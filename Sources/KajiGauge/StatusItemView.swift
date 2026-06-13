@@ -51,11 +51,15 @@ private struct DualRing: View {
     private let innerLW: CGFloat = 1.7
     private let gap: CGFloat = 1.3
 
-    // Base color: adaptive label color in mono, persimmon in color.
+    // Base color:
+    //   - mono  → adaptive label color, to sit with the native monochrome icons.
+    //   - color → the Kaji ring color, which is theme-aware on purpose: vibrant
+    //     persimmon by day (Kaji Sun), warm ember gold by night (Kaji Ember).
+    //     Day = energetic, night = quiet luxury — and it matches the popover ring.
     private var base: Color {
         switch style {
         case .mono:  return scheme == .dark ? .white : .black
-        case .color: return t.sun
+        case .color: return t.gold
         }
     }
     private var innerColor: Color { base.opacity(style == .mono ? 0.42 : 0.5) }
