@@ -3,76 +3,77 @@ import SwiftUI
 // MARK: - StatusItemView
 //
 // The compact menubar indicator: one concentric DOUBLE ring per visible
-// provider (Claude, Codex), side by side. The menubar can't hold text, so each
-// glyph carries two signals at once:
-//   - OUTER arc = the 5-hour window
-//   - INNER arc = the 7-day window
-// plus an optional tiny center number (the 5h %), toggleable in Prefs. Color
-// stays warm gold normally and deepens to amber once a window passes 80%.
-// Click the item for the full popover (reset countdowns, toggles, language).
+// provider, side by side. Each glyph carries the provider's identity AND two
+// quota signals at once:
+//   - CENTER  = the provider's logo (Claude burst / OpenAI knot) — this is how
+//     you tell Claude from Codex at a glance.
+//   - OUTER arc = the 5-hour window.
+//   - INNER arc = the 7-day window.
+// The exact % lives in the popover (click the item); the arc length already
+// shows roughly how full each window is.
+//
+// Style (Prefs.menubarStyle):
+//   - .mono  (default) — adaptive label color, so it sits quietly among the
+//     native monochrome menu-bar icons. Near-limit thickens the outer arc.
+//   - .color — warm persimmon, for more presence.
 struct StatusItemView: View {
     let providers: [ProviderView]
-    var showCenterNumber: Bool = true
-
-    @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme) }
+    var style: MenubarStyle = .mono
 
     var body: some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 6) {
             if providers.isEmpty {
-                DualRing(fiveFraction: 0, weekFraction: 0,
-                         fiveColor: t.ash, weekColor: t.ash, centerText: nil)
+                DualRing(provider: nil, style: style)
             } else {
                 ForEach(providers.prefix(2)) { p in
-                    DualRing(
-                        fiveFraction: p.usedFraction,
-                        weekFraction: p.weekFraction,
-                        fiveColor: p.isNearLimit ? t.amber : t.gold,
-                        weekColor: p.weekNearLimit ? t.amber : t.gold.opacity(0.62),
-                        centerText: centerText(p)
-                    )
+                    DualRing(provider: p, style: style)
                 }
             }
         }
         .padding(.horizontal, 3)
         .frame(height: 22)
     }
-
-    private func centerText(_ p: ProviderView) -> String? {
-        guard showCenterNumber, let v = p.fiveHourPercent else { return nil }
-        return "\(Int(v.rounded()))"
-    }
 }
 
 // MARK: - DualRing
 //
-// Two concentric trim arcs (outer = 5h, inner = 7d) sharing a center. Sized for
-// the menubar (~20pt). The center number is the 5h % — kept bold + monospaced so
-// two digits stay legible at this size.
+// Two concentric trim arcs (outer 5h, inner 7d) around a center provider logo.
+// Sized for the menubar (~21pt).
 private struct DualRing: View {
-    let fiveFraction: Double
-    let weekFraction: Double
-    let fiveColor: Color
-    let weekColor: Color
-    let centerText: String?
+    let provider: ProviderView?
+    let style: MenubarStyle
 
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
     private let dim: CGFloat = 21
     private let outerLW: CGFloat = 2.3
-    private let innerLW: CGFloat = 1.8
+    private let innerLW: CGFloat = 1.7
     private let gap: CGFloat = 1.3
+
+    // Base color: adaptive label color in mono, persimmon in color.
+    private var base: Color {
+        switch style {
+        case .mono:  return scheme == .dark ? .white : .black
+        case .color: return t.sun
+        }
+    }
+    private var innerColor: Color { base.opacity(style == .mono ? 0.42 : 0.5) }
+    private var trackColor: Color { base.opacity(0.22) }
+
+    private var fiveFraction: Double { provider?.usedFraction ?? 0 }
+    private var weekFraction: Double { provider?.weekFraction ?? 0 }
+    private var nearLimit: Bool { provider?.isNearLimit ?? false }
 
     var body: some View {
         ZStack {
-            ring(inset: 0, lineWidth: outerLW, fraction: fiveFraction, color: fiveColor)
-            ring(inset: outerLW + gap, lineWidth: innerLW, fraction: weekFraction, color: weekColor)
-            if let centerText {
-                Text(centerText)
-                    .font(.system(size: 8, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(t.cream)
+            ring(inset: 0,
+                 lineWidth: nearLimit ? outerLW + 0.9 : outerLW,
+                 fraction: fiveFraction, color: base)
+            ring(inset: outerLW + gap, lineWidth: innerLW,
+                 fraction: weekFraction, color: innerColor)
+            if let provider {
+                ProviderLogo(key: provider.id, color: base, size: 9)
             }
         }
         .frame(width: dim, height: dim)
@@ -82,7 +83,7 @@ private struct DualRing: View {
                       fraction: Double, color: Color) -> some View {
         ZStack {
             Circle()
-                .stroke(t.track.opacity(0.55),
+                .stroke(trackColor,
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             Circle()
                 .trim(from: 0, to: fraction)
