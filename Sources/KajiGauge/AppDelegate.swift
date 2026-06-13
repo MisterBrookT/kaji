@@ -32,7 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setupPopover()
 
         // Re-render the menubar indicator whenever data OR the visible-provider /
-        // center-number prefs change.
+        // menubar-style prefs change.
         store.$providers
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
@@ -41,7 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
-        prefs.$showCenterNumber
+        prefs.$menubarStyle
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
 
         let view = StatusItemView(providers: visibleProviders,
-                                  showCenterNumber: prefs.showCenterNumber)
+                                  style: prefs.menubarStyle)
         hostingView = NSHostingView(rootView: view)
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(hostingView)
@@ -85,7 +85,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
-                                               showCenterNumber: prefs.showCenterNumber)
+                                               style: prefs.menubarStyle)
     }
 
     @objc private func statusButtonClicked(_ sender: NSStatusBarButton) {
@@ -150,13 +150,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        // Center number toggle.
-        let numItem = NSMenuItem(title: L10n.t(.centerNumber, lang),
-                                 action: #selector(toggleCenterNumber),
-                                 keyEquivalent: "")
-        numItem.target = self
-        numItem.state = prefs.showCenterNumber ? .on : .off
-        menu.addItem(numItem)
+        // Menu-bar style submenu (Mono / Color), radio-checked.
+        let styleItem = NSMenuItem(title: L10n.t(.menubar, lang), action: nil, keyEquivalent: "")
+        let styleMenu = NSMenu()
+        let monoItem = NSMenuItem(title: L10n.t(.styleMono, lang),
+                                  action: #selector(setMenubarMono), keyEquivalent: "")
+        monoItem.target = self
+        monoItem.state = prefs.menubarStyle == .mono ? .on : .off
+        styleMenu.addItem(monoItem)
+        let colorItem = NSMenuItem(title: L10n.t(.styleColor, lang),
+                                   action: #selector(setMenubarColor), keyEquivalent: "")
+        colorItem.target = self
+        colorItem.state = prefs.menubarStyle == .color ? .on : .off
+        styleMenu.addItem(colorItem)
+        styleItem.submenu = styleMenu
+        menu.addItem(styleItem)
 
         // Language toggle — shows the OTHER language as the action label.
         let langItem = NSMenuItem(title: "\(L10n.t(.language, lang)): \(lang.toggled.label)",
@@ -205,8 +213,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.toggleProvider(key)
     }
 
-    @objc private func toggleCenterNumber() {
-        prefs.showCenterNumber.toggle()
+    @objc private func setMenubarMono() {
+        prefs.menubarStyle = .mono
+    }
+
+    @objc private func setMenubarColor() {
+        prefs.menubarStyle = .color
     }
 
     @objc private func toggleLanguage() {

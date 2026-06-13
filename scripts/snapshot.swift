@@ -47,7 +47,7 @@ struct Snap {
         let p = Prefs()
         p.language = lang
         p.visibleProviders = ["claude", "codex"]
-        p.showCenterNumber = true
+        p.menubarStyle = .mono
         return p
     }
 
@@ -64,24 +64,51 @@ struct Snap {
                 prefs: prefs,
                 controls: .init(panelVisible: false, onTogglePanel: {}, onQuit: {})
             )
-            // Menubar item mock: two concentric dual-rings on a menubar-ish strip.
-            func statusStrip(_ scheme: ColorScheme) -> some View {
-                HStack(spacing: 14) {
-                    StatusItemView(providers: mocks, showCenterNumber: true)
+            // Menu-bar right cluster mock: the Kaji dual-rings sitting among the
+            // real system status items (control center, wifi, battery, clock) so
+            // the README shows the app *in the menu bar*, not floating on grey.
+            func statusStrip(_ scheme: ColorScheme, _ mbStyle: MenubarStyle = .mono) -> some View {
+                let glyph: Color = scheme == .dark
+                    ? Color.white.opacity(0.82) : Color.black.opacity(0.78)
+                func sys(_ name: String, _ size: CGFloat = 14) -> some View {
+                    Image(systemName: name)
+                        .font(.system(size: size, weight: .regular))
+                        .foregroundColor(glyph)
                 }
-                .padding(.horizontal, 10).padding(.vertical, 3)
-                .background(scheme == .dark ? Color(hex: 0x2A2622) : Color(hex: 0xEDEAE3))
+                return HStack(spacing: 13) {
+                    StatusItemView(providers: mocks, style: mbStyle)
+                    sys("switch.2", 13)
+                    sys("wifi", 13)
+                    sys("battery.75", 16)
+                    Text("Thu 13 Jun  9:41")
+                        .font(.system(size: 13.5))
+                        .foregroundColor(glyph)
+                }
+                .padding(.leading, 16).padding(.trailing, 14)
+                .frame(height: 26)
+                .background(
+                    // A subtle translucent menu-bar slab over a hint of wallpaper.
+                    ZStack {
+                        (scheme == .dark
+                            ? LinearGradient(colors: [Color(hex: 0x3A332B), Color(hex: 0x2A2622)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing)
+                            : LinearGradient(colors: [Color(hex: 0xF4F1EB), Color(hex: 0xE7E2D9)],
+                                             startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                )
             }
 
             let arg = CommandLine.arguments.dropFirst().first ?? "both"
             if arg == "dark" || arg == "both" {
                 render(panel, appearance: .darkAqua, scheme: .dark, to: "/tmp/gauge-dark.png")
                 render(statusStrip(.dark), appearance: .darkAqua, scheme: .dark, to: "/tmp/status-dark.png")
+                render(statusStrip(.dark, .color), appearance: .darkAqua, scheme: .dark, to: "/tmp/status-color-dark.png")
                 render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/popover-dark.png")
             }
             if arg == "light" || arg == "both" {
                 render(panel, appearance: .aqua, scheme: .light, to: "/tmp/gauge-light.png")
                 render(statusStrip(.light), appearance: .aqua, scheme: .light, to: "/tmp/status-light.png")
+                render(statusStrip(.light, .color), appearance: .aqua, scheme: .light, to: "/tmp/status-color-light.png")
                 render(popover, appearance: .aqua, scheme: .light, to: "/tmp/popover-light.png")
             }
         }

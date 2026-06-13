@@ -69,6 +69,20 @@ struct GaugeRowView: View {
                 langToggle
             }
 
+            // Menu-bar style row: how the menu-bar glyph reads (mono / color).
+            HStack(spacing: 7) {
+                Text(L10n.t(.menubar, prefs.language))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(t.mute)
+                Spacer(minLength: 8)
+                segment(L10n.t(.styleMono, prefs.language), on: prefs.menubarStyle == .mono) {
+                    prefs.menubarStyle = .mono
+                }
+                segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
+                    prefs.menubarStyle = .color
+                }
+            }
+
             // Actions row: floating-panel toggle on the left, quit on the right.
             HStack(spacing: 12) {
                 Button(action: c.onTogglePanel) {
@@ -94,6 +108,23 @@ struct GaugeRowView: View {
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .foregroundColor(on ? t.bg : t.mute)
                 .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(on ? t.gold : Color.clear)
+                        .overlay(Capsule().stroke(on ? Color.clear : t.track, lineWidth: 1))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // One segment of a small two-option control (filled when selected).
+    private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundColor(on ? t.bg : t.mute)
+                .padding(.horizontal, 9)
                 .padding(.vertical, 3)
                 .background(
                     Capsule()

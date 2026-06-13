@@ -8,11 +8,12 @@ import Combine
 //
 //   - visibleProviders: which provider rings to show. Toggleable from the
 //     popover footer or the right-click menu. Never empties to zero.
-//   - language: EN / 中文. Drives all captions + menu text (the menubar glyph
-//     itself stays text-free aside from the optional center number). First run
-//     follows the macOS locale.
-//   - showCenterNumber: draw the 5h % in the middle of each ring (menubar +
-//     popover). On by default.
+//   - language: EN / 中文. Drives all captions + menu text. First run follows
+//     the macOS locale.
+//   - menubarStyle: how the menu-bar glyph reads. `.mono` (default) draws the
+//     rings + provider logo in the adaptive label color, so the app sits quietly
+//     among the native monochrome menu-bar icons. `.color` draws them in warm
+//     persimmon for more presence. The popover/panel are always in full color.
 @MainActor
 final class Prefs: ObservableObject {
     @Published var visibleProviders: Set<String> {
@@ -21,14 +22,14 @@ final class Prefs: ObservableObject {
     @Published var language: Lang {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: Key.language) }
     }
-    @Published var showCenterNumber: Bool {
-        didSet { UserDefaults.standard.set(showCenterNumber, forKey: Key.showCenterNumber) }
+    @Published var menubarStyle: MenubarStyle {
+        didSet { UserDefaults.standard.set(menubarStyle.rawValue, forKey: Key.menubarStyle) }
     }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
         static let language = "language"
-        static let showCenterNumber = "showCenterNumber"
+        static let menubarStyle = "menubarStyle"
     }
 
     init() {
@@ -43,7 +44,11 @@ final class Prefs: ObservableObject {
         } else {
             language = Lang.system                  // follow macOS locale on first run
         }
-        showCenterNumber = (d.object(forKey: Key.showCenterNumber) as? Bool) ?? true
+        if let raw = d.string(forKey: Key.menubarStyle), let s = MenubarStyle(rawValue: raw) {
+            menubarStyle = s
+        } else {
+            menubarStyle = .mono                    // quiet + native by default
+        }
     }
 
     /// Toggle a provider, but never let the set empty out — at least one ring
@@ -74,6 +79,15 @@ enum Lang: String {
     var label: String { self == .en ? "EN" : "\u{4E2D}\u{6587}" }   // 中文
 }
 
+// MARK: - Menu-bar style
+
+enum MenubarStyle: String {
+    case mono     // adaptive label color — sits among native monochrome icons
+    case color    // warm persimmon — more presence
+
+    var toggled: MenubarStyle { self == .mono ? .color : .mono }
+}
+
 // MARK: - L10n
 //
 // Minimal two-language string table, keyed by an enum so callers can't typo a
@@ -83,7 +97,8 @@ enum L10n {
     enum K {
         case fiveHQuota, week, quit, stale, waiting
         case floatPanel, hidePanel, showPanel
-        case refreshNow, quitApp, language, centerNumber, providers, show
+        case refreshNow, quitApp, language, providers, show
+        case menubar, styleMono, styleColor
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -98,9 +113,11 @@ enum L10n {
         .refreshNow:   ("Refresh Now",         "\u{7ACB}\u{5373}\u{5237}\u{65B0}"),         // 立即刷新
         .quitApp:      ("Quit Kaji Gauge",     "\u{9000}\u{51FA} Kaji Gauge"),              // 退出 Kaji Gauge
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
-        .centerNumber: ("Center Number",       "\u{4E2D}\u{5FC3}\u{6570}\u{5B57}"),         // 中心数字
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
         .show:         ("Show",                "\u{663E}\u{793A}"),                         // 显示
+        .menubar:      ("Menu bar",           "\u{83DC}\u{5355}\u{680F}"),                 // 菜单栏
+        .styleMono:    ("Mono",               "\u{9ED1}\u{767D}"),                         // 黑白
+        .styleColor:   ("Color",              "\u{5F69}\u{8272}"),                         // 彩色
     ]
 
     static func t(_ k: K, _ lang: Lang) -> String {
