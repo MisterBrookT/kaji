@@ -2,15 +2,17 @@ import SwiftUI
 
 // MARK: - GaugeRowView
 //
-// A horizontal row of ring gauges, one per provider. Shared by both surfaces
-// (the menubar popover and the floating panel) so they always render the same
-// content from the same store. The view sizes to its content — no fixed width —
-// so two providers don't leave a wall of dead space (it adapts to N rings).
+// A horizontal row of ring gauges, one per VISIBLE provider. Shared by both
+// surfaces (the menubar popover and the floating panel) so they always render
+// the same content from the same store. The view sizes to its content — no
+// fixed width — so it adapts to N rings.
+//
+// The popover passes `controls` (a settings footer: provider toggles, language,
+// floating-panel toggle, quit). The desktop panel passes nil — gauges only.
 struct GaugeRowView: View {
     @ObservedObject var store: QuotaStore
+    @ObservedObject var prefs: Prefs
 
-    // When set (the menubar popover), a slim footer is drawn under the rings with
-    // a floating-panel toggle + quit. The desktop panel passes nil — no footer.
     var controls: Controls? = nil
 
     struct Controls {
@@ -22,16 +24,23 @@ struct GaugeRowView: View {
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
+    // All providers that have data (for the toggle pills), and the subset the
+    // user has chosen to show (for the rings).
+    private var available: [ProviderView] { store.providers }
+    private var shown: [ProviderView] {
+        store.providers.filter { prefs.isVisible($0.id) }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
-            if store.providers.isEmpty {
+            if shown.isEmpty {
                 emptyState
             } else {
                 HStack(alignment: .top, spacing: 16) {
-                    ForEach(store.providers) { provider in
-                        RingGauge(provider: provider)
+                    ForEach(shown) { provider in
+                        RingGauge(provider: provider, lang: prefs.language)
                     }
                 }
             }
@@ -40,24 +49,37 @@ struct GaugeRowView: View {
         }
         .padding(14)
         .background(background)
-        .fixedSize()   // hug the content in both axes — adaptive width
+        .fixedSize()
     }
 
-    // Lives inside the gradient-backed VStack, so it spans the rings' width with
-    // no dead margin. Spacer pushes Quit to the right (same trick as `header`).
+    // MARK: Footer (settings — popover only)
+
     private func footer(_ c: Controls) -> some View {
         VStack(spacing: 9) {
             Rectangle().fill(t.track).frame(height: 1).opacity(0.7)
+
+            // Settings row: provider toggles on the left, language on the right.
+            HStack(spacing: 7) {
+                ForEach(available) { p in
+                    pill(p.displayName, on: prefs.isVisible(p.id)) {
+                        prefs.toggleProvider(p.id)
+                    }
+                }
+                Spacer(minLength: 8)
+                langToggle
+            }
+
+            // Actions row: floating-panel toggle on the left, quit on the right.
             HStack(spacing: 12) {
                 Button(action: c.onTogglePanel) {
                     HStack(spacing: 5) {
                         Image(systemName: c.panelVisible
                               ? "macwindow" : "macwindow.badge.plus")
-                        Text(c.panelVisible ? "Hide desktop panel" : "Float on desktop")
+                        Text(L10n.t(c.panelVisible ? .hidePanel : .floatPanel, prefs.language))
                     }
                 }
                 Spacer(minLength: 10)
-                Button(action: c.onQuit) { Text("Quit") }
+                Button(action: c.onQuit) { Text(L10n.t(.quit, prefs.language)) }
             }
             .buttonStyle(.plain)
             .font(.system(size: 11, weight: .medium))
@@ -65,8 +87,38 @@ struct GaugeRowView: View {
         }
     }
 
-    // Warm depth instead of flat black — matches the approved design preview's
-    // ember glow, so the native app reads as "Kaji", not generic dark.
+    // A small toggle chip: filled (warm) when on, outlined when off.
+    private func pill(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundColor(on ? t.bg : t.mute)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(
+                    Capsule()
+                        .fill(on ? t.gold : Color.clear)
+                        .overlay(Capsule().stroke(on ? Color.clear : t.track, lineWidth: 1))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // EN | 中文 segmented toggle.
+    private var langToggle: some View {
+        Button(action: { prefs.language = prefs.language.toggled }) {
+            Text(prefs.language.label)
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().stroke(t.track, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: Chrome
+
     private var background: some View {
         LinearGradient(
             colors: [t.bgTop, t.bg],
@@ -76,7 +128,6 @@ struct GaugeRowView: View {
 
     private var header: some View {
         HStack(spacing: 6) {
-            // Persimmon SUN dot — the one true Kaji brand accent.
             Circle().fill(t.sun).frame(width: 7, height: 7)
             Text("Kaji")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
@@ -85,14 +136,13 @@ struct GaugeRowView: View {
                 .font(.system(size: 12, weight: .regular, design: .rounded))
                 .foregroundColor(t.mute)
             Spacer(minLength: 18)
-            // No "updated Ns ago" — the gauge polls on its own; a timestamp is
-            // noise. Only flag the abnormal case: stale data after a fetch error.
             if store.lastError != nil, !store.providers.isEmpty {
-                Text("stale")
+                Text(L10n.t(.stale, prefs.language))
                     .font(.system(size: 10))
                     .foregroundColor(t.amber.opacity(0.9))
             } else {
-                Text("5h quota")
+                // Legend for the double ring: outer 5h, inner 7d.
+                Text("5h \u{00B7} \(L10n.t(.week, prefs.language))")
                     .font(.system(size: 10))
                     .foregroundColor(t.ash)
             }
@@ -104,7 +154,7 @@ struct GaugeRowView: View {
             Text("\u{2014}")
                 .font(.system(size: 28))
                 .foregroundColor(t.ash)
-            Text(store.lastError ?? "waiting for quota\u{2026}")
+            Text(store.lastError ?? L10n.t(.waiting, prefs.language))
                 .font(.system(size: 11))
                 .foregroundColor(t.mute)
                 .multilineTextAlignment(.center)

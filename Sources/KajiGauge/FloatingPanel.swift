@@ -48,9 +48,11 @@ final class DraggablePanel: NSPanel {
 final class FloatingPanelController {
     private var panel: DraggablePanel?
     private let store: QuotaStore
+    private let prefs: Prefs
 
-    init(store: QuotaStore) {
+    init(store: QuotaStore, prefs: Prefs) {
         self.store = store
+        self.prefs = prefs
     }
 
     var isVisible: Bool {
@@ -72,7 +74,7 @@ final class FloatingPanelController {
         if panel == nil {
             // No fixed width — GaugeRowView paints its own warm gradient and
             // hugs its content, so the panel fits N rings without dead space.
-            let root = GaugeRowView(store: store)
+            let root = GaugeRowView(store: store, prefs: prefs)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             let hosting = NSHostingView(rootView: root)
             hosting.layer?.cornerRadius = 14

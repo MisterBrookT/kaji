@@ -33,12 +33,19 @@ struct ProviderView: Identifiable, Equatable {
     let weekPercent: Double?
     let tokensToday: Int?
     let resetDate: Date?           // five-hour reset
+    let weekResetDate: Date?       // seven-day reset
     let plan: String?
     let history: [Double]          // rolling 5h used% samples for the sparkline
 
-    /// 0...1 fraction for the ring trim. Clamped. nil percent -> 0 (empty ring).
+    /// 0...1 fraction for the 5h ring trim. Clamped. nil percent -> 0 (empty).
     var usedFraction: Double {
         guard let p = fiveHourPercent else { return 0 }
+        return min(max(p / 100.0, 0), 1)
+    }
+
+    /// 0...1 fraction for the inner 7-day ring trim.
+    var weekFraction: Double {
+        guard let p = weekPercent else { return 0 }
         return min(max(p / 100.0, 0), 1)
     }
 
@@ -46,6 +53,11 @@ struct ProviderView: Identifiable, Equatable {
     /// (same warm family, no glow) plus non-color emphasis (thicker cap / tick).
     var isNearLimit: Bool {
         (fiveHourPercent ?? 0) >= 80
+    }
+
+    /// 7-day near-limit — deepens the inner ring to amber the same way.
+    var weekNearLimit: Bool {
+        (weekPercent ?? 0) >= 80
     }
 
     var hasData: Bool { fiveHourPercent != nil }
@@ -214,6 +226,7 @@ final class QuotaStore: ObservableObject {
                 weekPercent: limits?.sevenDayUsedPercent,
                 tokensToday: q.tokensToday,
                 resetDate: limits?.fiveHourResetsAt?.date,
+                weekResetDate: limits?.sevenDayResetsAt?.date,
                 plan: limits?.plan,
                 history: history[key] ?? []
             ))

@@ -17,6 +17,7 @@ import Combine
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = QuotaStore()
+    private let prefs = Prefs()
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var panelController: FloatingPanelController!
@@ -25,19 +26,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store.start()
-        panelController = FloatingPanelController(store: store)
+        panelController = FloatingPanelController(store: store, prefs: prefs)
 
         setupStatusItem()
         setupPopover()
 
-        // Re-render the menubar indicator whenever data changes.
+        // Re-render the menubar indicator whenever data OR the visible-provider /
+        // center-number prefs change.
         store.$providers
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        prefs.$visibleProviders
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        prefs.$showCenterNumber
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
 
         updateStatusItem()
         panelController.restore()
+    }
+
+    /// Providers the user has chosen to show, in display order — drives both the
+    /// menubar glyphs and (via GaugeRowView) the popover rings.
+    private var visibleProviders: [ProviderView] {
+        store.providers.filter { prefs.isVisible($0.id) }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -50,7 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem.button else { return }
 
-        let view = StatusItemView(providers: store.providers)
+        let view = StatusItemView(providers: visibleProviders,
+                                  showCenterNumber: prefs.showCenterNumber)
         hostingView = NSHostingView(rootView: view)
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(hostingView)
@@ -67,7 +84,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusItem() {
-        hostingView?.rootView = StatusItemView(providers: store.providers)
+        hostingView?.rootView = StatusItemView(providers: visibleProviders,
+                                               showCenterNumber: prefs.showCenterNumber)
     }
 
     @objc private func statusButtonClicked(_ sender: NSStatusBarButton) {
@@ -103,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onQuit: { NSApp.terminate(nil) }
         )
-        let content = GaugeRowView(store: store, controls: controls)
+        let content = GaugeRowView(store: store, prefs: prefs, controls: controls)
         popover.contentViewController = NSHostingController(rootView: content)
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
@@ -112,17 +130,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Right-click menu
 
     private func showMenu() {
+        let lang = prefs.language
         let menu = NSMenu()
 
-        let panelTitle = panelController.isVisible
-            ? "Hide Floating Panel" : "Show Floating Panel"
-        let panelItem = NSMenuItem(title: panelTitle,
-                                   action: #selector(togglePanel),
-                                   keyEquivalent: "")
+        // Provider visibility — one checkmarked item per known provider.
+        let providersHeader = NSMenuItem(title: L10n.t(.providers, lang),
+                                         action: nil, keyEquivalent: "")
+        providersHeader.isEnabled = false
+        menu.addItem(providersHeader)
+        for p in store.providers {
+            let item = NSMenuItem(title: "  \(p.displayName)",
+                                  action: #selector(toggleProvider(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = p.id
+            item.state = prefs.isVisible(p.id) ? .on : .off
+            menu.addItem(item)
+        }
+
+        menu.addItem(.separator())
+
+        // Center number toggle.
+        let numItem = NSMenuItem(title: L10n.t(.centerNumber, lang),
+                                 action: #selector(toggleCenterNumber),
+                                 keyEquivalent: "")
+        numItem.target = self
+        numItem.state = prefs.showCenterNumber ? .on : .off
+        menu.addItem(numItem)
+
+        // Language toggle — shows the OTHER language as the action label.
+        let langItem = NSMenuItem(title: "\(L10n.t(.language, lang)): \(lang.toggled.label)",
+                                  action: #selector(toggleLanguage),
+                                  keyEquivalent: "")
+        langItem.target = self
+        menu.addItem(langItem)
+
+        menu.addItem(.separator())
+
+        let panelItem = NSMenuItem(
+            title: L10n.t(panelController.isVisible ? .hidePanel : .showPanel, lang),
+            action: #selector(togglePanel), keyEquivalent: "")
         panelItem.target = self
         menu.addItem(panelItem)
 
-        let refreshItem = NSMenuItem(title: "Refresh Now",
+        let refreshItem = NSMenuItem(title: L10n.t(.refreshNow, lang),
                                      action: #selector(refreshNow),
                                      keyEquivalent: "r")
         refreshItem.target = self
@@ -130,7 +181,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        let quitItem = NSMenuItem(title: "Quit Kaji Gauge",
+        let quitItem = NSMenuItem(title: L10n.t(.quitApp, lang),
                                   action: #selector(NSApplication.terminate(_:)),
                                   keyEquivalent: "q")
         menu.addItem(quitItem)
@@ -147,5 +198,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func refreshNow() {
         store.refresh()
+    }
+
+    @objc private func toggleProvider(_ sender: NSMenuItem) {
+        guard let key = sender.representedObject as? String else { return }
+        prefs.toggleProvider(key)
+    }
+
+    @objc private func toggleCenterNumber() {
+        prefs.showCenterNumber.toggle()
+    }
+
+    @objc private func toggleLanguage() {
+        prefs.language = prefs.language.toggled
     }
 }
