@@ -53,6 +53,14 @@ else
 PLIST
 fi
 
+# Bundle the self-contained quota reader so the shipped app needs no external
+# repo / hardcoded path — it reads the user's own ~/.claude, ~/.codex, etc.
+if [[ -f "Resources/quota.py" ]]; then
+	cp "Resources/quota.py" "${BUNDLE}/Contents/Resources/quota.py"
+else
+	echo "warning: Resources/quota.py missing — app will fall back to a dev path" >&2
+fi
+
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
 

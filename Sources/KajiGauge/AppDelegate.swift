@@ -50,7 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem.button else { return }
 
-        let view = StatusItemView(provider: store.mostConstrained)
+        let view = StatusItemView(providers: store.providers)
         hostingView = NSHostingView(rootView: view)
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(hostingView)
@@ -67,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusItem() {
-        hostingView?.rootView = StatusItemView(provider: store.mostConstrained)
+        hostingView?.rootView = StatusItemView(providers: store.providers)
     }
 
     @objc private func statusButtonClicked(_ sender: NSStatusBarButton) {
@@ -85,19 +85,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
-        // No fixed width — the view hugs its content (adaptive to N rings).
-        let content = GaugeRowView(store: store)
-        pop.contentViewController = NSHostingController(rootView: content)
         popover = pop
     }
 
     private func togglePopover(_ sender: NSStatusBarButton) {
         if popover.isShown {
             popover.performClose(sender)
-        } else {
-            popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-            popover.contentViewController?.view.window?.makeKey()
+            return
         }
+        // Rebuild content each open so the panel toggle label reflects current
+        // state. No fixed width — the view hugs its content (adaptive to N rings).
+        let controls = GaugeRowView.Controls(
+            panelVisible: panelController.isVisible,
+            onTogglePanel: { [weak self] in
+                self?.panelController.toggle()
+                self?.popover.performClose(nil)
+            },
+            onQuit: { NSApp.terminate(nil) }
+        )
+        let content = GaugeRowView(store: store, controls: controls)
+        popover.contentViewController = NSHostingController(rootView: content)
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
     }
 
     // MARK: - Right-click menu

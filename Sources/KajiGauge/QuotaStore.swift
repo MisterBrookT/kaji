@@ -3,8 +3,9 @@ import Combine
 
 // MARK: - Configuration constants
 enum Config {
-    /// Default path to the helm-quota script. Overridable at runtime via the
-    /// UserDefaults key below (see `quotaScriptPath`).
+    /// Dev fallback ONLY (used by `swift run`, which has no app bundle). The
+    /// shipped .app uses the self-contained copy bundled in Contents/Resources
+    /// (see `QuotaStore.scriptPath`); end users never need this path.
     static let defaultQuotaScriptPath =
         "/Users/tangyinghao/workspace/helm-terminal/tools/helm-quota/quota.py"
 
@@ -80,9 +81,20 @@ final class QuotaStore: ObservableObject {
         self.lastUpdated = updated
     }
 
+    /// Resolve the quota reader, in priority order:
+    ///   1. a user override in UserDefaults (`quotaScriptPath`)
+    ///   2. the copy bundled inside the .app (Contents/Resources/quota.py) —
+    ///      this is what makes the shipped app self-contained (no helm-terminal)
+    ///   3. a dev fallback for `swift run` (no bundle present)
     var scriptPath: String {
-        UserDefaults.standard.string(forKey: Config.kQuotaScriptPath)
-            ?? Config.defaultQuotaScriptPath
+        if let override = UserDefaults.standard.string(forKey: Config.kQuotaScriptPath),
+           !override.isEmpty {
+            return override
+        }
+        if let bundled = Bundle.main.url(forResource: "quota", withExtension: "py") {
+            return bundled.path
+        }
+        return Config.defaultQuotaScriptPath
     }
 
     func start() {

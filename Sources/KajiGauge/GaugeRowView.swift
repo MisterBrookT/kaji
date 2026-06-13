@@ -9,6 +9,16 @@ import SwiftUI
 struct GaugeRowView: View {
     @ObservedObject var store: QuotaStore
 
+    // When set (the menubar popover), a slim footer is drawn under the rings with
+    // a floating-panel toggle + quit. The desktop panel passes nil — no footer.
+    var controls: Controls? = nil
+
+    struct Controls {
+        let panelVisible: Bool
+        let onTogglePanel: () -> Void
+        let onQuit: () -> Void
+    }
+
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
@@ -25,10 +35,34 @@ struct GaugeRowView: View {
                     }
                 }
             }
+
+            if let controls { footer(controls) }
         }
         .padding(14)
         .background(background)
         .fixedSize()   // hug the content in both axes — adaptive width
+    }
+
+    // Lives inside the gradient-backed VStack, so it spans the rings' width with
+    // no dead margin. Spacer pushes Quit to the right (same trick as `header`).
+    private func footer(_ c: Controls) -> some View {
+        VStack(spacing: 9) {
+            Rectangle().fill(t.track).frame(height: 1).opacity(0.7)
+            HStack(spacing: 12) {
+                Button(action: c.onTogglePanel) {
+                    HStack(spacing: 5) {
+                        Image(systemName: c.panelVisible
+                              ? "macwindow" : "macwindow.badge.plus")
+                        Text(c.panelVisible ? "Hide desktop panel" : "Float on desktop")
+                    }
+                }
+                Spacer(minLength: 10)
+                Button(action: c.onQuit) { Text("Quit") }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(t.mute)
+        }
     }
 
     // Warm depth instead of flat black — matches the approved design preview's
