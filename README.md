@@ -4,6 +4,10 @@ Your AI-provider quota, at a glance. A small native macOS app that reads
 coding-agent usage and draws it as warm ring gauges — in the menu bar and in a
 floating panel you can leave on the desktop.
 
+| Kaji Ember (dark) | Kaji Sun (light) |
+|:---:|:---:|
+| ![Kaji Gauge — dark](docs/gauge-dark.png) | ![Kaji Gauge — light](docs/gauge-light.png) |
+
 Two surfaces, same rings:
 
 - **Menu bar** — a compact indicator showing the most-constrained provider
