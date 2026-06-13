@@ -10,7 +10,9 @@ final class DraggablePanel: NSPanel {
     init(content: NSView) {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 200),
-            styleMask: [.borderless, .nonactivatingPanel, .hudWindow],
+            // No .hudWindow — its material forces a dark vibrancy that fights the
+            // light "Kaji Sun" theme. We paint our own warm gradient instead.
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -68,12 +70,13 @@ final class FloatingPanelController {
 
     func show() {
         if panel == nil {
+            // No fixed width — GaugeRowView paints its own warm gradient and
+            // hugs its content, so the panel fits N rings without dead space.
             let root = GaugeRowView(store: store)
-                .frame(width: 360)
-                .background(Palette.panel)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             let hosting = NSHostingView(rootView: root)
             hosting.layer?.cornerRadius = 14
+            hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
             let p = DraggablePanel(content: hosting)
             // Place near the top-right of the main screen on first show.
             if let screen = NSScreen.main {

@@ -85,7 +85,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let pop = NSPopover()
         pop.behavior = .transient
         pop.animates = true
-        let content = GaugeRowView(store: store).frame(width: 360)
+        // No fixed width — the view hugs its content (adaptive to N rings).
+        let content = GaugeRowView(store: store)
         pop.contentViewController = NSHostingController(rootView: content)
         popover = pop
     }

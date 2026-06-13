@@ -6,11 +6,9 @@ import Foundation
 // for real brand marks later. This map is the single place to add/remove a
 // provider's display config; the data layer surfaces whatever quota.py emits.
 enum Providers {
-    /// Glyph marks shown in the ring center, tinted to the ring color. These are
-    /// Unicode placeholders chosen to hint each brand. Official brand vector
-    /// logos (Claude burst / OpenAI knot / Gemini spark) are a TODO — bundle
-    /// them as assets; the design preview has accurate SVGs to convert.
-    /// (No emoji marks — the crab is gone.)
+    /// Unicode FALLBACK marks. claude / codex / gemini now render real vector
+    /// logos via `ProviderLogo` (Claude burst / OpenAI knot / Gemini spark);
+    /// these marks are only used for providers without a vector logo.
     static let marks: [String: String] = [
         "claude": "\u{2733}",   // ✳ burst — hints Claude's radial mark
         "codex":  "\u{273B}",   // ✻ six-petalled florette — hints OpenAI knot
@@ -31,6 +29,11 @@ enum Providers {
     /// Preferred left-to-right display order. Providers not listed here are
     /// appended afterward in alphabetical order.
     static let order: [String] = ["claude", "codex", "gemini", "kiro", "opencode"]
+
+    /// Providers we currently surface as rings. gemini / kiro / opencode are
+    /// intentionally hidden for now — focus on claude + codex.
+    static let visible: Set<String> = ["claude", "codex"]
+    static func isVisible(_ key: String) -> Bool { visible.contains(key) }
 
     static func mark(for key: String) -> String {
         marks[key] ?? "\u{2022}" // • bullet fallback

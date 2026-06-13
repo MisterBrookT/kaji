@@ -41,8 +41,8 @@ struct ProviderView: Identifiable, Equatable {
         return min(max(p / 100.0, 0), 1)
     }
 
-    /// Near-limit alert state — the >=80% threshold drives the SUN color + glow
-    /// + non-color emphasis (thicker cap / alert tick).
+    /// Near-limit alert state — the >=80% threshold deepens the ring to AMBER
+    /// (same warm family, no glow) plus non-color emphasis (thicker cap / tick).
     var isNearLimit: Bool {
         (fiveHourPercent ?? 0) >= 80
     }
@@ -71,6 +71,13 @@ final class QuotaStore: ObservableObject {
 
     init() {
         loadHistory()
+    }
+
+    /// Seed a store with fixed data for previews / offscreen snapshots. Does not
+    /// start the poll timer or touch UserDefaults.
+    init(previewProviders: [ProviderView], updated: Date? = nil) {
+        self.providers = previewProviders
+        self.lastUpdated = updated
     }
 
     var scriptPath: String {
@@ -167,7 +174,9 @@ final class QuotaStore: ObservableObject {
         // Only show providers that have a `limits` block (a quota to gauge).
         // Providers like kiro/opencode with no limits are skipped from the
         // rings — there is nothing to ring-gauge.
-        let keys = Providers.sorted(snap.keys.filter { snap[$0]?.limits != nil })
+        let keys = Providers.sorted(snap.keys.filter {
+            snap[$0]?.limits != nil && Providers.isVisible($0)
+        })
 
         var views: [ProviderView] = []
         for key in keys {

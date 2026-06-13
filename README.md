@@ -12,7 +12,11 @@ Two surfaces, same rings:
   Toggle it from the menu-bar item's right-click menu. Shown/hidden state is
   remembered.
 
-Dark, warm, restrained. Ember theme.
+Warm and restrained, with **Auto light/dark**: **Kaji Ember** (dark) and
+**Kaji Sun** (light) follow the system appearance.
+
+Currently surfaced: **Claude** and **Codex**. Other providers are hidden for now
+(see `Providers.visible`).
 
 ## The ring
 
@@ -23,15 +27,17 @@ One ring per provider, the 5-hour window:
 - **Gold** normally. At **≥ 80%** it deepens to a same-family **amber**,
   thickens, and grows an alert tick at the arc head — so "near the limit" reads
   even without color. No neon orange, no glow — restrained and warm.
-- Center: the provider logo (tinted to the ring color), the big used-% number,
-  and a thin 24h-ish sparkline. Official brand logos are a TODO — Unicode marks
-  stand in for now (no emoji).
-- Below: `周 {week}% · resets {countdown}`.
+- Center: the real provider logo (tinted to the ring color) — Claude's radial
+  burst, the OpenAI knot — the big used-% number, and a thin sparkline.
+- Below: the provider name + `周 {week}% · resets {countdown}`.
 
 The sparkline has no real history source — `quota.py` doesn't expose a 24h
 series. Kaji Gauge keeps a rolling buffer of the sampled 5h used-% values
-(persisted in `UserDefaults`) and draws that. It seeds empty and fills over
-time, so early on it's short or flat.
+(persisted in `UserDefaults`) and only draws it once there's genuine movement;
+a flat line is worse than none, so early on there's simply no sparkline.
+
+There is no "updated Ns ago" label — the gauge polls on its own (every 30s);
+the only status it surfaces is a small `stale` flag if a fetch fails.
 
 ## Build & run
 
@@ -71,9 +77,9 @@ defaults write dev.kaji.gauge quotaScriptPath /path/to/quota.py
 
 ## Roadmap
 
-- Light "Sun" theme (Ember ships now)
 - WidgetKit desktop widget
 - Configurable providers / marks from a settings UI
+- Real 24h sparkline (needs `quota.py` to log a rolling history)
 - Login-item autostart
 
 ## License
