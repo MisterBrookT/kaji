@@ -61,12 +61,14 @@ struct ResetTimestamp: Codable, Equatable {
         try c.encode(date?.timeIntervalSince1970)
     }
 
-    private static let iso: ISO8601DateFormatter = {
+    // ISO8601DateFormatter is thread-safe for read-only use; mark unsafe to
+    // satisfy Swift 6 strict concurrency (the class isn't Sendable).
+    nonisolated(unsafe) private static let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
-    private static let isoNoFrac: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let isoNoFrac: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
