@@ -21,11 +21,15 @@ struct StatusItemView: View {
     var style: MenubarStyle = .mono
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 5) {
             if providers.isEmpty {
                 DualRing(provider: nil, style: style)
             } else {
-                ForEach(providers.prefix(2)) { p in
+                // Show every visible provider — capping at 4 keeps the glyph
+                // compact (5+ would crowd the menubar and fight other icons).
+                // 4 also matches the max in `Providers.visible` minus hidden
+                // ones, so this is a future-proof ceiling, not a guess.
+                ForEach(providers.prefix(4)) { p in
                     DualRing(provider: p, style: style)
                 }
             }
