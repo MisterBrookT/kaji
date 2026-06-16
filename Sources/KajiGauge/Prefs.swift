@@ -25,11 +25,15 @@ final class Prefs: ObservableObject {
     @Published var menubarStyle: MenubarStyle {
         didSet { UserDefaults.standard.set(menubarStyle.rawValue, forKey: Key.menubarStyle) }
     }
+    @Published var dockEdge: DockEdge? {
+        didSet { UserDefaults.standard.set(dockEdge?.rawValue, forKey: Key.dockEdge) }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
         static let language = "language"
         static let menubarStyle = "menubarStyle"
+        static let dockEdge = "panelDockEdge"
     }
 
     init() {
@@ -48,6 +52,13 @@ final class Prefs: ObservableObject {
             menubarStyle = s
         } else {
             menubarStyle = .mono                    // quiet + native by default
+        }
+        // dockEdge defaults to nil (panel is expanded). Restore the persisted
+        // edge (if any) so the next launch can dock straight from restore().
+        if let raw = d.string(forKey: Key.dockEdge), let e = DockEdge(rawValue: raw) {
+            dockEdge = e
+        } else {
+            dockEdge = nil
         }
     }
 
@@ -79,6 +90,16 @@ enum Lang: String {
     var label: String { self == .en ? "EN" : "\u{4E2D}\u{6587}" }   // 中文
 }
 
+// MARK: - Dock edge
+//
+// Which screen edge the floating HUD is currently snapped + docked to. nil
+// means "expanded" (the regular floating panel). Persisted so the app comes
+// back up in the same state — close the lid, open it next morning, panel
+// is still where you left it.
+enum DockEdge: String, CaseIterable {
+    case left, right, top, bottom
+}
+
 // MARK: - Menu-bar style
 
 enum MenubarStyle: String {
@@ -99,6 +120,7 @@ enum L10n {
         case floatPanel, hidePanel, showPanel
         case refreshNow, quitApp, language, providers, show
         case menubar, styleMono, styleColor
+        case dockExpand, dockHint
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -118,6 +140,8 @@ enum L10n {
         .menubar:      ("Menu bar",           "\u{83DC}\u{5355}\u{680F}"),                 // 菜单栏
         .styleMono:    ("Mono",               "\u{9ED1}\u{767D}"),                         // 黑白
         .styleColor:   ("Color",              "\u{5F69}\u{8272}"),                         // 彩色
+        .dockExpand:   ("tap to expand",      "\u{70B9}\u{51FB}\u{5C55}\u{5F00}"),         // 点击展开
+        .dockHint:     ("drag to undock",     "\u{62D6}\u{52A8}\u{5C55}\u{5F00}"),         // 拖动展开
     ]
 
     static func t(_ k: K, _ lang: Lang) -> String {

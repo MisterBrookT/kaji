@@ -55,6 +55,10 @@ struct GaugeRowView: View {
         let rowSpacing: CGFloat = isTall ? 10 : 16
         let padding: CGFloat = 28
         // Chrome above (header) + below (label) the ring within each cell.
+        // 22 (header row including dot) + 38 (3-line label VStack at 12/10/10)
+        // + 12 (top→rings spacing) = 72. Real chrome in production = ~78 with
+        // 14pt top padding. We keep the under-estimate so 3-ring vertical
+        // mode still grows the ring at the panel's true min height.
         let verticalChrome: CGFloat = 22 + 38 + 12
         let perRingW = max(0, (w - padding - rowSpacing * CGFloat(n - 1)) / CGFloat(n))
         let rowsHeight = max(0, h - verticalChrome)
@@ -64,8 +68,9 @@ struct GaugeRowView: View {
         let maxFromHeight = max(0, perRowH - 38 - 7)   // label + VStack spacing
         let raw = min(perRingW, maxFromHeight)
         // Floor: when the panel is too narrow for n rings at minRing, fall
-        // back to whatever fits so the user can see all rings even at 220pt.
-        let effectiveMin = max(32, min(minRing,
+        // back to whatever fits. 36pt keeps the label captions legible (the
+        // 3-line label VStack needs ~38pt to render at full size).
+        let effectiveMin = max(36, min(minRing,
                                        (w - padding) / CGFloat(n) - rowSpacing))
         return min(max(raw, effectiveMin), maxRing)
     }
