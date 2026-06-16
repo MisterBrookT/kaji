@@ -96,13 +96,15 @@ struct GaugeRowView: View {
     private var ringsRow: some View {
         if expandToFill {
             // GeometryReader drives both axis. Pick a layout that matches the
-            // panel's actual aspect: wide/short → HStack row; tall/narrow →
-            // LazyVStack (one ring per row) so label text never gets clipped.
+            // panel's actual aspect: wide/short → HStack of stacked rings;
+            // tall/narrow → list rows (ring left, text right) so the
+            // provider name NEVER truncates to "Clau" / "Cod" / "Mini".
             GeometryReader { geo in
                 let n = max(1, shown.count)
-                // Go tall when the row would overflow horizontally. 130 ≈
-                // minRing (64) + padding per slot + label width; if total
-                // slots > available width, wrap to one-per-row.
+                // Go list-mode when the row would overflow horizontally. A
+                // 3-ring stacked card needs ~130pt per slot (ring 84 + chrome
+                // + label width) — anything tighter goes to the list layout
+                // where the label gets the full panel width to breathe.
                 let slotNeeded: CGFloat = 130
                 let totalNeeded = slotNeeded * CGFloat(n) + 16 * CGFloat(n - 1) + 28
                 let isTall = n > 1 && geo.size.width < totalNeeded
@@ -113,9 +115,10 @@ struct GaugeRowView: View {
                     if isTall {
                         LazyVStack(alignment: .leading, spacing: 10) {
                             ForEach(shown) { provider in
-                                RingGauge(provider: provider, lang: prefs.language,
-                                          showRemaining: prefs.showRemaining,
-                                          ringSize: size)
+                                CompactRingRow(provider: provider,
+                                               lang: prefs.language,
+                                               showRemaining: prefs.showRemaining,
+                                               ringSize: 56)
                             }
                         }
                         .scrollDisabled(true)
@@ -321,5 +324,133 @@ struct GaugeRowView: View {
                 .multilineTextAlignment(.center)
         }
         .frame(minWidth: 180, minHeight: 96)
+    }
+}
+
+// MARK: - CompactRingRow
+//
+// List-row layout used by the floating HUD when it's been stretched tall +
+// narrow. Same product signature (concentric ring + logo + %), but the label
+// moves to the RIGHT of the ring instead of below it. Pattern after iStat
+// Menus / MonitorControl / Spotify compact card: [icon] + [text] horizontal,
+// so the text column gets the full panel width and names never truncate to
+// "Clau" / "Cod" / "Mini".
+//
+// Ring size stays fixed at 56pt here — the panel's vertical chrome math is
+// irrelevant in this layout (no label below the ring), so passing a stable
+// value keeps the geometry predictable regardless of how tall the user drags.
+private struct CompactRingRow: View {
+    let provider: ProviderView
+    var lang: Lang = .en
+    var showRemaining: Bool = false
+    var ringSize: CGFloat = 56
+
+    @Environment(\.colorScheme) private var scheme
+    private var t: KajiTheme { .resolve(scheme) }
+
+    // Same ring math as RingGauge, scaled by ringSize.
+    private var baseLineWidth: CGFloat { ringSize * (10.0 / 84.0) }
+    private var innerLineWidth: CGFloat { ringSize * (5.0 / 84.0) }
+    private var innerInset: CGFloat    { ringSize * (13.0 / 84.0) }
+    private var logoSize: CGFloat      { ringSize * (16.0 / 84.0) }
+    private var percentFont: CGFloat   { ringSize * (22.0 / 84.0) }
+
+    private var arcColor: Color { provider.isNearLimit ? t.amber : t.gold }
+    private var weekColor: Color { provider.weekNearLimit ? t.amber : t.gold.opacity(0.55) }
+    private var valueLineWidth: CGFloat {
+        provider.isNearLimit ? baseLineWidth + (ringSize * (3.0 / 84.0)) : baseLineWidth
+    }
+    private var trimFraction: Double {
+        showRemaining ? 1.0 - provider.usedFraction : provider.usedFraction
+    }
+    private var weekTrimFraction: Double {
+        showRemaining ? 1.0 - provider.weekFraction : provider.weekFraction
+    }
+    private var percentText: String {
+        guard let p = provider.fiveHourPercent else { return "\u{2014}" }
+        let shown = showRemaining ? (100.0 - p) : p
+        return "\(Int(shown.rounded()))"
+    }
+    private var numberColor: Color { provider.isNearLimit ? t.amber : t.cream }
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 14) {
+            // Ring face on the left — same concentric ring + logo + % as
+            // RingGauge, just sized for a 56pt slot in a vertical list.
+            ZStack {
+                Circle()
+                    .stroke(t.track.opacity(0.5),
+                            style: StrokeStyle(lineWidth: baseLineWidth, lineCap: .round))
+                Circle()
+                    .trim(from: 0, to: trimFraction)
+                    .stroke(arcColor,
+                            style: StrokeStyle(lineWidth: valueLineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+
+                Circle()
+                    .stroke(t.track.opacity(0.4),
+                            style: StrokeStyle(lineWidth: innerLineWidth, lineCap: .round))
+                    .padding(innerInset)
+                Circle()
+                    .trim(from: 0, to: weekTrimFraction)
+                    .stroke(weekColor,
+                            style: StrokeStyle(lineWidth: innerLineWidth, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .padding(innerInset)
+
+                VStack(spacing: 1) {
+                    ProviderLogo(key: provider.id, color: arcColor, size: logoSize)
+                    Text(percentText)
+                        .font(.system(size: percentFont, weight: .semibold, design: .rounded))
+                        .foregroundColor(numberColor)
+                        .monospacedDigit()
+                }
+            }
+            .frame(width: ringSize, height: ringSize)
+
+            // Text column on the right — takes ALL remaining width via
+            // maxWidth: .infinity, so the name "MiniMax" never truncates.
+            textColumn
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var textColumn: some View {
+        let weekRaw = provider.weekPercent
+        let weekDisplayed = weekRaw.map { showRemaining ? (100 - $0) : $0 }
+        let week = weekDisplayed.map { "\(Int($0.rounded()))%" } ?? "\u{2014}"
+        let fiveReset = ResetFormat.phrase(provider.resetDate, lang)
+        let weekReset = ResetFormat.phrase(provider.weekResetDate, lang)
+        return VStack(alignment: .leading, spacing: 4) {
+            // Primary: provider name (semibold 13pt, cream).
+            Text(provider.displayName)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .lineLimit(1)
+            // Secondary: 5h window — "5h" mute label + gold reset countdown.
+            HStack(spacing: 4) {
+                Text("5h")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(t.mute)
+                Text(fiveReset)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(t.gold)
+            }
+            .lineLimit(1)
+            // Tertiary: 7d window — "7d 23% · " mute + gold reset.
+            HStack(spacing: 4) {
+                Text("\(L10n.t(.week, lang)) \(week)")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(t.mute)
+                Text("\u{00B7}")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(t.ash)
+                Text(weekReset)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(t.gold.opacity(0.85))
+            }
+            .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

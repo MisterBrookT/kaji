@@ -4,16 +4,14 @@ import SwiftUI
 //
 // The visual shown when the floating HUD is `.docked` against a screen edge.
 // A 36pt thin strip hosting:
-//   - the mostConstrained provider's logo + 5h % + reset countdown, on the
-//     SCREEN-edge side of the strip.
+//   - one cell per VISIBLE provider (logo + 5h %) along the SCREEN-edge side.
 //   - a curved handle ("ear") on the PANEL-facing side, with a chevron
 //     pointing the way the panel will unfold. Click handle (or anywhere on
 //     the strip) → `onExpand()`.
 //
 // Layout is done natively via HStack / VStack — no rotation. The strip's
 // long axis (height for left/right docks, width for top/bottom docks) is laid
-// out the way the eye reads it, so the chevron + percent text never need
-// a transform.
+// out the way the eye reads it, so the chevron + cells never need a transform.
 struct DockStripView: View {
     @ObservedObject var store: QuotaStore
     @ObservedObject var prefs: Prefs
@@ -23,11 +21,12 @@ struct DockStripView: View {
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
-    /// The provider currently closest to its 5h limit. Falls back to the
-    /// first available if none have data (we always show *something*).
-    private var provider: ProviderView? {
-        if let m = store.mostConstrained { return m }
-        return store.providers.first
+    /// All providers the user has chosen to show — we render one cell per
+    /// provider in the strip (the strip is long enough to fit them along its
+    /// long axis; cross axis stays 36pt). Order matches Providers.order so
+    /// Claude / Codex / MiniMax are visually consistent across surfaces.
+    private var providers: [ProviderView] {
+        store.providers.filter { prefs.isVisible($0.id) }
     }
 
     var body: some View {
@@ -74,58 +73,58 @@ struct DockStripView: View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
     }
 
-    // MARK: Content (logo + % + countdown)
+    // MARK: Content (all visible providers, one cell each)
 
+    /// All visible providers laid out along the strip's long axis:
+    /// - left/right dock (36pt wide): VStack of 3 cells, each ~24pt tall.
+    /// - top/bottom dock (36pt high): HStack of 3 cells, each ~24pt wide.
+    /// The cross axis is the strip's fixed 36pt thickness, so the cells stay
+    /// compact. Each cell is just a logo + the 5h % — the countdowns are
+    /// dropped here on purpose; the full HUD shows them on expand.
     private var content: some View {
-        VStack(spacing: 3) {
-            logo
-            percentLabel
-            countdownLabel
+        Group {
+            if providers.isEmpty {
+                // No providers yet — a tiny dot to mark the strip as ours.
+                Circle().fill(t.ash).frame(width: 5, height: 5)
+                    .padding(.vertical, 8)
+            } else {
+                switch edge {
+                case .left, .right:
+                    VStack(alignment: .center, spacing: 4) {
+                        ForEach(providers) { p in cell(p) }
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 6)
+                case .top, .bottom:
+                    HStack(alignment: .center, spacing: 8) {
+                        ForEach(providers) { p in cell(p) }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                }
+            }
         }
-        .padding(.horizontal, 6)
-        .padding(.vertical, 8)
     }
 
-    @ViewBuilder
-    private var logo: some View {
-        if let p = provider {
-            ProviderLogo(key: p.id, color: t.cream, size: 13)
-        } else {
-            // No providers yet — a tiny dot to mark the strip as ours.
-            Circle().fill(t.ash).frame(width: 5, height: 5)
+    /// One compact cell: tiny provider logo on top, % below. Sized so 3 of
+    /// them stack along the long axis of a 36pt strip without crowding.
+    private func cell(_ p: ProviderView) -> some View {
+        VStack(spacing: 2) {
+            ProviderLogo(key: p.id, color: t.cream, size: 11)
+            Text(percentText(p))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundColor(p.isNearLimit ? t.amber : t.gold)
+                .monospacedDigit()
+                .lineLimit(1)
+                .fixedSize()  // don't shrink — readability wins in a 36pt strip
         }
+        .frame(minWidth: 22, minHeight: 24)
     }
 
-    private var percentLabel: some View {
-        let text: String = {
-            guard let p = provider, let raw = p.fiveHourPercent else { return "—" }
-            let shown = prefs.showRemaining ? (100 - raw) : raw
-            return "\(Int(shown.rounded()))%"
-        }()
-        return Text(text)
-            .font(.system(size: 12.5, weight: .semibold, design: .rounded))
-            .foregroundColor(t.gold)
-            .lineLimit(1)
-            .fixedSize()  // don't shrink — readability wins in a 36pt strip
-    }
-
-    private var countdownLabel: some View {
-        Text(countdownText)
-            .font(.system(size: 8.5, weight: .regular, design: .monospaced))
-            .foregroundColor(t.cream.opacity(0.55))
-            .lineLimit(1)
-            .fixedSize()
-    }
-
-    /// "5h12m" or "12m" or "" when no data. Matches the menubar's compact
-    /// style — short enough to fit a 36pt strip without truncation.
-    private var countdownText: String {
-        guard let p = provider, let reset = p.resetDate else { return "·" }
-        let secs = max(0, Int(reset.timeIntervalSinceNow))
-        if secs <= 0 { return "now" }
-        let h = secs / 3600
-        let m = (secs % 3600) / 60
-        return h > 0 ? "\(h)h\(m)m" : "\(m)m"
+    private func percentText(_ p: ProviderView) -> String {
+        guard let raw = p.fiveHourPercent else { return "\u{2014}" }
+        let shown = prefs.showRemaining ? (100 - raw) : raw
+        return "\(Int(shown.rounded()))%"
     }
 
     // MARK: Handle (panel-facing side)

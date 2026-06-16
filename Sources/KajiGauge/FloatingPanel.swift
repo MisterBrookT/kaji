@@ -302,8 +302,8 @@ final class ResizeHandle: NSView {
 //   - `.snapped(edge)` — the panel moved within 14pt of a screen edge and
 //     we animated it flush to the edge. Same content; just relocated.
 //   - `.docked(edge)` — 240ms of stillness after a snap collapsed the panel
-//     into a thin 36pt strip (mostConstrained provider's logo + %). Strip
-//     sits on the chosen edge. Hover or drag the strip → back to expanded.
+//     into a thin 36pt strip (one cell per visible provider: logo + 5h %).
+//     Strip sits on the chosen edge. Hover or drag the strip → back to expanded.
 enum PanelState {
     case expanded
     case snapped(DockEdge)
