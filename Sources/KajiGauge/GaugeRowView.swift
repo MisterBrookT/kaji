@@ -15,16 +15,7 @@ struct GaugeRowView: View {
 
     var controls: Controls? = nil
 
-    /// When true the view expands to fill its container (used by the resizable
-    /// floating HUD — rings scale up with the panel width). Popover leaves
-    /// this false so the view still hugs its content and the popover stays
-    /// tight around its rings.
-    var expandToFill: Bool = false
-
-    /// Minimum / maximum ring diameter when scaling with the panel. Keeps the
-    /// gauge readable at small widths and prevents over-stretch at large ones.
-    private let minRing: CGFloat = 64
-    private let maxRing: CGFloat = 160
+    var panelSize: PanelSize? = nil
     /// Default ring size when the view is hugging its content (popover, or a
     /// panel that's at its natural fitting size).
     private let defaultRing: CGFloat = 84
@@ -45,36 +36,6 @@ struct GaugeRowView: View {
         store.providers.filter { prefs.isVisible($0.id) }
     }
 
-    /// Pick a ring diameter from BOTH width and height so the gauge never
-    /// overflows either axis. When the panel is tall+narrow we wrap to a
-    /// vertical stack; the ring then has the full row height to grow into.
-    /// - Parameter isTall: true → LazyVStack mode (one ring per row).
-    private func ringSize(width w: CGFloat, height h: CGFloat,
-                          n: Int, isTall: Bool) -> CGFloat {
-        guard n > 0 else { return minRing }
-        let rowSpacing: CGFloat = isTall ? 10 : 16
-        let padding: CGFloat = 28
-        // Chrome above (header) + below (label) the ring within each cell.
-        // 22 (header row including dot) + 38 (3-line label VStack at 12/10/10)
-        // + 12 (top→rings spacing) = 72. Real chrome in production = ~78 with
-        // 14pt top padding. We keep the under-estimate so 3-ring vertical
-        // mode still grows the ring at the panel's true min height.
-        let verticalChrome: CGFloat = 22 + 38 + 12
-        let perRingW = max(0, (w - padding - rowSpacing * CGFloat(n - 1)) / CGFloat(n))
-        let rowsHeight = max(0, h - verticalChrome)
-        let perRowH = isTall
-            ? (rowsHeight - rowSpacing * CGFloat(n - 1)) / CGFloat(n)
-            : rowsHeight
-        let maxFromHeight = max(0, perRowH - 38 - 7)   // label + VStack spacing
-        let raw = min(perRingW, maxFromHeight)
-        // Floor: when the panel is too narrow for n rings at minRing, fall
-        // back to whatever fits. 36pt keeps the label captions legible (the
-        // 3-line label VStack needs ~38pt to render at full size).
-        let effectiveMin = max(36, min(minRing,
-                                       (w - padding) / CGFloat(n) - rowSpacing))
-        return min(max(raw, effectiveMin), maxRing)
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -89,51 +50,13 @@ struct GaugeRowView: View {
         }
         .padding(14)
         .background(background)
-        .modifier(FitOrFill(expand: expandToFill))
+        .modifier(PanelOrPopoverFrame(panelSize: panelSize))
     }
 
     @ViewBuilder
     private var ringsRow: some View {
-        if expandToFill {
-            // GeometryReader drives both axis. Pick a layout that matches the
-            // panel's actual aspect: wide/short → HStack of stacked rings;
-            // tall/narrow → list rows (ring left, text right) so the
-            // provider name NEVER truncates to "Clau" / "Cod" / "Mini".
-            GeometryReader { geo in
-                let n = max(1, shown.count)
-                // Go list-mode when the row would overflow horizontally. A
-                // 3-ring stacked card needs ~130pt per slot (ring 84 + chrome
-                // + label width) — anything tighter goes to the list layout
-                // where the label gets the full panel width to breathe.
-                let slotNeeded: CGFloat = 130
-                let totalNeeded = slotNeeded * CGFloat(n) + 16 * CGFloat(n - 1) + 28
-                let isTall = n > 1 && geo.size.width < totalNeeded
-                let size = ringSize(width: geo.size.width,
-                                    height: geo.size.height,
-                                    n: n, isTall: isTall)
-                Group {
-                    if isTall {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(shown) { provider in
-                                CompactRingRow(provider: provider,
-                                               lang: prefs.language,
-                                               showRemaining: prefs.showRemaining,
-                                               ringSize: 56)
-                            }
-                        }
-                        .scrollDisabled(true)
-                    } else {
-                        HStack(alignment: .top, spacing: 16) {
-                            ForEach(shown) { provider in
-                                RingGauge(provider: provider, lang: prefs.language,
-                                          showRemaining: prefs.showRemaining,
-                                          ringSize: size)
-                            }
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
+        if let panelSize {
+            panelRings(panelSize)
         } else {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(shown) { provider in
@@ -145,12 +68,40 @@ struct GaugeRowView: View {
         }
     }
 
-    /// `.fixedSize()` for the popover (hugs content) → removed when the panel
-    /// mode is on (fills the panel, rings scale with width).
-    private struct FitOrFill: ViewModifier {
-        let expand: Bool
+    @ViewBuilder
+    private func panelRings(_ size: PanelSize) -> some View {
+        if size == .small {
+            VStack(alignment: .leading, spacing: 9) {
+                ForEach(shown) { provider in
+                    CompactRingRow(provider: provider,
+                                   lang: prefs.language,
+                                   showRemaining: prefs.showRemaining,
+                                   ringSize: size.ringSize)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(alignment: .top, spacing: size == .medium ? 14 : 18) {
+                ForEach(shown) { provider in
+                    RingGauge(provider: provider, lang: prefs.language,
+                              showRemaining: prefs.showRemaining,
+                              ringSize: size.ringSize)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private struct PanelOrPopoverFrame: ViewModifier {
+        let panelSize: PanelSize?
         func body(content: Content) -> some View {
-            if expand { content } else { content.fixedSize() }
+            if let panelSize {
+                content.frame(width: panelSize.frameSize.width,
+                              height: panelSize.frameSize.height,
+                              alignment: .topLeading)
+            } else {
+                content.fixedSize()
+            }
         }
     }
 
@@ -198,6 +149,22 @@ struct GaugeRowView: View {
                 }
                 segment(L10n.t(.showRemaining, prefs.language), on: prefs.showRemaining) {
                     prefs.showRemaining = true
+                }
+            }
+
+            HStack(spacing: 7) {
+                Text(L10n.t(.panelSize, prefs.language))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(t.mute)
+                Spacer(minLength: 8)
+                segment(L10n.t(.sizeSmall, prefs.language), on: prefs.panelSize == .small) {
+                    prefs.panelSize = .small
+                }
+                segment(L10n.t(.sizeMedium, prefs.language), on: prefs.panelSize == .medium) {
+                    prefs.panelSize = .medium
+                }
+                segment(L10n.t(.sizeLarge, prefs.language), on: prefs.panelSize == .large) {
+                    prefs.panelSize = .large
                 }
             }
 

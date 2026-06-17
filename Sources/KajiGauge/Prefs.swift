@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import CoreGraphics
 
 // MARK: - Prefs
 //
@@ -34,6 +35,9 @@ final class Prefs: ObservableObject {
     @Published var showRemaining: Bool {
         didSet { UserDefaults.standard.set(showRemaining, forKey: Key.showRemaining) }
     }
+    @Published var panelSize: PanelSize {
+        didSet { UserDefaults.standard.set(panelSize.rawValue, forKey: Key.panelSize) }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -41,6 +45,7 @@ final class Prefs: ObservableObject {
         static let menubarStyle = "menubarStyle"
         static let dockEdge = "panelDockEdge"
         static let showRemaining = "showRemaining"
+        static let panelSize = "panelSize"
     }
 
     init() {
@@ -73,6 +78,11 @@ final class Prefs: ObservableObject {
             showRemaining = d.bool(forKey: Key.showRemaining)
         } else {
             showRemaining = false
+        }
+        if let raw = d.string(forKey: Key.panelSize), let size = PanelSize(rawValue: raw) {
+            panelSize = size
+        } else {
+            panelSize = .medium
         }
     }
 
@@ -123,6 +133,26 @@ enum MenubarStyle: String {
     var toggled: MenubarStyle { self == .mono ? .color : .mono }
 }
 
+enum PanelSize: String, CaseIterable {
+    case small, medium, large
+
+    var frameSize: CGSize {
+        switch self {
+        case .small:  return CGSize(width: 236, height: 278)
+        case .medium: return CGSize(width: 360, height: 206)
+        case .large:  return CGSize(width: 520, height: 246)
+        }
+    }
+
+    var ringSize: CGFloat {
+        switch self {
+        case .small:  return 52
+        case .medium: return 78
+        case .large:  return 98
+        }
+    }
+}
+
 // MARK: - L10n
 //
 // Minimal two-language string table, keyed by an enum so callers can't typo a
@@ -135,7 +165,8 @@ enum L10n {
         case refreshNow, quitApp, language, providers, show
         case menubar, styleMono, styleColor
         case dockExpand, dockHint
-        case usage, showUsed, showRemaining
+            case usage, showUsed, showRemaining
+            case panelSize, sizeSmall, sizeMedium, sizeLarge
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -156,10 +187,14 @@ enum L10n {
         .styleMono:    ("Mono",               "\u{9ED1}\u{767D}"),                         // 黑白
         .styleColor:   ("Color",              "\u{5F69}\u{8272}"),                         // 彩色
         .dockExpand:   ("tap to expand",      "\u{70B9}\u{51FB}\u{5C55}\u{5F00}"),         // 点击展开
-        .dockHint:     ("drag to undock",     "\u{62D6}\u{52A8}\u{5C55}\u{5F00}"),         // 拖动展开
+        .dockHint:     ("click arrow",        "\u{70B9}\u{7BAD}\u{5934}"),                 // 点箭头
         .usage:        ("Usage",              "\u{7528}\u{91CF}"),                         // 用量
         .showUsed:     ("Used",               "\u{5DF2}\u{7528}"),                         // 已用
         .showRemaining:("Remaining",          "\u{5269}\u{4F59}"),                         // 剩余
+        .panelSize:    ("Size",               "\u{5927}\u{5C0F}"),                         // 大小
+        .sizeSmall:    ("S",                  "\u{5C0F}"),                                 // 小
+        .sizeMedium:   ("M",                  "\u{4E2D}"),                                 // 中
+        .sizeLarge:    ("L",                  "\u{5927}"),                                 // 大
     ]
 
     static func t(_ k: K, _ lang: Lang) -> String {

@@ -3,11 +3,9 @@ import SwiftUI
 // MARK: - DockStripView
 //
 // The visual shown when the floating HUD is `.docked` against a screen edge.
-// A 36pt thin strip hosting:
+// A fixed side tab hosting:
 //   - one cell per VISIBLE provider (logo + 5h %) along the SCREEN-edge side.
-//   - a curved handle ("ear") on the PANEL-facing side, with a chevron
-//     pointing the way the panel will unfold. Click handle (or anywhere on
-//     the strip) → `onExpand()`.
+//   - a curved handle on the panel-facing side. Click arrow → `onExpand()`.
 //
 // Layout is done natively via HStack / VStack — no rotation. The strip's
 // long axis (height for left/right docks, width for top/bottom docks) is laid
@@ -35,20 +33,19 @@ struct DockStripView: View {
         Group {
             switch edge {
             case .left:
-                HStack(spacing: 0) { handle; content }
-            case .right:
                 HStack(spacing: 0) { content; handle }
+            case .right:
+                HStack(spacing: 0) { handle; content }
             case .top:
-                VStack(spacing: 0) { handle; content }
-            case .bottom:
                 VStack(spacing: 0) { content; handle }
+            case .bottom:
+                VStack(spacing: 0) { handle; content }
             }
         }
         .background(stripBg)
         .overlay(stripOutline)
         .clipShape(stripShape)
         .contentShape(stripShape)
-        .onTapGesture(perform: onExpand)
     }
 
     // MARK: Background + shape
@@ -63,14 +60,12 @@ struct DockStripView: View {
     }
 
     private var stripOutline: some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .stroke(t.gold.opacity(0.55), lineWidth: 1)
+        DockTabShape(edge: edge, radius: 22)
+            .stroke(t.gold.opacity(0.46), lineWidth: 1)
     }
 
-    /// Capsule on both ends — the panel-facing edge already curves gracefully,
-    /// and the dedicated handle View on top of it pops as the affordance.
     private var stripShape: some Shape {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        DockTabShape(edge: edge, radius: 22)
     }
 
     // MARK: Content (all visible providers, one cell each)
@@ -90,17 +85,17 @@ struct DockStripView: View {
             } else {
                 switch edge {
                 case .left, .right:
-                    VStack(alignment: .center, spacing: 4) {
+                    VStack(alignment: .center, spacing: 7) {
                         ForEach(providers) { p in cell(p) }
                     }
-                    .padding(.vertical, 8)
-                    .padding(.horizontal, 6)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 4)
                 case .top, .bottom:
                     HStack(alignment: .center, spacing: 8) {
                         ForEach(providers) { p in cell(p) }
                     }
                     .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, 4)
                 }
             }
         }
@@ -112,13 +107,13 @@ struct DockStripView: View {
         VStack(spacing: 2) {
             ProviderLogo(key: p.id, color: t.cream, size: 11)
             Text(percentText(p))
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                 .foregroundColor(p.isNearLimit ? t.amber : t.gold)
                 .monospacedDigit()
                 .lineLimit(1)
-                .fixedSize()  // don't shrink — readability wins in a 36pt strip
+                .minimumScaleFactor(0.78)
         }
-        .frame(minWidth: 22, minHeight: 24)
+        .frame(width: 36, height: 35)
     }
 
     private func percentText(_ p: ProviderView) -> String {
@@ -135,18 +130,36 @@ struct DockStripView: View {
     /// The whole strip is also tappable as a fallback.
     private var handle: some View {
         ZStack {
-            Capsule(style: .continuous)
-                .fill(t.gold.opacity(0.18))
-                .overlay(Capsule(style: .continuous)
-                    .stroke(t.gold.opacity(0.7), lineWidth: 1))
-            Image(systemName: chevronName)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(t.gold)
+            Button(action: onExpand) {
+                ZStack {
+                    Capsule(style: .continuous)
+                        .fill(t.gold.opacity(0.10))
+                        .overlay(Capsule(style: .continuous)
+                            .stroke(t.gold.opacity(0.52), lineWidth: 1))
+                    Image(systemName: chevronName)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(t.gold)
+                }
+                .frame(width: edge == .left || edge == .right ? 18 : 34,
+                       height: edge == .left || edge == .right ? 52 : 18)
+            }
+            .buttonStyle(.plain)
+
+            if edge == .left || edge == .right {
+                Capsule(style: .continuous)
+                    .fill(t.gold.opacity(0.18))
+                    .frame(width: 1.5, height: 50)
+                    .offset(x: edge == .left ? 13 : -13)
+                    .allowsHitTesting(false)
+            } else {
+                Capsule(style: .continuous)
+                    .fill(t.gold.opacity(0.18))
+                    .frame(width: 50, height: 1.5)
+                    .offset(y: edge == .top ? -13 : 13)
+                    .allowsHitTesting(false)
+            }
         }
         .frame(width: handleSize.width, height: handleSize.height)
-        .padding(3)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onExpand)
     }
 
     /// Tall thin pill on left/right docks, short wide pill on top/bottom.
@@ -155,9 +168,9 @@ struct DockStripView: View {
     private var handleSize: CGSize {
         switch edge {
         case .left, .right:
-            return CGSize(width: 14, height: 44)
+            return CGSize(width: 22, height: 78)
         case .top, .bottom:
-            return CGSize(width: 44, height: 14)
+            return CGSize(width: 78, height: 22)
         }
     }
 
@@ -169,5 +182,55 @@ struct DockStripView: View {
         case .top:    return "chevron.down"    // panel unrolls down
         case .bottom: return "chevron.up"      // panel unrolls up
         }
+    }
+}
+
+private struct DockTabShape: Shape {
+    let edge: DockEdge
+    let radius: CGFloat
+
+    func path(in rect: CGRect) -> Path {
+        let r = min(radius, rect.width / 2, rect.height / 2)
+        var p = Path()
+        switch edge {
+        case .left:
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+            p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r),
+                           control: CGPoint(x: rect.maxX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
+            p.addQuadCurve(to: CGPoint(x: rect.maxX - r, y: rect.maxY),
+                           control: CGPoint(x: rect.maxX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
+        case .right:
+            p.move(to: CGPoint(x: rect.maxX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.minX + r, y: rect.minY))
+            p.addQuadCurve(to: CGPoint(x: rect.minX, y: rect.minY + r),
+                           control: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+            p.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY),
+                           control: CGPoint(x: rect.minX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .top:
+            p.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + r))
+            p.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.minY),
+                           control: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.minY))
+            p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.minY + r),
+                           control: CGPoint(x: rect.maxX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        case .bottom:
+            p.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            p.addLine(to: CGPoint(x: rect.minX, y: rect.maxY - r))
+            p.addQuadCurve(to: CGPoint(x: rect.minX + r, y: rect.maxY),
+                           control: CGPoint(x: rect.minX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.maxX - r, y: rect.maxY))
+            p.addQuadCurve(to: CGPoint(x: rect.maxX, y: rect.maxY - r),
+                           control: CGPoint(x: rect.maxX, y: rect.maxY))
+            p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        }
+        p.closeSubpath()
+        return p
     }
 }

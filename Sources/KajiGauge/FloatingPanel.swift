@@ -3,31 +3,22 @@ import SwiftUI
 import Combine
 
 // MARK: - DraggablePanel
-//
-// An always-on-top, borderless HUD panel that the user can drag anywhere on
-// the desktop. .nonactivatingPanel so clicking it never steals focus from the
-// frontmost app; .floating level so it stays above normal windows.
-//
-// Borderless NSPanels default to a ~3pt edge hit zone for resizing — the user
-// has to park the cursor right on the edge. We widen this to 10pt by
-// installing eight invisible `ResizeHandle` views (one per edge + corner)
-// that own the resize gesture + cursor and sit ABOVE the SwiftUI host so they
-// get first crack at mouse events.
 final class DraggablePanel: NSPanel {
-    /// Edge width for the resize hit zone. 16pt ≈ a comfortable grab target
-    /// + room for a visible 1.5pt track line + L-shape corner indicator. The
-    /// handles are still mostly transparent — only the inner-edge track line
-    /// is drawn, so the wider hit zone doesn't leak into the content.
-    private static let edgeWidth: CGFloat = 16
-
     init(content: NSView) {
+        let fitting = content.fittingSize
+        let initialSize = NSSize(
+            width: max(1, fitting.width),
+            height: max(1, fitting.height)
+        )
+        let container = NSView(frame: NSRect(origin: .zero, size: initialSize))
+        container.configureKajiHost()
+        content.frame = container.bounds
+        content.autoresizingMask = [.width, .height]
+        container.addSubview(content)
+
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 200),
-            // No .hudWindow — its material forces a dark vibrancy that fights the
-            // light "Kaji Sun" theme. We paint our own warm gradient instead.
-            // .resizable so we can also drag the edges/corners via the
-            // ResizeHandle subviews; we paint our own shadow (no native chrome).
-            styleMask: [.borderless, .nonactivatingPanel, .resizable],
+            contentRect: NSRect(origin: .zero, size: initialSize),
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -43,64 +34,13 @@ final class DraggablePanel: NSPanel {
         hasShadow = true
         hidesOnDeactivate = false
 
-        contentView = content
+        contentView = container
         // Size to fit the SwiftUI content.
-        if let fitting = content.fittingSize as NSSize?, fitting.width > 0 {
+        if fitting.width > 0 {
             setContentSize(fitting)
         }
 
-        // Initial bounds use the LARGEST visible-ring case (3-ring vertical
-        // wrap, 200x340). The controller narrows the lower bound as visible
-        // rings change, via `updateMinSize(forVisibleRings:)`. The upper bound
-        // stays at the original 720x360 — that's still where rings stop
-        // scaling.
-        let maxW: CGFloat = 720
-        let maxH: CGFloat = 360
-        let defaultMin = DraggablePanel.minSize(forVisibleRings: 3)
-        minSize = defaultMin
-        maxSize = NSSize(width: maxW, height: maxH)
-        contentMinSize = defaultMin
-        contentMaxSize = NSSize(width: maxW, height: maxH)
-
-        // Install the eight resize handles. The hosting view is also added so
-        // the SwiftUI content still draws (these handles are transparent).
-        if let host = contentView {
-            host.wantsLayer = true
-            host.layer?.backgroundColor = .clear
-            installResizeHandles(on: host)
-        }
-    }
-
-    /// Pick a min size for the panel given how many provider rings the user
-    /// currently has visible. 1-2 rings sit in an HStack (need W), 3+ wraps
-    /// to a LazyVStack (need H). We never go below the natural chrome — below
-    /// that the SwiftUI content starts to clip and the legend truncates.
-    static func minSize(forVisibleRings n: Int) -> NSSize {
-        if n <= 2 {
-            // 1 ring ≈ 84 + label; 2 rings HStack need ~280 to fit 84+84+16+chrome.
-            // Height = ring + label + chrome ≈ 160; below that the panel feels
-            // squeezed and the popover font starts to shrink.
-            let w: CGFloat = n == 1 ? 200 : 280
-            return NSSize(width: w, height: 160)
-        }
-        // 3 rings vertical: ring(36) + label(38) + spacing(7) per cell, 3 cells
-        // + 2 inter-cell gaps + top chrome (header+padding ≈ 54) + bottom 14.
-        // Round up to 340 so the label VStack never gets squeezed.
-        return NSSize(width: 200, height: 340)
-    }
-
-    /// Re-apply the lower bound when the user's visible-ring count changes.
-    /// Capped to the current frame so we don't SHRINK a live panel the user
-    /// is already looking at — only expand the bound so the user can shrink
-    /// back down to the new minimum.
-    func updateMinSize(forVisibleRings n: Int) {
-        let target = DraggablePanel.minSize(forVisibleRings: n)
-        // If the panel is already larger than the new min, keep the panel
-        // size and just relax the lower bound to the new min.
-        minSize = NSSize(width: min(target.width, frame.width),
-                         height: min(target.height, frame.height))
-        contentMinSize = NSSize(width: min(target.width, frame.width),
-                                height: min(target.height, frame.height))
+        setFixedContentSize(initialSize)
     }
 
     // Borderless windows can't become key by default; allow it so SwiftUI
@@ -108,186 +48,11 @@ final class DraggablePanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
-    private func installResizeHandles(on host: NSView) {
-        let w = DraggablePanel.edgeWidth
-        // Corners first (drawn last so they sit on top of the edge handles
-        // and own the cursor at the intersection). Each corner is square of
-        // side `w`; edges are thin strips.
-        let corners: [(ResizeHandle.Kind, CGRect)] = [
-            (.topLeft,     CGRect(x: 0, y: host.bounds.maxY - w,
-                                  width: w, height: w)),
-            (.topRight,    CGRect(x: host.bounds.maxX - w, y: host.bounds.maxY - w,
-                                  width: w, height: w)),
-            (.bottomLeft,  CGRect(x: 0, y: 0, width: w, height: w)),
-            (.bottomRight, CGRect(x: host.bounds.maxX - w, y: 0,
-                                  width: w, height: w)),
-        ]
-        let edges: [(ResizeHandle.Kind, CGRect)] = [
-            (.top,    CGRect(x: w, y: host.bounds.maxY - w,
-                             width: max(0, host.bounds.width - 2 * w), height: w)),
-            (.bottom, CGRect(x: w, y: 0,
-                             width: max(0, host.bounds.width - 2 * w), height: w)),
-            (.left,   CGRect(x: 0, y: w, width: w,
-                             height: max(0, host.bounds.height - 2 * w))),
-            (.right,  CGRect(x: host.bounds.maxX - w, y: w, width: w,
-                             height: max(0, host.bounds.height - 2 * w))),
-        ]
-        for (kind, rect) in edges + corners {
-            let handle = ResizeHandle(kind: kind, panel: self)
-            handle.frame = rect
-            handle.autoresizingMask = autoresizeMask(for: kind, in: host)
-            host.addSubview(handle)
-        }
-    }
-
-    private func autoresizeMask(for kind: ResizeHandle.Kind,
-                                in host: NSView) -> NSView.AutoresizingMask {
-        // Edges/corners move with their adjacent sides when the panel resizes.
-        switch kind {
-        case .topLeft:     return [.maxXMargin, .minYMargin]
-        case .topRight:    return [.minXMargin, .minYMargin]
-        case .bottomLeft:  return [.maxXMargin, .maxYMargin]
-        case .bottomRight: return [.minXMargin, .maxYMargin]
-        case .top:         return [.width, .minYMargin]
-        case .bottom:      return [.width, .maxYMargin]
-        case .left:        return [.maxXMargin, .height]
-        case .right:       return [.minXMargin, .height]
-        }
-    }
-
-    /// Tear down + reinstall all eight ResizeHandle subviews. Called by the
-    /// controller after swapping the SwiftUI hosting view (dock ↔ HUD) so
-    /// the handles always sit on top of the new content with the right z-order.
-    func reinstallResizeHandles() {
-        guard let host = contentView else { return }
-        host.subviews
-            .compactMap { $0 as? ResizeHandle }
-            .forEach { $0.removeFromSuperview() }
-        installResizeHandles(on: host)
-    }
-}
-
-// MARK: - ResizeHandle
-//
-// An NSView that owns one of the eight panel edges/corners. The hit zone is
-// 16pt wide. Cursor changes on enter so the user reads the affordance from
-// the cursor shape alone — we deliberately paint NOTHING here, so the chrome
-// stays out of the way of the SwiftUI content. Earlier iterations drew a 1.5pt
-// track + a gold hover line; both were dropped after user feedback said they
-// felt more like glitches than affordances.
-final class ResizeHandle: NSView {
-    enum Kind {
-        case topLeft, topRight, bottomLeft, bottomRight
-        case top, bottom, left, right
-    }
-    private let kind: Kind
-    private weak var panel: NSPanel?
-    private var startOrigin: NSPoint = .zero
-    private var startSize: NSSize = .zero
-    private var startFrame: NSRect = .zero
-
-    init(kind: Kind, panel: NSPanel) {
-        self.kind = kind
-        self.panel = panel
-        super.init(frame: .zero)
-        // Transparent — cursor change is the only affordance.
-        wantsLayer = true
-        layer?.backgroundColor = .clear
-    }
-    required init?(coder: NSCoder) { fatalError() }
-
-    override var acceptsFirstResponder: Bool { true }
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        // Block any hits in our rect so the SwiftUI host doesn't steal them.
-        // We still let the panel's own isMovableByWindowBackground handle the
-        // background drag (we only sit on the edges).
-        bounds.contains(point) ? self : nil
-    }
-
-    override func resetCursorRects() {
-        addCursorRect(bounds, cursor: cursor())
-    }
-
-    override func draw(_ dirtyRect: NSRect) {
-        // Intentional no-op — see file header.
-    }
-
-    override func mouseDown(with event: NSEvent) {
-        guard let panel = panel else { return }
-        startFrame = panel.frame
-        startOrigin = startFrame.origin
-        startSize = startFrame.size
-        window?.makeFirstResponder(self)
-    }
-
-    override func mouseDragged(with event: NSEvent) {
-        guard let panel = panel else { return }
-        // Location in window coords; convert to delta in screen coords (Y up).
-        let loc = event.locationInWindow
-        let start = window?.mouseLocationOutsideOfEventStream ?? loc
-        let dx = loc.x - start.x
-        let dy = loc.y - start.y
-        apply(dx: dx, dy: dy, to: panel)
-    }
-
-    private func apply(dx: CGFloat, dy: CGFloat, to panel: NSPanel) {
-        var origin = startOrigin
-        var size = startSize
-        // NSPanel resize: edges/corners modify origin + size according to which
-        // side the user grabbed. Y is screen-up here (dy > 0 = drag up).
-        switch kind {
-        case .topLeft:
-            origin.x += dx; origin.y += dy
-            size.width -= dx; size.height += dy
-        case .topRight:
-            origin.y += dy
-            size.width += dx; size.height += dy
-        case .bottomLeft:
-            origin.x += dx
-            size.width -= dx; size.height -= dy
-        case .bottomRight:
-            size.width += dx; size.height -= dy
-        case .top:
-            origin.y += dy
-            size.height += dy
-        case .bottom:
-            size.height -= dy
-        case .left:
-            origin.x += dx
-            size.width -= dx
-        case .right:
-            size.width += dx
-        }
-        // Clamp to the same bounds the panel's minSize / maxSize enforce.
-        let minS = panel.minSize, maxS = panel.maxSize
-        size.width = min(max(size.width, minS.width),  maxS.width)
-        size.height = min(max(size.height, minS.height), maxS.height)
-        // Re-derive origin for the clamped size so the grabbed edge stays
-        // anchored to the cursor (only the non-anchored corners move).
-        switch kind {
-        case .topLeft:
-            origin.x = startOrigin.x + (startSize.width - size.width)
-            origin.y = startOrigin.y + (startSize.height - size.height)
-        case .topRight:
-            origin.y = startOrigin.y + (startSize.height - size.height)
-        case .bottomLeft:
-            origin.x = startOrigin.x + (startSize.width - size.width)
-        case .top:
-            origin.y = startOrigin.y + (startSize.height - size.height)
-        case .left:
-            origin.x = startOrigin.x + (startSize.width - size.width)
-        default: break
-        }
-        panel.setFrame(NSRect(origin: origin, size: size), display: true)
-    }
-
-    private func cursor() -> NSCursor {
-        switch kind {
-        case .topLeft, .bottomRight: return .crosshair
-        case .topRight, .bottomLeft: return .crosshair
-        case .top, .bottom:          return .resizeUpDown
-        case .left, .right:          return .resizeLeftRight
-        }
+    func setFixedContentSize(_ size: NSSize) {
+        minSize = size
+        maxSize = size
+        contentMinSize = size
+        contentMaxSize = size
     }
 }
 
@@ -297,13 +62,12 @@ final class ResizeHandle: NSView {
 // (not the view) so SwiftUI sees a single root and we can swap it without
 // rebuilding the panel.
 //
-//   - `.expanded` — the regular HUD: rings, labels, header. Drag from any
-//     inner pixel; resize from the 8 invisible ResizeHandles on the border.
+//   - `.expanded` — fixed-size HUD. Drag body to place.
 //   - `.snapped(edge)` — the panel moved within 14pt of a screen edge and
 //     we animated it flush to the edge. Same content; just relocated.
 //   - `.docked(edge)` — 240ms of stillness after a snap collapsed the panel
 //     into a thin 36pt strip (one cell per visible provider: logo + 5h %).
-//     Strip sits on the chosen edge. Hover or drag the strip → back to expanded.
+//     Strip sits on the chosen edge. Click arrow → back to expanded.
 enum PanelState {
     case expanded
     case snapped(DockEdge)
@@ -331,8 +95,7 @@ final class FloatingPanelController {
     private let prefs: Prefs
     private var cancellables = Set<AnyCancellable>()
 
-    /// Number of providers the user has chosen to show. Drives the panel's
-    /// min size — see `DraggablePanel.minSize(forVisibleRings:)`.
+    /// Number of providers the user has chosen to show. Drives dock tab length.
     private var shownCount: Int {
         store.providers.filter { prefs.isVisible($0.id) }.count
     }
@@ -356,10 +119,13 @@ final class FloatingPanelController {
 
     /// didMoveNotification observer — drives the snap → dock state machine.
     private var moveObserver: NSObjectProtocol?
+    private var suppressMoveHandling = false
+    private var dockReclampTimer: Timer?
 
-    /// Snap + dock constants. Kept on the controller so the behavior is
-    /// self-contained; if these ever need user-tunable, lift to Prefs.
-    private static let stripThickness: CGFloat = 36
+    private static let sideTabWidth: CGFloat = 68
+    private static let topTabHeight: CGFloat = 66
+    private static let dockCellLength: CGFloat = 42
+    private static let dockPadLength: CGFloat = 24
     private static let snapThreshold: CGFloat = 14
     private static let snapAnimationDuration: TimeInterval = 0.18
     private static let dockDelay: TimeInterval = 0.24
@@ -368,15 +134,14 @@ final class FloatingPanelController {
     init(store: QuotaStore, prefs: Prefs) {
         self.store = store
         self.prefs = prefs
-        // Re-apply the min size whenever the user's visible-ring set changes
-        // (provider toggle in the popover/menu) OR the store reports new data
-        // (a provider that was previously "no data" now has a row to show).
-        // MainActor: all UI work; no need to hop.
         store.$providers
-            .sink { [weak self] _ in self?.applyMinSize() }
+            .sink { [weak self] _ in self?.refreshCurrentMode() }
             .store(in: &cancellables)
         prefs.$visibleProviders
-            .sink { [weak self] _ in self?.applyMinSize() }
+            .sink { [weak self] _ in self?.refreshCurrentMode() }
+            .store(in: &cancellables)
+        prefs.$panelSize
+            .sink { [weak self] _ in self?.refreshCurrentMode() }
             .store(in: &cancellables)
         // prefs.dockEdge is persisted via its own didSet; no controller-side
         // hook needed today, but we keep a sink registered for future
@@ -406,12 +171,10 @@ final class FloatingPanelController {
 
     func show() {
         if panel == nil {
-            // Resizable HUD: GaugeRowView runs in `expandToFill` mode so the
-            // SwiftUI view tracks the panel's width and rings scale together.
-            let root = GaugeRowView(store: store, prefs: prefs, expandToFill: true)
+            let root = GaugeRowView(store: store, prefs: prefs, panelSize: prefs.panelSize)
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             let hosting = NSHostingView(rootView: root)
-            hosting.layer?.cornerRadius = 14
+            hosting.configureKajiHost(cornerRadius: 14)
             hosting.frame = NSRect(origin: .zero, size: hosting.fittingSize)
             // Track the panel's content size on resize (width + height), so
             // the SwiftUI view reflows instead of staying anchored top-left.
@@ -431,7 +194,7 @@ final class FloatingPanelController {
             pendingStartupDock = prefs.dockEdge
         }
         panel?.orderFrontRegardless()
-        applyMinSize()  // covers the show-after-data-arrived case
+        refreshCurrentMode()
         // Defer startup-dock to the next runloop tick so the panel's content
         // view is fully wired up before we swap in the dock strip.
         if let edge = pendingStartupDock {
@@ -448,6 +211,8 @@ final class FloatingPanelController {
         // while hidden.
         snapTimer?.invalidate()
         snapTimer = nil
+        dockReclampTimer?.invalidate()
+        dockReclampTimer = nil
         if let obs = moveObserver {
             NotificationCenter.default.removeObserver(obs)
             moveObserver = nil
@@ -461,11 +226,20 @@ final class FloatingPanelController {
         UserDefaults.standard.set(false, forKey: Config.kPanelVisible)
     }
 
-    /// Push the current visible-ring count down to the panel as a min-size
-    /// floor. No-op if the panel isn't shown yet (it'll fire on first show()).
-    private func applyMinSize() {
+    private func refreshCurrentMode() {
         guard let panel else { return }
-        panel.updateMinSize(forVisibleRings: shownCount)
+        switch state {
+        case .expanded, .snapped:
+            swapContentToGaugeRow()
+            let target = frameKeepingTopRight(panel.frame, size: prefs.panelSize.frameSize)
+            panel.setFixedContentSize(target.size)
+            setPanelFrame(target, animated: false)
+        case .docked(let edge):
+            swapContentToDockStrip(for: edge)
+            let target = makeDockFrame(for: edge, base: panel.frame)
+            panel.setFixedContentSize(target.size)
+            setPanelFrame(target, animated: false)
+        }
     }
 
     // MARK: - Snap + dock state machine
@@ -517,6 +291,7 @@ final class FloatingPanelController {
     }
 
     private func handlePanelMoved() {
+        guard !suppressMoveHandling else { return }
         guard let panel else { return }
         let detection = detectNearestEdge(panel: panel)
         switch detection {
@@ -525,8 +300,10 @@ final class FloatingPanelController {
             switch state {
             case .expanded:
                 snapTimer?.invalidate(); snapTimer = nil
-            case .snapped, .docked:
+            case .snapped:
                 expandFromDock(animated: true)
+            case .docked(let edge):
+                scheduleDockReclamp(edge)
             }
         case .near(let edge):
             switch state {
@@ -548,10 +325,8 @@ final class FloatingPanelController {
                     // dock timer so 240ms of stillness commits the dock.
                     scheduleDockTimer(for: edge)
                 }
-            case .docked:
-                // User grabbed the docked strip and dragged — pop back to
-                // expanded immediately. The next edge detection re-arms.
-                expandFromDock(animated: true)
+            case .docked(let edge):
+                scheduleDockReclamp(edge)
             }
         }
     }
@@ -573,11 +348,7 @@ final class FloatingPanelController {
         case .top:    target = NSRect(x: f.minX, y: v.maxY - f.height, width: f.width, height: f.height)
         case .bottom: target = NSRect(x: f.minX, y: v.minY,           width: f.width, height: f.height)
         }
-        NSAnimationContext.runAnimationGroup { ctx in
-            ctx.duration = Self.snapAnimationDuration
-            ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().setFrame(target, display: true)
-        }
+        setPanelFrame(target, animated: true, duration: Self.snapAnimationDuration)
     }
 
     private func scheduleDockTimer(for edge: DockEdge) {
@@ -601,24 +372,35 @@ final class FloatingPanelController {
     private func enterDockedMode(edge: DockEdge, animated: Bool) {
         guard let panel else { return }
         snapTimer?.invalidate(); snapTimer = nil
+        if savedExpandedFrame == nil {
+            savedExpandedFrame = panel.frame
+        }
         state = .docked(edge)
         prefs.dockEdge = edge
+        panel.isMovableByWindowBackground = true
         swapContentToDockStrip(for: edge)
         let target = makeDockFrame(for: edge, base: panel.frame)
-        // Lock the panel to the strip thickness so the user can't drag it
-        // wider from a docked handle. Expanded mode restores the proper min
-        // in expandFromDock().
-        panel.minSize = NSSize(width: Self.stripThickness, height: Self.stripThickness)
-        panel.contentMinSize = panel.minSize
-        if animated {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = Self.dockAnimationDuration
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().setFrame(target, display: true)
-            }
-        } else {
-            panel.setFrame(target, display: true)
+        panel.setFixedContentSize(target.size)
+        setPanelFrame(target, animated: animated, duration: Self.dockAnimationDuration)
+    }
+
+    private func scheduleDockReclamp(_ edge: DockEdge) {
+        dockReclampTimer?.invalidate()
+        dockReclampTimer = Timer.scheduledTimer(withTimeInterval: 0.16,
+                                                repeats: false) { [weak self] _ in
+            Task { @MainActor in self?.reclampDockedTab(edge) }
         }
+    }
+
+    private func reclampDockedTab(_ edge: DockEdge) {
+        guard let panel else { return }
+        if NSEvent.pressedMouseButtons & 1 != 0 {
+            scheduleDockReclamp(edge)
+            return
+        }
+        let target = makeDockFrame(for: edge, base: panel.frame)
+        panel.setFixedContentSize(target.size)
+        setPanelFrame(target, animated: true, duration: 0.12)
     }
 
     /// Restore the panel to `.expanded` at the saved frame. The saved frame
@@ -626,77 +408,134 @@ final class FloatingPanelController {
     private func expandFromDock(animated: Bool) {
         guard let panel else { return }
         snapTimer?.invalidate(); snapTimer = nil
-        // If we were never saved (e.g. direct dock from launch), fall back
-        // to the current frame so the panel doesn't teleport to stale state.
-        let target = savedExpandedFrame ?? panel.frame
+        dockReclampTimer?.invalidate(); dockReclampTimer = nil
+        let edge = state.edge
+        // Startup-dock path may lack a saved HUD frame.
+        let base = savedExpandedFrame ?? fallbackExpandedFrame(from: panel.frame, edge: edge)
+        let target = clampExpandedFrame(NSRect(origin: base.origin, size: prefs.panelSize.frameSize))
         state = .expanded
         prefs.dockEdge = nil
+        panel.isMovableByWindowBackground = true
         swapContentToGaugeRow()
-        // Restore the proper min size for the user's current ring count.
-        panel.updateMinSize(forVisibleRings: shownCount)
+        panel.setFixedContentSize(target.size)
         savedExpandedFrame = nil
-        if animated {
-            NSAnimationContext.runAnimationGroup { ctx in
-                ctx.duration = Self.dockAnimationDuration
-                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
-                panel.animator().setFrame(target, display: true)
-            }
-        } else {
-            panel.setFrame(target, display: true)
-        }
+        setPanelFrame(target, animated: animated, duration: Self.dockAnimationDuration)
     }
 
-    /// Frame a docked panel should occupy: flush to the edge, with the
-    /// strip thickness on the cross axis. Long axis (height for left/right,
-    /// width for top/bottom) keeps the user's snap-time size.
+    /// Frame a docked panel should occupy: fully visible, flush to edge.
     private func makeDockFrame(for edge: DockEdge, base: NSRect) -> NSRect {
         guard let screen = panel?.screen ?? NSScreen.main else { return base }
         let v = screen.visibleFrame
-        let t = Self.stripThickness
+        let count = max(1, shownCount)
+        let long = max(132, CGFloat(count) * Self.dockCellLength + Self.dockPadLength)
         switch edge {
-        case .left:   return NSRect(x: v.minX,           y: base.minY, width: t, height: base.height)
-        case .right:  return NSRect(x: v.maxX - t,       y: base.minY, width: t, height: base.height)
-        case .top:    return NSRect(x: base.minX, y: v.maxY - t,       width: base.width, height: t)
-        case .bottom: return NSRect(x: base.minX, y: v.minY,           width: base.width, height: t)
+        case .left:
+            let h = min(long, v.height - 16)
+            let y = clamp(base.midY - h / 2, v.minY + 8, v.maxY - h - 8)
+            return NSRect(x: v.minX, y: y, width: Self.sideTabWidth, height: h)
+        case .right:
+            let h = min(long, v.height - 16)
+            let y = clamp(base.midY - h / 2, v.minY + 8, v.maxY - h - 8)
+            return NSRect(x: v.maxX - Self.sideTabWidth, y: y, width: Self.sideTabWidth, height: h)
+        case .top:
+            let w = min(long, v.width - 16)
+            let x = clamp(base.midX - w / 2, v.minX + 8, v.maxX - w - 8)
+            return NSRect(x: x, y: v.maxY - Self.topTabHeight, width: w, height: Self.topTabHeight)
+        case .bottom:
+            let w = min(long, v.width - 16)
+            let x = clamp(base.midX - w / 2, v.minX + 8, v.maxX - w - 8)
+            return NSRect(x: x, y: v.minY, width: w, height: Self.topTabHeight)
         }
+    }
+
+    private func fallbackExpandedFrame(from strip: NSRect, edge: DockEdge?) -> NSRect {
+        guard let screen = panel?.screen ?? NSScreen.main else { return strip }
+        let v = screen.visibleFrame
+        let size = prefs.panelSize.frameSize
+        let margin: CGFloat = 8
+        let x: CGFloat
+        let y: CGFloat
+        switch edge {
+        case .left:
+            x = v.minX + margin
+            y = clamp(strip.midY - size.height / 2, v.minY + margin, v.maxY - size.height - margin)
+        case .right:
+            x = v.maxX - size.width - margin
+            y = clamp(strip.midY - size.height / 2, v.minY + margin, v.maxY - size.height - margin)
+        case .top:
+            x = clamp(strip.midX - size.width / 2, v.minX + margin, v.maxX - size.width - margin)
+            y = v.maxY - size.height - margin
+        case .bottom:
+            x = clamp(strip.midX - size.width / 2, v.minX + margin, v.maxX - size.width - margin)
+            y = v.minY + margin
+        case .none:
+            x = clamp(strip.minX, v.minX + margin, v.maxX - size.width - margin)
+            y = clamp(strip.minY, v.minY + margin, v.maxY - size.height - margin)
+        }
+        return NSRect(origin: NSPoint(x: x, y: y), size: size)
+    }
+
+    private func clampExpandedFrame(_ frame: NSRect) -> NSRect {
+        guard let screen = panel?.screen ?? NSScreen.main else { return frame }
+        let v = screen.visibleFrame
+        let margin: CGFloat = 8
+        let x = clamp(frame.minX, v.minX + margin, v.maxX - frame.width - margin)
+        let y = clamp(frame.minY, v.minY + margin, v.maxY - frame.height - margin)
+        return NSRect(x: x, y: y, width: frame.width, height: frame.height)
+    }
+
+    private func frameKeepingTopRight(_ frame: NSRect, size: CGSize) -> NSRect {
+        let origin = NSPoint(x: frame.maxX - size.width, y: frame.maxY - size.height)
+        return clampExpandedFrame(NSRect(origin: origin, size: size))
+    }
+
+    private func setPanelFrame(_ frame: NSRect, animated: Bool, duration: TimeInterval = 0) {
+        guard let panel else { return }
+        suppressMoveHandling = true
+        if animated {
+            NSAnimationContext.runAnimationGroup { ctx in
+                ctx.duration = duration
+                ctx.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                panel.animator().setFrame(frame, display: true)
+            } completionHandler: { [weak self] in
+                Task { @MainActor in self?.suppressMoveHandling = false }
+            }
+        } else {
+            panel.setFrame(frame, display: true)
+            suppressMoveHandling = false
+        }
+    }
+
+    private func clamp(_ value: CGFloat, _ low: CGFloat, _ high: CGFloat) -> CGFloat {
+        min(max(value, low), high)
     }
 
     // MARK: - Content swap (HUD ↔ dock strip)
     //
-    // We rebuild the SwiftUI hosting view because the SwiftUI root differs
-    // (GaugeRowView vs DockStripView). The 8 ResizeHandle subviews stay —
-    // we just re-stack them on top of the new host so hit-testing still
-    // works on the edges.
+    // We rebuild the SwiftUI hosting view because the SwiftUI root differs.
 
     private func swapContentToDockStrip(for edge: DockEdge) {
         guard let panel, let host = panel.contentView else { return }
-        // Remove the existing hosting view; keep the resize handles.
-        host.subviews
-            .filter { !($0 is ResizeHandle) }
-            .forEach { $0.removeFromSuperview() }
+        host.subviews.forEach { $0.removeFromSuperview() }
         let root = DockStripView(store: store, prefs: prefs, edge: edge) { [weak self] in
             Task { @MainActor in self?.expandFromDock(animated: true) }
         }
         let hosting = NSHostingView(rootView: root)
+        hosting.configureKajiHost(cornerRadius: 14)
         hosting.frame = host.bounds
         hosting.autoresizingMask = [.width, .height]
         host.addSubview(hosting)
-        // Bring resize handles to the front (z-order) so they win edge hits.
-        panel.reinstallResizeHandles()
     }
 
     private func swapContentToGaugeRow() {
         guard let panel, let host = panel.contentView else { return }
-        host.subviews
-            .filter { !($0 is ResizeHandle) }
-            .forEach { $0.removeFromSuperview() }
-        let root = GaugeRowView(store: store, prefs: prefs, expandToFill: true)
+        host.subviews.forEach { $0.removeFromSuperview() }
+        let root = GaugeRowView(store: store, prefs: prefs, panelSize: prefs.panelSize)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         let hosting = NSHostingView(rootView: root)
-        hosting.layer?.cornerRadius = 14
+        hosting.configureKajiHost(cornerRadius: 14)
         hosting.frame = host.bounds
         hosting.autoresizingMask = [.width, .height]
         host.addSubview(hosting)
-        panel.reinstallResizeHandles()
     }
 }

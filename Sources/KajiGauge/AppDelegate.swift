@@ -69,6 +69,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = StatusItemView(providers: visibleProviders,
                                   style: prefs.menubarStyle)
         hostingView = NSHostingView(rootView: view)
+        hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
         button.addSubview(hostingView)
         NSLayoutConstraint.activate([
@@ -86,6 +87,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
                                                style: prefs.menubarStyle)
+        statusItem.length = statusItemLength
+    }
+
+    private var statusItemLength: CGFloat {
+        let count = max(1, min(4, visibleProviders.count))
+        return CGFloat(count) * 26 + 6
     }
 
     @objc private func statusButtonClicked(_ sender: NSStatusBarButton) {
@@ -122,7 +129,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onQuit: { NSApp.terminate(nil) }
         )
         let content = GaugeRowView(store: store, prefs: prefs, controls: controls)
-        popover.contentViewController = NSHostingController(rootView: content)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        let controller = NSHostingController(rootView: content)
+        controller.view.configureKajiHost(cornerRadius: 14)
+        let fitting = controller.view.fittingSize
+        controller.view.frame = NSRect(origin: .zero, size: fitting)
+        controller.preferredContentSize = fitting
+        popover.contentSize = fitting
+        popover.contentViewController = controller
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
     }
@@ -183,6 +197,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         usageMenu.addItem(remItem)
         usageItem.submenu = usageMenu
         menu.addItem(usageItem)
+
+        let sizeItem = NSMenuItem(title: L10n.t(.panelSize, lang), action: nil, keyEquivalent: "")
+        let sizeMenu = NSMenu()
+        for size in PanelSize.allCases {
+            let item = NSMenuItem(title: sizeTitle(size, lang),
+                                  action: #selector(setPanelSize(_:)),
+                                  keyEquivalent: "")
+            item.target = self
+            item.representedObject = size.rawValue
+            item.state = prefs.panelSize == size ? .on : .off
+            sizeMenu.addItem(item)
+        }
+        sizeItem.submenu = sizeMenu
+        menu.addItem(sizeItem)
 
         // Language toggle — shows the OTHER language as the action label.
         let langItem = NSMenuItem(title: "\(L10n.t(.language, lang)): \(lang.toggled.label)",
@@ -247,7 +275,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.showRemaining = true
     }
 
+    @objc private func setPanelSize(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let size = PanelSize(rawValue: raw) else { return }
+        prefs.panelSize = size
+    }
+
     @objc private func toggleLanguage() {
         prefs.language = prefs.language.toggled
+    }
+
+    private func sizeTitle(_ size: PanelSize, _ lang: Lang) -> String {
+        switch size {
+        case .small:  return L10n.t(.sizeSmall, lang)
+        case .medium: return L10n.t(.sizeMedium, lang)
+        case .large:  return L10n.t(.sizeLarge, lang)
+        }
     }
 }
