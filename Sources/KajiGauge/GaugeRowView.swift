@@ -50,13 +50,21 @@ struct GaugeRowView: View {
         }
         .padding(14)
         .background(background)
-        .modifier(PanelOrPopoverFrame(panelSize: panelSize))
+        .modifier(PanelOrPopoverFrame(panelSize: panelSize, hasControls: controls != nil))
     }
 
     @ViewBuilder
     private var ringsRow: some View {
         if let panelSize {
-            panelRings(panelSize)
+            // Popover (has the settings footer): ALWAYS one horizontal row,
+            // ring size computed to fill the width for N providers — S/M/L just
+            // scales the whole row proportionally. The floating HUD keeps its
+            // own resize-aware layout (panelRings).
+            if controls != nil {
+                popoverRings(panelSize)
+            } else {
+                panelRings(panelSize)
+            }
         } else {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(shown) { provider in
@@ -66,6 +74,32 @@ struct GaugeRowView: View {
                 }
             }
         }
+    }
+
+    /// One horizontal row that always fits: ring diameter is derived from the
+    /// (known, pinned) popover width and the provider count so N rings fill the
+    /// row exactly — 3 fill it, 4 fill it — and S/M/L scale it as a unit. No
+    /// GeometryReader (it would break the popover's vertical fitting pass).
+    private func popoverRings(_ size: PanelSize) -> some View {
+        let n = CGFloat(max(1, shown.count))
+        let content = size.frameSize.width - 28          // outer padding (14 * 2)
+        // Tighter spacing as the count grows so the row keeps fitting.
+        let spacing: CGFloat = n >= 5 ? 6 : (n >= 4 ? 9 : 14)
+        let raw = (content - spacing * (n - 1)) / n
+        // `raw` is the largest ring that still fits the row. Clamp into
+        // [24, size.ringSize]: the 24pt floor only guards a degenerate count —
+        // with the real provider set (<=5) at the smallest width raw stays ~34pt
+        // so it never trips (a floor ABOVE raw, like the old 40, overflowed).
+        let ring = min(size.ringSize, max(24, raw))
+        return HStack(alignment: .top, spacing: spacing) {
+            ForEach(shown) { provider in
+                RingGauge(provider: provider, lang: prefs.language,
+                          showRemaining: prefs.showRemaining,
+                          ringSize: ring)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder
@@ -94,13 +128,64 @@ struct GaugeRowView: View {
 
     private struct PanelOrPopoverFrame: ViewModifier {
         let panelSize: PanelSize?
+        let hasControls: Bool
         func body(content: Content) -> some View {
             if let panelSize {
-                content.frame(width: panelSize.frameSize.width,
-                              height: panelSize.frameSize.height,
-                              alignment: .topLeading)
+                if hasControls {
+                    // Popover: width is pinned to S/M/L, but height grows
+                    // to fit the settings footer. Floating HUD has no
+                    // footer, so it's free to take the full frame.
+                    content.frame(width: panelSize.frameSize.width,
+                                  alignment: .topLeading)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    content.frame(width: panelSize.frameSize.width,
+                                  height: panelSize.frameSize.height,
+                                  alignment: .topLeading)
+                }
             } else {
                 content.fixedSize()
+            }
+        }
+    }
+
+    // A wrapping row: lays children left-to-right, breaking to a new line when
+    // the next child would overflow the proposed width. Used for the provider
+    // toggle pills so a narrow popover wraps them (2x2, 3+2, …) instead of
+    // crushing each pill into vertical text. macOS 13+ Layout protocol.
+    private struct FlowLayout: Layout {
+        var spacing: CGFloat = 7
+        var lineSpacing: CGFloat = 7
+
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            let maxW = proposal.width ?? .infinity
+            var x: CGFloat = 0, y: CGFloat = 0, lineH: CGFloat = 0, widest: CGFloat = 0
+            for s in subviews {
+                let sz = s.sizeThatFits(.unspecified)
+                if x > 0 && x + sz.width > maxW {
+                    widest = max(widest, x - spacing)
+                    x = 0; y += lineH + lineSpacing; lineH = 0
+                }
+                x += sz.width + spacing
+                lineH = max(lineH, sz.height)
+            }
+            widest = max(widest, x - spacing)
+            let w = maxW.isFinite ? maxW : widest
+            return CGSize(width: w, height: y + lineH)
+        }
+
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            let maxW = bounds.width
+            var x: CGFloat = 0, y: CGFloat = 0, lineH: CGFloat = 0
+            for s in subviews {
+                let sz = s.sizeThatFits(.unspecified)
+                if x > 0 && x + sz.width > maxW {
+                    x = 0; y += lineH + lineSpacing; lineH = 0
+                }
+                s.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y),
+                        anchor: .topLeading, proposal: ProposedViewSize(sz))
+                x += sz.width + spacing
+                lineH = max(lineH, sz.height)
             }
         }
     }
@@ -111,16 +196,19 @@ struct GaugeRowView: View {
         VStack(spacing: 9) {
             Rectangle().fill(t.track).frame(height: 1).opacity(0.7)
 
-            // Settings row: provider toggles on the left, language on the right.
-            HStack(spacing: 7) {
+            // Settings row: provider toggles + language. A flow layout wraps to
+            // the next line when the popover is too narrow for one row (small
+            // size + 4-5 providers) — so pills never get crushed into vertical
+            // text. Each pill keeps its natural width (lineLimit 1 + fixedSize).
+            FlowLayout(spacing: 7, lineSpacing: 7) {
                 ForEach(available) { p in
                     pill(p.displayName, on: prefs.isVisible(p.id)) {
                         prefs.toggleProvider(p.id)
                     }
                 }
-                Spacer(minLength: 8)
                 langToggle
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Menu-bar style row: how the menu-bar glyph reads (mono / color).
             HStack(spacing: 7) {
@@ -192,6 +280,8 @@ struct GaugeRowView: View {
             Text(title)
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .foregroundColor(on ? t.bg : t.mute)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(
@@ -226,6 +316,8 @@ struct GaugeRowView: View {
             Text(prefs.language.label)
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .foregroundColor(t.cream)
+                .lineLimit(1)
+                .fixedSize()
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
                 .background(Capsule().stroke(t.track, lineWidth: 1))
@@ -281,11 +373,20 @@ struct GaugeRowView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 6) {
+        // No working python3 → actionable onboarding. Any other failure (or a
+        // first poll still in flight) reads as a neutral "waiting" rather than a
+        // raw subprocess error string, which would look broken to end users.
+        let message: String
+        if store.lastError == Config.noPythonSentinel {
+            message = L10n.t(.needPython, prefs.language)
+        } else {
+            message = L10n.t(.waiting, prefs.language)
+        }
+        return VStack(spacing: 6) {
             Text("\u{2014}")
                 .font(.system(size: 28))
                 .foregroundColor(t.ash)
-            Text(store.lastError ?? L10n.t(.waiting, prefs.language))
+            Text(message)
                 .font(.system(size: 11))
                 .foregroundColor(t.mute)
                 .multilineTextAlignment(.center)

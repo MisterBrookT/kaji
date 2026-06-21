@@ -38,13 +38,57 @@ claude-code + opencode + codex; kiro stays session-count only until a
 CLI/API exists.
 ────────────────────────────────────────────────────────────────────────
 """
-import json, os, subprocess, sys, time
+import hashlib, hmac, json, os, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import quote
 
 HOME = Path.home()
 # Overridable for tests.
 CODEX_SESSIONS = Path(os.environ.get("HELM_CODEX_SESSIONS") or HOME / ".codex" / "sessions")
+ARK_AGENT_KEY = Path(os.environ.get("HELM_ARK_AGENT_KEY") or HOME / ".config" / "ark" / "agent-key")
+ARK_CODING_KEY = Path(os.environ.get("HELM_ARK_CODING_KEY") or HOME / ".config" / "ark" / "key")
+
+
+def _read_env_file(path):
+    data = {}
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return data
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        value = value.strip().strip("'\"")
+        if key:
+            data[key] = value
+    return data
+
+
+LOCAL_ENV = _read_env_file(os.environ.get("KAJI_GAUGE_VOLCENGINE_ENV")
+                           or HOME / ".config" / "kaji-gauge" / "volcengine.env")
+
+
+def _secret(*names):
+    for name in names:
+        value = os.environ.get(name) or LOCAL_ENV.get(name)
+        if value:
+            return value
+    return ""
+
+
+VOLC_AK = _secret("VOLCENGINE_ACCESS_KEY_ID", "VOLCENGINE_ACCESS_KEY",
+                  "VOLC_ACCESS_KEY_ID", "VOLC_ACCESS_KEY")
+VOLC_SK = _secret("VOLCENGINE_SECRET_ACCESS_KEY", "VOLCENGINE_SECRET_KEY",
+                  "VOLC_SECRET_ACCESS_KEY", "VOLC_SECRET_KEY")
+VOLC_SESSION_TOKEN = _secret("VOLCENGINE_SESSION_TOKEN", "VOLC_SESSION_TOKEN")
+VOLC_ARK_PROJECT_NAME = _secret("VOLCENGINE_ARK_PROJECT_NAME", "VOLC_ARK_PROJECT_NAME",
+                                "ARK_PROJECT_NAME")
+VOLC_ARK_SEAT_ID = _secret("VOLCENGINE_ARK_SEAT_ID", "VOLC_ARK_SEAT_ID",
+                           "ARK_SEAT_ID")
 NOW = time.time()
 TODAY_START = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
@@ -147,11 +191,27 @@ def claude_limits():
 
 def _fetch_codex_limits():
     """codex app-server JSON-RPC account/rateLimits/read (official path)."""
-    import select
+    import queue as _queue
+    import threading
     proc = subprocess.Popen(
         ["codex", "-s", "read-only", "-a", "untrusted", "app-server"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, text=True)
+    # Drain stdout on a background thread. select()+text readline() can leave a
+    # second JSON-RPC response stranded in the userspace buffer (select reports
+    # the fd not-ready while a full line already sits decoded), stalling the
+    # whole 10s budget. A blocking line iterator on its own thread never stalls.
+    lines = _queue.Queue()
+
+    def _drain():
+        try:
+            for ln in proc.stdout:
+                lines.put(ln)
+        except Exception:
+            pass
+        lines.put(None)
+
+    threading.Thread(target=_drain, daemon=True).start()
     try:
         def send(o):
             proc.stdin.write(json.dumps(o) + "\n")
@@ -161,12 +221,15 @@ def _fetch_codex_limits():
         send({"jsonrpc": "2.0", "id": 2,
               "method": "account/rateLimits/read", "params": {}})
         deadline = time.time() + 10
-        while time.time() < deadline:
-            r, _, _ = select.select([proc.stdout], [], [], 1.0)
-            if not r:
-                continue
-            line = proc.stdout.readline()
-            if not line:
+        while True:
+            remaining = deadline - time.time()
+            if remaining <= 0:
+                break
+            try:
+                line = lines.get(timeout=remaining)
+            except _queue.Empty:
+                break
+            if line is None:
                 break
             try:
                 d = json.loads(line)
@@ -414,19 +477,25 @@ def codex():
         all_files = sorted(base.glob("*/*/*/rollout-*.jsonl"), key=lambda p: p.stat().st_mtime)
     except OSError:
         all_files = []
-    if all_files:
-        _, rl, _ = _codex_last_token_count(all_files[-1])
-        if rl:
-            limits = {}
-            for src, key in (("primary", "five_hour"), ("secondary", "seven_day")):
-                window = rl.get(src)
-                if isinstance(window, dict) and window.get("used_percent") is not None:
-                    limits[key + "_used_percent"] = window["used_percent"]
-                    if window.get("resets_at") is not None:
-                        limits[key + "_resets_at"] = window["resets_at"]
-            if rl.get("plan_type"):
-                limits["plan"] = rl["plan_type"]
-            limits = limits or None
+    # Walk sessions freshest-first and take the first that actually carries a
+    # rate_limits event. The single newest file may be a brand-new session with
+    # no token_count yet (rl=None) — using only all_files[-1] would then drop
+    # account limits even though the 2nd-freshest session has fresh ones.
+    for p in reversed(all_files):
+        _, rl, _ = _codex_last_token_count(p)
+        if not rl:
+            continue
+        limits = {}
+        for src, key in (("primary", "five_hour"), ("secondary", "seven_day")):
+            window = rl.get(src)
+            if isinstance(window, dict) and window.get("used_percent") is not None:
+                limits[key + "_used_percent"] = window["used_percent"]
+                if window.get("resets_at") is not None:
+                    limits[key + "_resets_at"] = window["resets_at"]
+        if rl.get("plan_type"):
+            limits["plan"] = rl["plan_type"]
+        limits = limits or None
+        break
 
     return len(files_today), (tokens_today or None), last, limits, by_project, context
 
@@ -440,6 +509,52 @@ def fmt_tokens(n):
 def fmt_last(ts):
     if ts is None: return "N/A"
     return ago(ts)
+
+
+def _reset_epoch(value):
+    """A reset timestamp as epoch seconds. Accepts unix epoch (codex/minimax)
+    or ISO-8601 (claude/ark). None if unparseable."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+        except Exception:
+            return None
+    return None
+
+
+def _scrub_expired(limits):
+    """Drop a window's used_percent once its reset time has passed.
+
+    The percentage is a point-in-time snapshot (last provider activity / last
+    cache fetch). After the window resets the real usage is ~0, but a quiet
+    provider keeps reporting the old pre-reset value until it's exercised again
+    — that's the stale 'codex shows 80% when it already reset' bug. Dropping the
+    value renders '—' (honest unknown) instead of a stale-high number."""
+    if not isinstance(limits, dict):
+        return limits
+    for win in ("five_hour", "seven_day"):
+        reset = _reset_epoch(limits.get(win + "_resets_at"))
+        if reset is not None and reset <= NOW:
+            limits.pop(win + "_used_percent", None)
+            limits.pop(win + "_resets_at", None)
+    return limits
+
+
+def _merge_limits(primary, fallback):
+    """Merge two limits dicts per-KEY (not whole-dict). `primary` (live) wins
+    where present; `fallback` (file) fills the rest. A partial live dict (e.g.
+    only five_hour) must not mask a more complete file dict's seven_day."""
+    if not primary:
+        return fallback
+    if not fallback:
+        return primary
+    out = dict(fallback)
+    out.update({k: v for k, v in primary.items() if v is not None})
+    return out
 
 
 def _fetch_minimax_limits():
@@ -502,6 +617,262 @@ def minimax():
     return 0, None, None
 
 
+def _norm_query(params):
+    bits = []
+    for key in sorted(params):
+        value = params[key]
+        if isinstance(value, list):
+            vals = value
+        else:
+            vals = [value]
+        for val in vals:
+            bits.append(quote(str(key), safe="-_.~") + "=" + quote(str(val), safe="-_.~"))
+    return "&".join(bits)
+
+
+def _hmac_sha256(key, content):
+    return hmac.new(key, content.encode("utf-8"), hashlib.sha256).digest()
+
+
+def _hash_sha256(content):
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
+def _volc_openapi(action, query=None, body_obj=None):
+    """Signed Volcengine OpenAPI GET request for Ark management-plane APIs."""
+    if not VOLC_AK or not VOLC_SK:
+        return None
+
+    import urllib.request
+    host = "open.volcengineapi.com"
+    service = "ark"
+    region = "cn-beijing"
+    version = "2024-01-01"
+    body = ""
+    content_type = "application/x-www-form-urlencoded"
+    method = "GET"
+    if body_obj is not None:
+        body = json.dumps(body_obj, separators=(",", ":"))
+        content_type = "application/json"
+        method = "POST"
+    now = datetime.now(timezone.utc)
+    x_date = now.strftime("%Y%m%dT%H%M%SZ")
+    short_date = x_date[:8]
+    x_content_sha256 = _hash_sha256(body)
+
+    params = {"Action": action, "Version": version}
+    if query:
+        params.update(query)
+
+    headers_to_sign = {
+        "content-type": content_type,
+        "host": host,
+        "x-content-sha256": x_content_sha256,
+        "x-date": x_date,
+    }
+    if VOLC_SESSION_TOKEN:
+        headers_to_sign["x-security-token"] = VOLC_SESSION_TOKEN
+    signed_headers = ";".join(sorted(headers_to_sign))
+    canonical_headers = "".join(f"{k}:{headers_to_sign[k]}\n" for k in sorted(headers_to_sign))
+    canonical_request = "\n".join([
+        method,
+        "/",
+        _norm_query(params),
+        canonical_headers,
+        signed_headers,
+        x_content_sha256,
+    ])
+    credential_scope = "/".join([short_date, region, service, "request"])
+    string_to_sign = "\n".join([
+        "HMAC-SHA256",
+        x_date,
+        credential_scope,
+        _hash_sha256(canonical_request),
+    ])
+    k_date = _hmac_sha256(VOLC_SK.encode("utf-8"), short_date)
+    k_region = _hmac_sha256(k_date, region)
+    k_service = _hmac_sha256(k_region, service)
+    k_signing = _hmac_sha256(k_service, "request")
+    signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    headers = {
+        "Host": host,
+        "Content-Type": content_type,
+        "X-Content-Sha256": x_content_sha256,
+        "X-Date": x_date,
+        "Authorization": (
+            "HMAC-SHA256 "
+            f"Credential={VOLC_AK}/{credential_scope}, "
+            f"SignedHeaders={signed_headers}, "
+            f"Signature={signature}"
+        ),
+    }
+    if VOLC_SESSION_TOKEN:
+        headers["X-Security-Token"] = VOLC_SESSION_TOKEN
+
+    # Use the SAME canonical encoder as the signature (_norm_query). urlencode
+    # differs on spaces (+) and list params, which would desync the signed
+    # query string from the wire query string and fail signature verification.
+    url = "https://" + host + "/?" + _norm_query(params)
+    req = urllib.request.Request(url, data=(body.encode("utf-8") if method == "POST" else None),
+                                 headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def _walk_values(obj, path=()):
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            yield from _walk_values(value, path + (str(key),))
+    elif isinstance(obj, list):
+        for idx, value in enumerate(obj):
+            yield from _walk_values(value, path + (str(idx),))
+    else:
+        yield path, obj
+
+
+def _coerce_percent(value, ratio_ok=True):
+    # bool is an int subclass — True would coerce to 100, False to 0. Reject it.
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    v = float(value)
+    # Only a value strictly < 1 is unambiguously a fraction (0.44 -> 44%). The
+    # value 1 is ambiguous (1% vs 100%); for percent/rate fields treat it as an
+    # already-scaled percent, never multiply.
+    if ratio_ok and 0 <= v < 1:
+        return v * 100.0
+    if 0 <= v <= 100:
+        return v
+    return None
+
+
+_METRIC_TERMS = ("percent", "ratio", "rate", "utilization")
+
+
+def _find_percent(data, window_terms):
+    for path, value in _walk_values(data):
+        key = "_".join(path).lower()
+        if not any(term in key for term in window_terms):
+            continue
+        matched = [term for term in _METRIC_TERMS if term in key]
+        if not matched:
+            continue
+        # A field named "*ratio*" is a 0..1 fraction; percent/rate/utilization
+        # fields are already scaled 0..100, so don't re-multiply a bare 1.
+        p = _coerce_percent(value, ratio_ok=("ratio" in matched))
+        if p is not None:
+            return p
+    return None
+
+
+def _iso_from_volc_ms(value):
+    if not isinstance(value, (int, float)) or value <= 0:
+        return None
+    return datetime.fromtimestamp(value / 1000.0, timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def _add_ark_window(out, result, source_key, target_key):
+    window = result.get(source_key) if isinstance(result, dict) else None
+    if not isinstance(window, dict):
+        return
+    quota = window.get("Quota")
+    used = window.get("Used")
+    if isinstance(quota, (int, float)) and quota > 0 and isinstance(used, (int, float)):
+        out[target_key + "_used_percent"] = max(0.0, min(100.0, float(used) / float(quota) * 100.0))
+    reset = _iso_from_volc_ms(window.get("ResetTime"))
+    if reset:
+        out[target_key + "_resets_at"] = reset
+
+
+def _ark_coding_query():
+    if VOLC_ARK_SEAT_ID:
+        return {"SeatID": VOLC_ARK_SEAT_ID}
+    if VOLC_ARK_PROJECT_NAME:
+        return {"ProjectName": VOLC_ARK_PROJECT_NAME}
+    return None
+
+
+def _ark_usage_limits(action, query=None, post_body=False):
+    """Best-effort parser for Ark Agent/Coding Plan usage responses."""
+    try:
+        data = _volc_openapi(action, body_obj=(query if post_body else None))
+    except Exception as exc:
+        try:
+            body = exc.read().decode("utf-8", "replace")
+            err = ((json.loads(body).get("ResponseMetadata") or {}).get("Error") or {})
+            msg = err.get("Message") or err.get("Code")
+            return {"status": msg} if msg else None
+        except Exception:
+            return None
+    if not data or (data.get("ResponseMetadata") or {}).get("Error"):
+        return None
+    out = {}
+    result = data.get("Result") if isinstance(data, dict) else None
+    if isinstance(result, dict):
+        if result.get("PlanType"):
+            out["tier"] = result["PlanType"]
+        _add_ark_window(out, result, "AFPFiveHour", "five_hour")
+        _add_ark_window(out, result, "AFPWeekly", "seven_day")
+    # Heuristic walk is a FALLBACK only — never clobber the exact Quota/Used
+    # percentages computed above. Fill a window solely when it's still missing.
+    if "five_hour_used_percent" not in out:
+        five = _find_percent(data, ("five", "5h", "hour"))
+        if five is not None:
+            out["five_hour_used_percent"] = five
+    if "seven_day_used_percent" not in out:
+        week = _find_percent(data, ("week", "weekly", "seven", "7d"))
+        if week is not None:
+            out["seven_day_used_percent"] = week
+    return out or None
+
+
+def ark_agent_limits():
+    return _limits_cached("ark-agent-limits-cache.json", lambda: _ark_usage_limits("GetAFPUsage"))
+
+
+def ark_coding_limits():
+    query = _ark_coding_query()
+    if not query:
+        return {"status": "needs SeatID or ProjectName"}
+    return _limits_cached("ark-coding-limits-cache.json",
+                          lambda: _ark_usage_limits("GetSeatInfoUsage", query, post_body=True))
+
+
+def _with_plan(plan, limits):
+    out = {"plan": plan}
+    if limits:
+        out.update(limits)
+    return out
+
+
+def _configured_key(path):
+    """Whether a provider key exists and is non-empty, without exposing it."""
+    try:
+        return path.is_file() and path.stat().st_size > 0
+    except OSError:
+        return False
+
+
+def ark_agent():
+    """Volcengine Ark Agent Plan via Claude Code-compatible wrappers.
+
+    Local wiring lives in fish functions (`claude-ark` / `arkp`) that set
+    ANTHROPIC_BASE_URL to /api/plan. The plan usage APIs appear to be
+    management-plane APIs, so the first UI slice only reports configured state
+    and the plan label; exact quota can be added once signing is implemented.
+    """
+    return 0, None, None
+
+
+def ark_coding():
+    """Volcengine Ark Coding Plan via Claude Code-compatible wrappers.
+
+    Local wiring lives in fish functions (`claude-ark-coding` / `arkcp`) that
+    set ANTHROPIC_BASE_URL to /api/coding.
+    """
+    return 0, None, None
+
+
 def collect():
     """Per-harness tuples (name, sessions, tokens, last, limits|None, by_project).
 
@@ -513,19 +884,33 @@ def collect():
     c_sess, c_tok, c_last, c_proj, c_ctx = claude_code()
     x_sess, x_tok, x_last, x_file_limits, x_proj, x_ctx = codex()
     m_sess, m_tok, m_last = minimax()
-    return [
+    rows = [
         ("claude",  c_sess, c_tok, c_last, claude_limits(), c_proj, c_ctx),
         ("kiro",    *kiro(), None, {}, {}),
         ("opencode", *opencode(), None, {}, {}),
-        ("codex",   x_sess, x_tok, x_last, codex_limits() or x_file_limits, x_proj, x_ctx),
+        # Scrub each source BEFORE merging: a live dict may carry a used_percent
+        # with no resets_at of its own — merging first would let it inherit the
+        # file source's EXPIRED resets_at and then get wrongly scrubbed. Drop
+        # each source's stale windows independently, then merge what's fresh.
+        ("codex",   x_sess, x_tok, x_last,
+         _merge_limits(_scrub_expired(codex_limits()), _scrub_expired(x_file_limits)),
+         x_proj, x_ctx),
         ("minimax", m_sess, m_tok, m_last, minimax_limits(), {}, {}),
     ]
+    if _configured_key(ARK_AGENT_KEY):
+        rows.append(("ark-agent", *ark_agent(), _with_plan("Agent Plan", ark_agent_limits()), {}, {}))
+    if _configured_key(ARK_CODING_KEY):
+        rows.append(("ark-coding", *ark_coding(), _with_plan("Coding Plan", ark_coding_limits()), {}, {}))
+    return rows
 
 
 def emit_json():
     rows = collect()
     out = {}
     for name, sess, tok, _last, limits, by_project, context in rows:
+        # Drop windows whose reset already passed — the cached % is pre-reset
+        # stale and would otherwise show a high number for a quiet provider.
+        limits = _scrub_expired(limits)
         out[name] = {
             "tokens_today": tok if tok is not None else 0,
             "sessions_today": sess,
@@ -552,6 +937,7 @@ def emit_table():
     print(f"{'harness':<14} {'sessions_today':<16} {'tokens_today':<13} {'last_active'}")
     print(f"{'-'*14} {'-'*14} {'-'*11} {'-'*12}")
     for name, sess, tok, last, limits, _bp, _ctx in rows:
+        limits = _scrub_expired(limits)
         extra = ""
         if limits:
             fh = limits.get("five_hour_used_percent")

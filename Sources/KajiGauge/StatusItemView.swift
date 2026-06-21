@@ -19,6 +19,12 @@ import SwiftUI
 struct StatusItemView: View {
     let providers: [ProviderView]
     var style: MenubarStyle = .mono
+    /// When a newer release exists, a small accent dot rides the top-trailing
+    /// corner of the glyph as a passive "update available" cue (right-click ->
+    /// "Update to vX" to act on it). No notification permission needed.
+    var updateAvailable: Bool = false
+
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 5) {
@@ -36,6 +42,15 @@ struct StatusItemView: View {
         }
         .padding(.horizontal, 3)
         .frame(height: 22)
+        .overlay(alignment: .topTrailing) {
+            if updateAvailable {
+                Circle()
+                    .fill(KajiTheme.resolve(scheme).gold)
+                    .frame(width: 5, height: 5)
+                    .overlay(Circle().stroke(.background, lineWidth: 1))
+                    .offset(x: 1, y: 1)
+            }
+        }
     }
 }
 

@@ -10,6 +10,7 @@ import SwiftUI
 //   - MiniMax → geometric M monogram (filled path). MiniMax has no published
 //     icon — wordmark only — so we draw a sans-serif M in the same visual
 //     weight as the OpenAI / Gemini marks.
+//   - Ark     → a simple faceted diamond; no official single-color mark here.
 // Anything else falls back to its Unicode mark from `Providers`.
 //
 // All paths author in a 24×24 box; the shapes scale to whatever frame we give.
@@ -31,6 +32,10 @@ struct ProviderLogo: View {
                 VectorLogo(pathData: BrandPaths.gemini).fill(color)
             case "minimax":
                 VectorLogo(pathData: BrandPaths.minimax).fill(color)
+            case "ark-agent", "ark-coding":
+                ArkDiamond()
+                    .stroke(color, style: StrokeStyle(lineWidth: size * (1.9 / 24),
+                                                      lineJoin: .round))
             default:
                 Text(Providers.mark(for: key))
                     .font(.system(size: size))
@@ -38,6 +43,29 @@ struct ProviderLogo: View {
             }
         }
         .frame(width: size, height: size)
+    }
+}
+
+// MARK: - Ark diamond
+
+struct ArkDiamond: Shape {
+    func path(in rect: CGRect) -> Path {
+        var p = Path()
+        let s = min(rect.width, rect.height) / 24
+        let cx = rect.midX, cy = rect.midY
+        func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: cx + (x - 12) * s, y: cy + (y - 12) * s)
+        }
+        p.move(to: pt(12, 2.5))
+        p.addLine(to: pt(21.5, 12))
+        p.addLine(to: pt(12, 21.5))
+        p.addLine(to: pt(2.5, 12))
+        p.closeSubpath()
+        p.move(to: pt(12, 2.5))
+        p.addLine(to: pt(12, 21.5))
+        p.move(to: pt(2.5, 12))
+        p.addLine(to: pt(21.5, 12))
+        return p
     }
 }
 

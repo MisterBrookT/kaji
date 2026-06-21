@@ -160,13 +160,14 @@ enum PanelSize: String, CaseIterable {
 // sensitive phrases (reset countdowns) are composed in the views, not here.
 enum L10n {
     enum K {
-        case fiveHQuota, week, quit, stale, waiting
+        case fiveHQuota, week, quit, stale, waiting, needPython
         case floatPanel, hidePanel, showPanel
         case refreshNow, quitApp, language, providers, show
         case menubar, styleMono, styleColor
         case dockExpand, dockHint
             case usage, showUsed, showRemaining
             case panelSize, sizeSmall, sizeMedium, sizeLarge
+            case updateTo, checkUpdates
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -175,10 +176,17 @@ enum L10n {
         .quit:         ("Quit",                "\u{9000}\u{51FA}"),                         // 退出
         .stale:        ("stale",               "\u{5DF2}\u{8FC7}\u{671F}"),                 // 已过期
         .waiting:      ("waiting for quota\u{2026}", "\u{7B49}\u{5F85}\u{989D}\u{5EA6}\u{2026}"), // 等待额度…
+        // Shown when no working python3 is found. Kaji Gauge reads local CLI
+        // usage via a bundled python script; macOS ships no python3 by default.
+        .needPython:   ("Needs Python 3 \u{00B7} run  xcode-select --install",
+                        "\u{9700}\u{8981} Python 3 \u{00B7} \u{8FD0}\u{884C}  xcode-select --install"), // 需要 Python 3 · 运行
+
         .floatPanel:   ("Float on desktop",    "\u{60AC}\u{6D6E}\u{5230}\u{684C}\u{9762}"), // 悬浮到桌面
         .hidePanel:    ("Hide desktop panel",  "\u{9690}\u{85CF}\u{60AC}\u{6D6E}\u{7A97}"), // 隐藏悬浮窗
         .showPanel:    ("Show Floating Panel", "\u{663E}\u{793A}\u{60AC}\u{6D6E}\u{7A97}"), // 显示悬浮窗
         .refreshNow:   ("Refresh Now",         "\u{7ACB}\u{5373}\u{5237}\u{65B0}"),         // 立即刷新
+        .updateTo:     ("Update to",           "\u{66F4}\u{65B0}\u{5230}"),                 // 更新到
+        .checkUpdates: ("Check for Updates\u{2026}", "\u{68C0}\u{67E5}\u{66F4}\u{65B0}\u{2026}"), // 检查更新…
         .quitApp:      ("Quit Kaji Gauge",     "\u{9000}\u{51FA} Kaji Gauge"),              // 退出 Kaji Gauge
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商

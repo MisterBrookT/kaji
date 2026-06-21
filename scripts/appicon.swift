@@ -24,12 +24,15 @@ struct AppIconView: View {
     // 1024-pt design canvas.
     let s: CGFloat = 1024
 
-    // Palette (Kaji Ember + brand persimmon / ember gold).
-    private let ink = hex(0x16100B)
-    private let inkTop = hex(0x271C12)
+    // Palette — white field + brand persimmon / ember gold (user prefers
+    // white + orange). The dark Ember ground was swapped for a warm white so
+    // the persimmon pops; the gauge geometry is unchanged.
+    private let field = hex(0xFFFFFF)      // squircle base
+    private let fieldTop = hex(0xFFF6EE)   // faint warm white at the top
+    private let edge = hex(0xEADFD3)       // hairline so the squircle reads on white
     private let persimmon = hex(0xF25C05)
-    private let gold = hex(0xD8A657)
-    private let track = hex(0x3A3026)
+    private let gold = hex(0xE0902F)       // warmer/deeper gold so it carries on white
+    private let track = hex(0xF0E3D6)      // light warm track behind the inner arc
 
     var body: some View {
         ZStack {
@@ -38,22 +41,28 @@ struct AppIconView: View {
             let side = s - inset * 2
             RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous)
                 .fill(
-                    LinearGradient(colors: [inkTop, ink],
+                    LinearGradient(colors: [fieldTop, field],
                                    startPoint: .topLeading, endPoint: .bottomTrailing)
                 )
                 .overlay(
-                    // Warm radial glow centered behind the gauge.
-                    RadialGradient(colors: [persimmon.opacity(0.18), .clear],
+                    // Faint warm radial wash behind the gauge for a little depth.
+                    RadialGradient(colors: [persimmon.opacity(0.06), .clear],
                                    center: .center, startRadius: 0, endRadius: side * 0.55)
                         .clipShape(RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous))
+                )
+                .overlay(
+                    // Hairline edge so the white squircle stays defined against a
+                    // white Finder / Applications background.
+                    RoundedRectangle(cornerRadius: side * 0.2237, style: .continuous)
+                        .stroke(edge, lineWidth: 3)
                 )
                 .frame(width: side, height: side)
 
             gauge
-            // Knockout: a wider ember-colored spoke under the persimmon one, so
-            // the handle reads as crossing OVER the wheel (a clean dark gap on
+            // Knockout: a wider FIELD-colored spoke under the persimmon one, so
+            // the handle reads as crossing OVER the wheel (a clean white gap on
             // each side) instead of merging into a same-color blob.
-            spokeStroke(color: ink, width: 96)
+            spokeStroke(color: field, width: 96)
             spokeStroke(color: persimmon, width: 60)
             // Center hub.
             Circle().fill(persimmon).frame(width: 46, height: 46)

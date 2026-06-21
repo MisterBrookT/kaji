@@ -20,8 +20,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let prefs = Prefs()
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var popoverHostingController: NSHostingController<AnyView>?
     private var panelController: FloatingPanelController!
     private var hostingView: NSHostingView<StatusItemView>!
+    private let updateChecker = UpdateChecker()
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -45,6 +47,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
+        // Popover size + visible-providers reactive: when the user flips
+        // S/M/L from the right-click menu (or toggles a provider) while the
+        // popover is open, the host content rebuilds with the new size.
+        prefs.$panelSize
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshPopoverContentIfShown() }
+            .store(in: &cancellables)
+        prefs.$visibleProviders
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshPopoverContentIfShown() }
+            .store(in: &cancellables)
+        // Update availability re-renders the glyph (adds/removes the badge dot).
+        updateChecker.$available
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        // Check on launch; re-check when the app is reactivated (cheap, throttled
+        // to once per interval inside the checker).
+        updateChecker.checkIfDue()
 
         updateStatusItem()
         panelController.restore()
@@ -60,6 +81,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
     }
 
+    func applicationDidBecomeActive(_ notification: Notification) {
+        // Re-check on reactivation; the checker's own once/6h throttle keeps this
+        // from hitting the network on every menubar interaction.
+        updateChecker.checkIfDue()
+    }
+
     // MARK: - Status item
 
     private func setupStatusItem() {
@@ -67,7 +94,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
 
         let view = StatusItemView(providers: visibleProviders,
-                                  style: prefs.menubarStyle)
+                                  style: prefs.menubarStyle,
+                                  updateAvailable: updateChecker.available != nil)
         hostingView = NSHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -86,7 +114,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
-                                               style: prefs.menubarStyle)
+                                               style: prefs.menubarStyle,
+                                               updateAvailable: updateChecker.available != nil)
         statusItem.length = statusItemLength
     }
 
@@ -118,8 +147,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.performClose(sender)
             return
         }
-        // Rebuild content each open so the panel toggle label reflects current
-        // state. No fixed width — the view hugs its content (adaptive to N rings).
+        // Rebuild content each open. Width is pinned to `prefs.panelSize`
+        // so the popover follows S/M/L; height auto-fits since the popover
+        // also shows the settings footer (which the HUD doesn't).
+        let controller = makePopoverContentController()
+        popoverHostingController = controller
+        let target = popoverFittingSize(for: controller)
+        controller.preferredContentSize = target
+        popover.contentSize = target
+        popover.contentViewController = controller
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
+    }
+
+    private func makePopoverContentController() -> NSHostingController<AnyView> {
         let controls = GaugeRowView.Controls(
             panelVisible: panelController.isVisible,
             onTogglePanel: { [weak self] in
@@ -128,17 +169,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             },
             onQuit: { NSApp.terminate(nil) }
         )
-        let content = GaugeRowView(store: store, prefs: prefs, controls: controls)
+        let content = GaugeRowView(store: store, prefs: prefs,
+                                   controls: controls,
+                                   panelSize: prefs.panelSize)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        let controller = NSHostingController(rootView: content)
+        let controller = NSHostingController(rootView: AnyView(content))
         controller.view.configureKajiHost(cornerRadius: 14)
-        let fitting = controller.view.fittingSize
-        controller.view.frame = NSRect(origin: .zero, size: fitting)
-        controller.preferredContentSize = fitting
-        popover.contentSize = fitting
+        return controller
+    }
+
+    /// Width is pinned to S/M/L; height comes from the SwiftUI fitting pass
+    /// after the width is fixed (settings footer rows extend the height by
+    /// a variable amount per language).
+    private func popoverFittingSize(for controller: NSHostingController<AnyView>) -> CGSize {
+        let width = prefs.panelSize.frameSize.width
+        controller.view.frame = NSRect(x: 0, y: 0, width: width, height: 1)
+        controller.view.layoutSubtreeIfNeeded()
+        let fittingHeight = controller.view.fittingSize.height
+        return CGSize(width: width, height: fittingHeight)
+    }
+
+    /// Live-rebuild the popover content view when prefs that affect layout
+    /// change (S/M/L size, visible providers). Resizes the popover to the
+    /// new target frame so the change is visible without re-opening.
+    private func refreshPopoverContentIfShown() {
+        guard popover != nil, popover.isShown else { return }
+        let controller = makePopoverContentController()
+        popoverHostingController = controller
+        let target = popoverFittingSize(for: controller)
+        controller.preferredContentSize = target
+        popover.contentSize = target
         popover.contentViewController = controller
-        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
     }
 
     // MARK: - Right-click menu
@@ -235,6 +296,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
+        // Update row: actionable when a newer release exists, otherwise a passive
+        // "check for updates" that forces a fresh check.
+        if let rel = updateChecker.available {
+            let updateItem = NSMenuItem(title: L10n.t(.updateTo, lang) + " " + rel.tag,
+                                        action: #selector(openUpdate),
+                                        keyEquivalent: "")
+            updateItem.target = self
+            menu.addItem(updateItem)
+        } else {
+            let checkItem = NSMenuItem(title: L10n.t(.checkUpdates, lang),
+                                       action: #selector(checkUpdatesNow),
+                                       keyEquivalent: "")
+            checkItem.target = self
+            menu.addItem(checkItem)
+        }
+
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(title: L10n.t(.quitApp, lang),
                                   action: #selector(NSApplication.terminate(_:)),
                                   keyEquivalent: "q")
@@ -252,6 +331,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func refreshNow() {
         store.refresh()
+    }
+
+    @objc private func openUpdate() {
+        guard let rel = updateChecker.available else { return }
+        NSWorkspace.shared.open(rel.url)
+    }
+
+    @objc private func checkUpdatesNow() {
+        updateChecker.checkIfDue(force: true)
     }
 
     @objc private func toggleProvider(_ sender: NSMenuItem) {

@@ -9,8 +9,22 @@ enum Config {
     static let defaultQuotaScriptPath =
         "/Users/tangyinghao/workspace/kaji/tools/helm-quota/quota.py"
 
-    /// python3 interpreter. We rely on PATH resolution via /usr/bin/env.
-    static let pythonInterpreter = "python3"
+    /// Candidate python3 interpreters, probed in order. A .app launched from
+    /// Finder inherits a MINIMAL PATH (/usr/bin:/bin:/usr/sbin:/sbin) — not the
+    /// user's shell PATH — so `/usr/bin/env python3` can't see Homebrew's
+    /// python, and `/usr/bin/python3` is only the Command Line Tools STUB on a
+    /// machine without dev tools (it prompts to install Xcode and exits non-
+    /// zero). We probe each candidate with `--version` and use the first that
+    /// actually runs, so non-developer users aren't left with a dead panel.
+    static let pythonCandidates = [
+        "/opt/homebrew/bin/python3",   // Apple Silicon Homebrew
+        "/usr/local/bin/python3",      // Intel Homebrew
+        "/usr/bin/python3",            // system / Command Line Tools (may be a stub)
+    ]
+
+    /// Sentinel surfaced when NO working python3 was found — the UI maps this to
+    /// an actionable onboarding message instead of a raw subprocess error.
+    static let noPythonSentinel = "__no_python__"
 
     /// Poll interval, seconds.
     static let refreshInterval: TimeInterval = 30
@@ -20,6 +34,7 @@ enum Config {
 
     // UserDefaults keys.
     static let kQuotaScriptPath = "quotaScriptPath"
+    static let kPythonInterpreter = "pythonInterpreter" // user override (optional)
     static let kPanelVisible    = "panelVisible"
     static let kPanelDockEdge   = "panelDockEdge"  // "left" | "right" | "top" | "bottom"
     static let kSparkHistory    = "sparklineHistory" // [providerKey: [Double]]
@@ -141,11 +156,60 @@ final class QuotaStore: ObservableObject {
         case failure(String)
     }
 
+    // Resolved python3 path, cached after the first successful probe so we don't
+    // spawn `--version` checks every 30s poll. Guarded by a lock (runScript runs
+    // on a detached task).
+    nonisolated(unsafe) private static var cachedInterpreter: String?
+    nonisolated private static let interpreterLock = NSLock()
+
+    /// First python3 candidate that actually runs. Rejects the Command Line
+    /// Tools stub (which exits non-zero) by requiring `--version` to succeed.
+    nonisolated private static func resolveInterpreter() -> String? {
+        interpreterLock.lock()
+        defer { interpreterLock.unlock() }
+        if let cached = cachedInterpreter { return cached }
+        var candidates: [String] = []
+        if let override = UserDefaults.standard.string(forKey: Config.kPythonInterpreter),
+           !override.isEmpty {
+            candidates.append(override)
+        }
+        candidates += Config.pythonCandidates
+        for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
+            if probeInterpreter(path) {
+                cachedInterpreter = path
+                return path
+            }
+        }
+        return nil
+    }
+
+    /// True if `<path> --version` exits 0 within a few seconds. The CLT stub at
+    /// /usr/bin/python3 exits non-zero (and prints an install prompt), so this
+    /// naturally rejects it.
+    nonisolated private static func probeInterpreter(_ path: String) -> Bool {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: path)
+        p.arguments = ["--version"]
+        p.standardOutput = Pipe()
+        p.standardError = Pipe()
+        do { try p.run() } catch { return false }
+        // Watchdog: a hung candidate would otherwise hold `interpreterLock`
+        // forever and freeze every future refresh. `--version` is instant; kill
+        // after 5s.
+        let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: killer)
+        p.waitUntilExit()
+        killer.cancel()
+        return p.terminationStatus == 0
+    }
+
     nonisolated private static func runScript(path: String) -> ScriptResult {
+        guard let interpreter = resolveInterpreter() else {
+            return .failure(Config.noPythonSentinel)
+        }
         let proc = Process()
-        // Use /usr/bin/env so python3 resolves via PATH.
-        proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        proc.arguments = [Config.pythonInterpreter, path, "--json"]
+        proc.executableURL = URL(fileURLWithPath: interpreter)
+        proc.arguments = [path, "--json"]
 
         let outPipe = Pipe()
         let errPipe = Pipe()
@@ -158,9 +222,22 @@ final class QuotaStore: ObservableObject {
             return .failure("launch failed: \(error.localizedDescription)")
         }
 
+        // Watchdog: quota.py's network/subprocess calls are individually bounded
+        // (~10s each, cached 180s), so a healthy run finishes well under this.
+        // A genuine hang (wedged interpreter / stuck child) would otherwise pin
+        // a detached worker forever — terminate, then hard-kill.
+        let killer = DispatchWorkItem {
+            if proc.isRunning { proc.terminate() }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
+                if proc.isRunning { kill(proc.processIdentifier, SIGKILL) }
+            }
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + 90, execute: killer)
+
         let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
         let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
         proc.waitUntilExit()
+        killer.cancel()
 
         if proc.terminationStatus != 0 {
             let err = String(data: errData, encoding: .utf8) ?? ""
@@ -186,6 +263,9 @@ final class QuotaStore: ObservableObject {
         case .failure(let msg):
             // Keep the last good data on screen; just surface the error.
             lastError = msg
+            // Raw error stays in the log for debugging even though the empty
+            // state shows a friendlier message.
+            NSLog("[KajiGauge] quota refresh failed: %@", msg)
             // Still bump the timestamp so the user sees we tried.
             return
         case .success(let snap):
@@ -196,11 +276,10 @@ final class QuotaStore: ObservableObject {
     }
 
     private func ingest(_ snap: QuotaSnapshot) {
-        // Show every visible provider — with OR without a `limits` block.
-        // Providers without limits (e.g. minimax, today) still render as a
-        // ring with "—" in the center, so the slot is reserved. If we ever
-        // need to hide a no-limits provider, drop it from `Providers.visible`.
-        let keys = Providers.sorted(snap.keys.filter { Providers.isVisible($0) })
+        // Keep every display-ready provider emitted by quota.py in the store.
+        // Visibility is a user preference applied by the views; filtering only
+        // to default-visible providers here would hide Ark from the toggles.
+        let keys = Providers.sorted(snap.keys.filter { Providers.isAvailable($0) })
 
         var views: [ProviderView] = []
         for key in keys {
