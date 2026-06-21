@@ -1,56 +1,51 @@
+<div align="center">
+
 # Kaji Gauge
 
-Your AI-provider quota, at a glance — warm ring gauges for **Claude** and
-**Codex**, in your menu bar and on your desktop.
+**A beautiful macOS menu-bar app for your AI usage.**
+读本地、不联网，把 Claude · Codex · MiniMax · Ark 的额度，安静地住进你的菜单栏。
 
-<p align="center">
-  <a href="https://github.com/interesting-vibe-coding/kaji-gauge/releases/latest"><img src="https://img.shields.io/github/v/release/interesting-vibe-coding/kaji-gauge?color=F25C05&label=release&labelColor=211C15" alt="latest release"></a>
-  <img src="https://img.shields.io/badge/macOS-13%2B%20·%20Apple%20Silicon-F25C05?labelColor=211C15" alt="macOS 13+, Apple Silicon">
-  <img src="https://img.shields.io/badge/built%20with-SwiftUI%20·%20AppKit-F25C05?labelColor=211C15" alt="SwiftUI + AppKit">
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/interesting-vibe-coding/kaji-gauge?color=F25C05&labelColor=211C15" alt="MIT license"></a>
-</p>
+<a href="https://github.com/interesting-vibe-coding/kaji-gauge/releases/latest"><img src="https://img.shields.io/github/v/release/interesting-vibe-coding/kaji-gauge?color=F25C05&label=release&labelColor=211C15" alt="latest release"></a>
+<img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-F25C05?labelColor=211C15" alt="macOS 13+, Apple Silicon">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/interesting-vibe-coding/kaji-gauge?color=F25C05&labelColor=211C15" alt="MIT license"></a>
 
-<p align="center">
-  <img src="docs/gauge-light.png" width="320" alt="Kaji Sun — light">
-  &nbsp;&nbsp;
-  <img src="docs/gauge-dark.png" width="320" alt="Kaji Ember — dark">
-</p>
+<img src="docs/hero.png" width="820" alt="Kaji Gauge — menu-bar rings, a floating panel, and a dock that folds to the screen edge">
 
-## Install
+</div>
+
+## Install · 安装
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/interesting-vibe-coding/kaji-gauge/main/install.sh | bash
 ```
 
-Drops the app in `/Applications` and launches it — the rings appear in your menu
-bar. macOS 13+, Apple Silicon. Needs `python3` (ships with the Xcode tools) to
-read your usage. Unsigned for now, so the installer clears the Gatekeeper
-quarantine for you.
+一行装好 —— 拖进 `/Applications`、启动，菜单栏就出现额度环。需要 macOS 13+、Apple Silicon。
+缺 `python3` 时安装脚本会自动帮你装 Xcode 命令行工具（已装则跳过）。
 
-## What it shows
+应用暂时**未签名**：安装脚本会替你清掉 Gatekeeper 隔离标记 —— 让你知道发生了什么，而不是假装没这回事。
+等正式签名 + 公证后，这一步就消失了。
 
-<p align="center">
-  <img src="docs/menubar-dark.png" height="24" alt="menu bar — mono dual rings">
-  &nbsp;&nbsp;&nbsp;
-  <img src="docs/menubar-color-dark.png" height="24" alt="menu bar — color dual rings">
-</p>
+## What it shows · 它显示什么
 
-- **Menu bar** — one concentric **double ring** per provider: the **outer** arc
-  is your 5-hour window, the **inner** arc your 7-day window. In the center sits
-  the provider's own mark — the Claude burst, the Codex knot — so you can tell
-  them apart at a glance.
-- **Two looks, your choice** (Settings → *Menu bar*): **Mono** (default) draws
-  the rings in the adaptive label color, so they sit quietly among the native
-  monochrome menu-bar icons; **Color** draws the arcs in Kaji persimmon on a
-  neutral track, for more presence. Left pair above is Mono, right is Color.
-- **Click** the rings for the full popover — both reset countdowns (5h and 7d),
-  a draggable desktop panel you can float anywhere, per-provider show/hide, the
-  menu-bar style switch, and an **EN / 中文** toggle. Right-click the icon for
-  the same options.
-- **Auto light/dark** — *Kaji Sun* by day, *Kaji Ember* by night.
+每个服务一枚**双环 / double ring**：外环是 5 小时窗口，内环是 7 天窗口；中心是各家自己的标记
+（Claude 星芒、Codex 结、MiniMax 的 M、Ark 菱形），大数字是 5 小时用量。7 天百分比写在标签里，
+逼近周上限时转为琥珀色。
 
-Everything is read locally from your own Claude Code / Codex files by a bundled,
-dependency-free Python reader. Nothing leaves your machine.
+- **四个服务 · Four providers** —— Claude、Codex、MiniMax 直接读你本地的 CLI 文件，无需 API key；
+  Ark（Agent + Coding 两套）用本地 Volcengine 凭据。
+- **三种形态 · Three surfaces** —— 菜单栏环 (menu bar)、可拖到桌面任意处的悬浮窗 (floating panel)、
+  以及收到屏幕边缘、只露一条的**可折叠 dock** (foldable dock)。
+- **两种风格 · Mono / Color**（设置 → 菜单栏）—— Mono 默认，与原生图标一同安静；Color 用 Kaji 柿橙。
+- **点一下展开 popover** —— 两个重置倒计时 (5h + 7d)、按服务显隐、S/M/L 尺寸、已用 / 剩余切换、
+  EN / 中文。右键图标是同样的菜单。
+- **自动日夜 · Auto light/dark** —— 白天 *Kaji Sun*，夜里 *Kaji Ember*。
+
+一切由内置、零依赖的 Python reader 在本地读取。**Nothing leaves your machine.**
+
+## Updates · 更新
+
+启动时检查一次 GitHub Releases（最多几小时一次）。有新版就在菜单栏图标上点一个小圆点，
+右键菜单出现 **Update to vX**，点开发布页。只碰公开 GitHub API，不上传任何东西。
 
 ## Build from source
 
@@ -59,12 +54,13 @@ swift run                 # dev — menu-bar agent, no dock icon
 ./scripts/build-app.sh    # release bundle → dist/KajiGauge.app
 ```
 
+CLT-only 机器上 SwiftPM 链接不动时，用 `./scripts/build-local.sh`（直接 `swiftc`，编译并装到 `/Applications`）。
+
 ## Part of Kaji
 
-Kaji Gauge is the menu-bar companion to **[Kaji](https://github.com/interesting-vibe-coding/kaji)** —
-a macOS-native terminal built for AI-assisted work (the rings, the warm palette,
-and the 舵 helm mark all come from there). There's also a small
-[landing page](https://interesting-vibe-coding.github.io/kaji-gauge-site/).
+Kaji Gauge 是 **[Kaji](https://github.com/interesting-vibe-coding/kaji)** 的菜单栏伙伴 —— 一个为 AI 协作打造的
+原生 macOS 终端。环、暖墨配色、舵 (helm) 标记都来自那里：白天柿橙 `#F25C05`，夜里暖金。
+还有一个小[主页](https://interesting-vibe-coding.github.io/kaji-gauge-site/)。
 
 ## License
 

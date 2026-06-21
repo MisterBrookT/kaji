@@ -15,8 +15,25 @@ say() { printf '\033[1;38;5;208m==>\033[0m %s\n' "$1"; }
 die() { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
 
 [ "$(uname)" = "Darwin" ] || die "Kaji Gauge is macOS only."
-command -v python3 >/dev/null 2>&1 || \
-  echo "note: python3 not found — install it (e.g. 'xcode-select --install') so the gauge can read your quota."
+
+# The bundled reader needs a real python3. /usr/bin/python3 is only a stub until
+# the Xcode command-line tools are installed — trigger that install (Apple's GUI
+# prompt) and wait, so a fresh Mac works out of the box.
+have_python() { /usr/bin/env python3 -c 'import sys' >/dev/null 2>&1; }
+if ! have_python; then
+  if xcode-select -p >/dev/null 2>&1; then
+    die "python3 not working though the command-line tools are present. Reinstall: 'sudo rm -rf \$(xcode-select -p) && xcode-select --install'."
+  fi
+  say "Installing the Xcode command-line tools (needed for python3)…"
+  xcode-select --install >/dev/null 2>&1 || true
+  say "Finish the macOS install dialog that just opened — this resumes automatically…"
+  # Poll until the tools land (or the user cancels). ~20 min ceiling.
+  for _ in $(seq 1 240); do
+    if xcode-select -p >/dev/null 2>&1 && have_python; then break; fi
+    sleep 5
+  done
+  have_python || die "command-line tools not installed. Run 'xcode-select --install', finish the dialog, then re-run this installer."
+fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

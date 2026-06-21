@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  :root{
+    --ink:#2B2620; --ink2:#6E6253; --mute:#9A8C79;
+    --persimmon:#F25C05; --persimmon-soft:#FF7A2E;
+    --amber:#D8A657; --track:#ECE2D0; --paper:#FCF7EE; --paper2:#FFFFFF;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{width:1280px; height:760px}
+  body{
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",sans-serif;
+    color:var(--ink); -webkit-font-smoothing:antialiased;
+    position:relative; overflow:hidden;
+    background:
+      radial-gradient(1200px 700px at 78% 30%, rgba(242,92,5,.16), transparent 60%),
+      radial-gradient(900px 600px at 12% 88%, rgba(255,122,46,.12), transparent 62%),
+      linear-gradient(135deg,#FFFFFF 0%, #FFF6EC 46%, #FFEAD6 100%);
+  }
+  /* faux desktop menu bar */
+  .menubar{
+    position:absolute; top:0; left:0; right:0; height:30px;
+    background:rgba(255,255,255,.55); backdrop-filter:blur(8px);
+    border-bottom:1px solid rgba(0,0,0,.05);
+    display:flex; align-items:center; padding:0 18px; gap:18px;
+    font-size:13px; font-weight:600; color:#3a342b;
+  }
+  .menubar .spacer{flex:1}
+  .menubar .glyphs{display:flex; gap:11px; align-items:center}
+  .menubar .clock{font-weight:500; color:#4a4136; font-variant-numeric:tabular-nums}
+  .mini{width:18px; height:18px}
+
+  .stage{position:absolute; inset:30px 0 0 0}
+
+  /* headline */
+  .lede{position:absolute; left:84px; top:118px; width:430px}
+  .brandrow{display:flex; align-items:center; gap:13px; margin-bottom:22px}
+  .helm{width:42px; height:42px}
+  .wordmark{font-size:30px; font-weight:680; letter-spacing:-.01em}
+  .wordmark b{color:var(--persimmon); font-weight:700}
+  .tag{font-size:21px; line-height:1.42; font-weight:560; color:#3a332a; letter-spacing:-.005em}
+  .tag .hl{color:var(--persimmon)}
+  .subtag{margin-top:16px; font-size:14.5px; color:var(--ink2); line-height:1.5}
+  .chips{margin-top:22px; display:flex; gap:9px; flex-wrap:wrap}
+  .chip{font-size:12.5px; font-weight:600; color:#7a6e5d;
+    background:rgba(255,255,255,.7); border:1px solid rgba(0,0,0,.06);
+    padding:6px 11px; border-radius:20px}
+  .chip.hot{color:#fff; background:var(--persimmon); border-color:transparent}
+
+  /* popover card */
+  .popover{
+    position:absolute; right:74px; top:96px; width:520px;
+    background:var(--paper); border-radius:22px;
+    box-shadow:0 2px 1px rgba(0,0,0,.03), 0 30px 70px -22px rgba(120,60,10,.42),
+      0 0 0 1px rgba(0,0,0,.045);
+    padding:22px 24px 20px; transform:rotate(-.6deg);
+  }
+  .pop-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
+  .pop-title{display:flex; align-items:center; gap:8px; font-size:16px; font-weight:600}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--persimmon)}
+  .pop-title .g{color:var(--mute); font-weight:600}
+  .pop-win{font-size:13px; color:var(--mute); font-weight:500}
+  .rings{display:flex; justify-content:space-between; gap:6px}
+  .cell{flex:1; text-align:center}
+  .ringwrap{position:relative; width:106px; height:106px; margin:0 auto}
+  .ringwrap .num{position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-size:25px; font-weight:640; color:var(--ink); font-variant-numeric:tabular-nums; padding-top:24px}
+  .ringwrap .mk{position:absolute; left:50%; top:34px; transform:translateX(-50%); width:21px; height:21px}
+  .name{margin-top:7px; font-size:14px; font-weight:600}
+  .r1{margin-top:4px; font-size:12px; color:var(--persimmon); font-weight:600}
+  .r2{margin-top:1px; font-size:12px; color:var(--persimmon); font-weight:600}
+  .r2.amber{color:var(--persimmon)}
+  .divider{height:1px; background:rgba(0,0,0,.07); margin:17px 2px 14px}
+  .pills{display:flex; gap:8px; flex-wrap:wrap}
+  .pill{font-size:13px; font-weight:600; padding:7px 15px; border-radius:18px}
+  .pill.on{background:var(--persimmon); color:#fff}
+  .pill.off{background:transparent; color:#8a7d6b; border:1px solid rgba(0,0,0,.12)}
+
+  /* foldable dock */
+  .dock{
+    position:absolute; left:118px; bottom:64px; width:96px;
+    background:linear-gradient(160deg,#FFFDF8,#FBF2E2);
+    border:1px solid rgba(216,166,87,.5);
+    border-radius:20px;
+    box-shadow:0 24px 50px -18px rgba(120,60,10,.40), 0 0 0 1px rgba(0,0,0,.03);
+    padding:16px 0; transform:rotate(1.2deg);
+  }
+  .dock .row{display:flex; flex-direction:column; align-items:center; gap:2px; padding:9px 0}
+  .dock .mk{width:22px; height:22px}
+  .dock .pc{font-size:15px; font-weight:680; color:var(--persimmon); font-variant-numeric:tabular-nums}
+  .dock .handle{
+    position:absolute; right:-15px; top:50%; transform:translateY(-50%);
+    width:30px; height:42px; border-radius:13px;
+    background:#FCE3CD; border:1px solid rgba(242,92,5,.45);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--persimmon); font-size:16px; font-weight:700;
+    box-shadow:0 6px 14px -6px rgba(242,92,5,.5);
+  }
+  .caption{position:absolute; left:84px; bottom:30px; font-size:13px; color:var(--ink2)}
+  .caption b{color:#3a332a; font-weight:650}
+</style>
+</head>
+<body>
+  <!-- shared SVG defs: brand marks (24x24 viewBox) -->
+  <svg width="0" height="0" style="position:absolute"><defs>
+    <g id="m-openai"><path fill="currentColor" d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.1419.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></g>
+    <g id="m-minimax"><path fill="currentColor" d="M3,3 H8 L12,12 L16,3 H21 V21 H3 Z"/></g>
+    <g id="m-diamond" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round">
+      <path d="M12 2.4 L20 12 L12 21.6 L4 12 Z"/><path d="M12 7 L16.5 12 L12 17 L7.5 12 Z"/>
+    </g>
+    <g id="m-burst" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
+      <line x1="12" y1="3.5" x2="12" y2="20.5"/><line x1="3.5" y1="12" x2="20.5" y2="12"/>
+      <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+      <line x1="12" y1="2.8" x2="12" y2="6.4"/>
+    </g>
+  </defs></svg>
+
+  <div class="menubar">
+    <b>Finder</b><span style="font-weight:500;color:#6a6052">File&nbsp; Edit&nbsp; View</span>
+    <span class="spacer"></span>
+    <span class="glyphs" style="color:var(--persimmon)">
+      <svg class="mini" viewBox="0 0 24 24"><use href="#m-burst"/></svg>
+      <svg class="mini" viewBox="0 0 24 24"><use href="#m-openai"/></svg>
+      <svg class="mini" viewBox="0 0 24 24"><use href="#m-diamond"/></svg>
+      <svg class="mini" viewBox="0 0 24 24"><use href="#m-minimax"/></svg>
+    </span>
+    <span class="clock">9:41</span>
+  </div>
+
+  <div class="stage">
+    <!-- headline -->
+    <div class="lede">
+      <div class="brandrow">
+        <svg class="helm" viewBox="0 0 24 24" fill="none" stroke="#F25C05" stroke-width="1.7">
+          <circle cx="12" cy="12" r="9.2"/><circle cx="12" cy="12" r="2.1" fill="#F25C05" stroke="none"/>
+          <g stroke-linecap="round"><line x1="12" y1="2.8" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="21.2"/>
+          <line x1="2.8" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="21.2" y2="12"/>
+          <line x1="5.5" y1="5.5" x2="7.8" y2="7.8"/><line x1="16.2" y1="16.2" x2="18.5" y2="18.5"/>
+          <line x1="18.5" y1="5.5" x2="16.2" y2="7.8"/><line x1="7.8" y1="16.2" x2="5.5" y2="18.5"/></g>
+        </svg>
+        <div class="wordmark">Kaji <b>Gauge</b></div>
+      </div>
+      <div class="tag">A <span class="hl">beautiful</span> macOS menu-bar app for your<br>AI usage — <span class="hl">用量一眼看尽</span>.</div>
+      <div class="subtag">Claude · Codex · MiniMax · Ark，五小时 / 七天双环额度，<br>读本地、不联网、安静地住在你的菜单栏里。</div>
+      <div class="chips">
+        <span class="chip hot">menu bar</span>
+        <span class="chip">floating panel</span>
+        <span class="chip">foldable dock</span>
+        <span class="chip">light · dark</span>
+      </div>
+    </div>
+
+    <!-- popover -->
+    <div class="popover">
+      <div class="pop-head">
+        <div class="pop-title"><span class="dot"></span> Kaji <span class="g">Gauge</span></div>
+        <div class="pop-win">5h · 7天</div>
+      </div>
+      <div class="rings">
+        <!-- Claude 77 / 7d17 -->
+        <div class="cell">
+          <div class="ringwrap">
+            <svg viewBox="0 0 100 100" width="106" height="106">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#ECE2D0" stroke-width="9"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#ECE2D0" stroke-width="8"/>
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#F25C05" stroke-width="9" stroke-linecap="round"
+                transform="rotate(-90 50 50)" stroke-dasharray="203.2 60.7"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#F25C05" stroke-width="8" stroke-linecap="round"
+                transform="rotate(-90 50 50)" stroke-dasharray="31 151.2"/>
+            </svg>
+            <svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-burst"/></svg>
+            <div class="num">77</div>
+          </div>
+          <div class="name">Claude</div><div class="r1">2h 47m</div><div class="r2">7天 17%</div>
+        </div>
+        <!-- Codex 44 / 7d100 -->
+        <div class="cell">
+          <div class="ringwrap">
+            <svg viewBox="0 0 100 100" width="106" height="106">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#ECE2D0" stroke-width="9"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#ECE2D0" stroke-width="8"/>
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#F25C05" stroke-width="9" stroke-linecap="round"
+                transform="rotate(-90 50 50)" stroke-dasharray="116.1 147.8"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#F25C05" stroke-width="8"
+                transform="rotate(-90 50 50)" stroke-dasharray="182.2 0"/>
+            </svg>
+            <svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-openai"/></svg>
+            <div class="num">44</div>
+          </div>
+          <div class="name">Codex</div><div class="r1">3h 30m</div><div class="r2 amber">7天 100%</div>
+        </div>
+        <!-- Ark 0 / 7d100 -->
+        <div class="cell">
+          <div class="ringwrap">
+            <svg viewBox="0 0 100 100" width="106" height="106">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#ECE2D0" stroke-width="9"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#ECE2D0" stroke-width="8"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#F25C05" stroke-width="8"
+                transform="rotate(-90 50 50)" stroke-dasharray="182.2 0"/>
+            </svg>
+            <svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-diamond"/></svg>
+            <div class="num">0</div>
+          </div>
+          <div class="name">Ark Agent</div><div class="r1">—</div><div class="r2 amber">7天 100%</div>
+        </div>
+        <!-- MiniMax 5 / 7d20 -->
+        <div class="cell">
+          <div class="ringwrap">
+            <svg viewBox="0 0 100 100" width="106" height="106">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#ECE2D0" stroke-width="9"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#ECE2D0" stroke-width="8"/>
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#F25C05" stroke-width="9" stroke-linecap="round"
+                transform="rotate(-90 50 50)" stroke-dasharray="13.2 250.7"/>
+              <circle cx="50" cy="50" r="29" fill="none" stroke="#F25C05" stroke-width="8" stroke-linecap="round"
+                transform="rotate(-90 50 50)" stroke-dasharray="36.4 145.8"/>
+            </svg>
+            <svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-minimax"/></svg>
+            <div class="num">5</div>
+          </div>
+          <div class="name">MiniMax</div><div class="r1">2h 27m</div><div class="r2">7天 20%</div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div class="pills">
+        <span class="pill on">Claude</span><span class="pill on">Codex</span>
+        <span class="pill on">Ark Agent</span><span class="pill off">MiniMax</span>
+        <span class="pill off">中文</span>
+      </div>
+    </div>
+
+    <!-- foldable dock -->
+    <div class="dock">
+      <div class="row"><svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-burst"/></svg><div class="pc">77%</div></div>
+      <div class="row"><svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-openai"/></svg><div class="pc">44%</div></div>
+      <div class="row"><svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-diamond"/></svg><div class="pc">0%</div></div>
+      <div class="row"><svg class="mk" viewBox="0 0 24 24" style="color:#2B2620"><use href="#m-minimax"/></svg><div class="pc">5%</div></div>
+      <div class="handle">‹</div>
+    </div>
+
+    <div class="caption"><b>One glance</b> — menu-bar rings, a floating panel, and a dock that folds to the screen edge.</div>
+  </div>
+</body>
+</html>
