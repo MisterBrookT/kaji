@@ -107,33 +107,45 @@ struct RingGauge: View {
         let weekRaw = provider.weekPercent
         let weekDisplayed = weekRaw.map { showRemaining ? (100 - $0) : $0 }
         let week = weekDisplayed.map { "\(Int($0.rounded()))%" } ?? "\u{2014}"
-        let fiveReset = ResetFormat.phrase(provider.resetDate, lang)
-        let weekReset = ResetFormat.phrase(provider.weekResetDate, lang)
         // When the ring is small, drop the "5h · " and "周 {n}% · " prefixes.
         // The rings themselves encode the window visually; the countdown is
         // the load-bearing info and must remain readable in full.
         let narrow = ringSize < 78
+        // Very small rings (adaptive popover with many providers): even the
+        // "{dur} 后重置" phrase won't fit — fall back to the bare duration so
+        // the number itself stays legible.
+        let tiny = ringSize < 58
+        let fiveReset = tiny ? ResetFormat.short(provider.resetDate)
+                             : ResetFormat.phrase(provider.resetDate, lang)
+        let weekReset = tiny ? ResetFormat.short(provider.weekResetDate)
+                             : ResetFormat.phrase(provider.weekResetDate, lang)
+        // Fonts scale with ringSize too, so the whole row shrinks as a unit.
+        let nameFont = min(13, max(8.5, ringSize * (12.0 / 84.0)))
+        let capFont  = min(11, max(7.0, ringSize * (10.0 / 84.0)))
         return VStack(spacing: 2) {
             Text(provider.displayName)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.system(size: nameFont, weight: .semibold, design: .rounded))
                 .foregroundColor(t.cream)
                 .lineLimit(1)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.7)
             // 5h reset countdown (the outer ring's window).
             (Text(narrow ? "" : "5h \u{00B7} ").foregroundColor(t.mute)
                 + Text(fiveReset).foregroundColor(t.gold))
-                .font(.system(size: 10, weight: .medium))
+                .font(.system(size: capFont, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .minimumScaleFactor(0.85)
-            // 7d used % + its own reset countdown (the inner ring's window).
-            (Text(narrow ? "" : "\(L10n.t(.week, lang)) \(week) \u{00B7} ")
-                .foregroundColor(t.mute)
-                + Text(weekReset).foregroundColor(t.gold.opacity(0.85)))
-                .font(.system(size: 10, weight: .medium))
+                .minimumScaleFactor(0.7)
+            // 7d used % — the ONLY numeric readout of the inner ring, so it stays
+            // visible at EVERY size (amber when near the weekly limit, so a maxed
+            // week is obvious at a glance). Only the trailing reset countdown is
+            // dropped when the ring is narrow.
+            (Text("\(L10n.t(.week, lang)) ").foregroundColor(t.mute)
+                + Text(week).foregroundColor(provider.weekNearLimit ? t.amber : t.gold)
+                + Text(narrow ? "" : "  \u{00B7} \(weekReset)").foregroundColor(t.gold.opacity(0.85)))
+                .font(.system(size: capFont, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
-                .minimumScaleFactor(0.85)
+                .minimumScaleFactor(0.7)
         }
         .fixedSize(horizontal: false, vertical: true)
     }
