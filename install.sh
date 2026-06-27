@@ -53,8 +53,14 @@ APP_PATH="$(find "$TMP" -maxdepth 2 -name '*.app' -print -quit)"
 [ -n "$APP_PATH" ] || die "no .app found in the downloaded archive."
 APP_NAME="$(basename "$APP_PATH")"
 
+say "Stopping old copies…"
+pkill -f "/Applications/Kaji.app/Contents/MacOS/Kaji" 2>/dev/null || true
+pkill -f "/Applications/KajiGauge.app/Contents/MacOS/KajiGauge" 2>/dev/null || true
+sleep 1
+
 say "Installing to $DEST/$APP_NAME"
 rm -rf "$DEST/$APP_NAME"
+rm -rf "$DEST/KajiGauge.app"
 cp -R "$APP_PATH" "$DEST/"
 xattr -dr com.apple.quarantine "$DEST/$APP_NAME" 2>/dev/null || true
 
