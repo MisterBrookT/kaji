@@ -24,7 +24,7 @@ struct GaugeRowView: View {
     }
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme) }
+    private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
 
     // All providers that have data (for the toggle pills), and the subset the
     // user has chosen to show (for the rings).
@@ -65,6 +65,7 @@ struct GaugeRowView: View {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(shown) { provider in
                     RingGauge(provider: provider, lang: prefs.language,
+                              style: prefs.menubarStyle,
                               showRemaining: prefs.showRemaining,
                               ringSize: defaultRing)
                 }
@@ -77,25 +78,51 @@ struct GaugeRowView: View {
     /// row exactly — 3 fill it, 4 fill it — and S/M/L scale it as a unit. No
     /// GeometryReader (it would break the popover's vertical fitting pass).
     private func popoverRings(_ size: PanelSize) -> some View {
-        let n = CGFloat(max(1, shown.count))
-        let content = size.frameSize.width - 28          // outer padding (14 * 2)
-        // Tighter spacing as the count grows so the row keeps fitting.
-        let spacing: CGFloat = n >= 5 ? 6 : (n >= 4 ? 9 : 14)
-        let raw = (content - spacing * (n - 1)) / n
-        // `raw` is the largest ring that still fits the row. Clamp into
-        // [24, size.ringSize]: the 24pt floor only guards a degenerate count —
-        // with the real provider set (<=5) at the smallest width raw stays ~34pt
-        // so it never trips (a floor ABOVE raw, like the old 40, overflowed).
-        let ring = min(size.ringSize, max(24, raw))
-        return HStack(alignment: .top, spacing: spacing) {
-            ForEach(shown) { provider in
-                RingGauge(provider: provider, lang: prefs.language,
-                          showRemaining: prefs.showRemaining,
-                          ringSize: ring)
-                    .frame(maxWidth: .infinity)
-            }
+        if size == .small {
+            return AnyView(
+                VStack(alignment: .leading, spacing: 9) {
+                    ForEach(shown) { provider in
+                        CompactRingRow(provider: provider,
+                                       lang: prefs.language,
+                                       style: prefs.menubarStyle,
+                                       showRemaining: prefs.showRemaining,
+                                       ringSize: size.ringSize)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            )
         }
-        .frame(maxWidth: .infinity)
+
+        if shown.count <= 2 {
+            return AnyView(
+                HStack(alignment: .top, spacing: 18) {
+                    ForEach(shown) { provider in
+                        RingGauge(provider: provider, lang: prefs.language,
+                                  style: prefs.menubarStyle,
+                                  showRemaining: prefs.showRemaining,
+                                  ringSize: size.ringSize)
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+            )
+        }
+
+        let columns = [
+            GridItem(.flexible(), spacing: 12, alignment: .leading),
+            GridItem(.flexible(), spacing: 12, alignment: .leading),
+        ]
+        return AnyView(
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                ForEach(shown) { provider in
+                    CompactRingRow(provider: provider,
+                                   lang: prefs.language,
+                                   style: prefs.menubarStyle,
+                                   showRemaining: prefs.showRemaining,
+                                   ringSize: 52)
+                }
+            }
+        )
     }
 
     @ViewBuilder
@@ -105,6 +132,7 @@ struct GaugeRowView: View {
                 ForEach(shown) { provider in
                     CompactRingRow(provider: provider,
                                    lang: prefs.language,
+                                   style: prefs.menubarStyle,
                                    showRemaining: prefs.showRemaining,
                                    ringSize: size.ringSize)
                 }
@@ -114,6 +142,7 @@ struct GaugeRowView: View {
             HStack(alignment: .top, spacing: size == .medium ? 14 : 18) {
                 ForEach(shown) { provider in
                     RingGauge(provider: provider, lang: prefs.language,
+                              style: prefs.menubarStyle,
                               showRemaining: prefs.showRemaining,
                               ringSize: size.ringSize)
                 }
@@ -206,7 +235,7 @@ struct GaugeRowView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Menu-bar style row: how the menu-bar glyph reads (mono / color).
+            // Visual style row: Calm / Playful / Mono.
             HStack(spacing: 7) {
                 Text(L10n.t(.menubar, prefs.language))
                     .font(.system(size: 10.5, weight: .medium))
@@ -217,6 +246,9 @@ struct GaugeRowView: View {
                 }
                 segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
                     prefs.menubarStyle = .color
+                }
+                segment(L10n.t(.styleBlackWhite, prefs.language), on: prefs.menubarStyle == .blackWhite) {
+                    prefs.menubarStyle = .blackWhite
                 }
             }
 
@@ -246,9 +278,6 @@ struct GaugeRowView: View {
                 }
                 segment(L10n.t(.sizeMedium, prefs.language), on: prefs.panelSize == .medium) {
                     prefs.panelSize = .medium
-                }
-                segment(L10n.t(.sizeLarge, prefs.language), on: prefs.panelSize == .large) {
-                    prefs.panelSize = .large
                 }
             }
 
@@ -345,8 +374,8 @@ struct GaugeRowView: View {
         let density = max(1, shown.count)
         let scale: CGFloat = density >= 3 ? 1.0 : (density == 2 ? 0.90 : 0.78)
         return HStack(spacing: 6) {
-            // Theme-aware accent dot: muted copper, matched to the rings.
-            Circle().fill(t.gold).frame(width: 7, height: 7)
+            // Theme-aware accent dot, kept smaller than data.
+            Circle().fill(t.sun).frame(width: 7, height: 7)
             Text("Kaji")
                 .font(.system(size: 12, weight: .semibold, design: .rounded))
                 .foregroundColor(t.cream)
@@ -398,18 +427,20 @@ struct GaugeRowView: View {
 private struct CompactRingRow: View {
     let provider: ProviderView
     var lang: Lang = .en
+    var style: MenubarStyle = .mono
     var showRemaining: Bool = false
     var ringSize: CGFloat = 56
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme) }
+    private var t: KajiTheme { .resolve(scheme, style) }
 
     // Same ring math as RingGauge, scaled by ringSize.
     private var baseLineWidth: CGFloat { ringSize * (10.0 / 84.0) }
     private var innerLineWidth: CGFloat { ringSize * (5.0 / 84.0) }
     private var innerInset: CGFloat    { ringSize * (13.0 / 84.0) }
-    private var logoSize: CGFloat      { ringSize * (16.0 / 84.0) }
-    private var percentFont: CGFloat   { ringSize * (22.0 / 84.0) }
+    private var logoSize: CGFloat      { ringSize * (13.0 / 84.0) }
+    private var percentFont: CGFloat   { ringSize * (14.0 / 84.0) }
+    private var metricLabelFont: CGFloat { ringSize * (7.0 / 84.0) }
 
     private var arcColor: Color { provider.isNearLimit ? t.amber : t.gold }
     private var weekColor: Color { provider.weekNearLimit ? t.amber : t.gold.opacity(0.55) }
@@ -422,11 +453,13 @@ private struct CompactRingRow: View {
     private var weekTrimFraction: Double {
         showRemaining ? 1.0 - provider.weekFraction : provider.weekFraction
     }
-    private var percentText: String {
-        guard let p = provider.fiveHourPercent else { return "\u{2014}" }
+    private func displayPercent(_ raw: Double?) -> String {
+        guard let p = raw else { return "\u{2014}" }
         let shown = showRemaining ? (100.0 - p) : p
         return "\(Int(shown.rounded()))"
     }
+    private var fivePercentText: String { displayPercent(provider.fiveHourPercent) }
+    private var weekPercentText: String { displayPercent(provider.weekPercent) }
     private var numberColor: Color { provider.isNearLimit ? t.amber : t.cream }
 
     var body: some View {
@@ -454,28 +487,38 @@ private struct CompactRingRow: View {
                     .rotationEffect(.degrees(-90))
                     .padding(innerInset)
 
-                VStack(spacing: 1) {
+                VStack(spacing: 0) {
                     ProviderLogo(key: provider.id, color: arcColor, size: logoSize)
-                    Text(percentText)
-                        .font(.system(size: percentFont, weight: .semibold, design: .rounded))
-                        .foregroundColor(numberColor)
-                        .monospacedDigit()
+                    metric("5h", fivePercentText, color: numberColor)
+                    metric(L10n.t(.week, lang), weekPercentText,
+                           color: provider.weekNearLimit ? t.amber : t.gold)
                 }
             }
             .frame(width: ringSize, height: ringSize)
 
-            // Text column on the right — takes ALL remaining width via
-            // maxWidth: .infinity, so the name "MiniMax" never truncates.
+            // Text column on the right takes all remaining width via
+            // maxWidth: .infinity, so provider names do not truncate.
             textColumn
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private func metric(_ label: String, _ value: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 1.5) {
+            Text(label)
+                .font(.system(size: metricLabelFont, weight: .medium, design: .rounded))
+                .foregroundColor(t.mute)
+            Text(value)
+                .font(.system(size: percentFont, weight: .semibold, design: .rounded))
+                .foregroundColor(color)
+                .monospacedDigit()
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.55)
+    }
+
     private var textColumn: some View {
-        let weekRaw = provider.weekPercent
-        let weekDisplayed = weekRaw.map { showRemaining ? (100 - $0) : $0 }
-        let week = weekDisplayed.map { "\(Int($0.rounded()))%" } ?? "\u{2014}"
-        let fiveReset = ResetFormat.phrase(provider.resetDate, lang)
+        let fiveReset = ResetFormat.short(provider.resetDate)
         let weekReset = ResetFormat.absolute(provider.weekResetDate)
         return VStack(alignment: .leading, spacing: 4) {
             // Primary: provider name (semibold 13pt, cream).
@@ -483,9 +526,9 @@ private struct CompactRingRow: View {
                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                 .foregroundColor(t.cream)
                 .lineLimit(1)
-            // Secondary: 5h window — "5h" mute label + gold reset countdown.
+            // Secondary: reset timing. Percentages live in the ring.
             HStack(spacing: 4) {
-                Text("5h")
+                Text("5h \(fivePercentText)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(t.mute)
                 Text(fiveReset)
@@ -493,14 +536,10 @@ private struct CompactRingRow: View {
                     .foregroundColor(t.gold)
             }
             .lineLimit(1)
-            // Tertiary: 7d window — "7d 23% · " mute + gold reset.
             HStack(spacing: 4) {
-                Text("\(L10n.t(.week, lang)) \(week)")
+                Text("\(L10n.t(.week, lang)) \(weekPercentText)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(t.mute)
-                Text("\u{00B7}")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundColor(t.ash)
                 Text(weekReset)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(t.gold.opacity(0.85))

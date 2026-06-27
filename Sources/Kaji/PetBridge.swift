@@ -3,7 +3,7 @@ import Foundation
 // MARK: - Pet bridge
 //
 // Kaji does not own a desktop-pet runtime. It publishes a small local state file
-// so OpenPets, Codex Pets, or future runtimes can map quota pressure to animation.
+// so pet runtimes can map quota pressure to animation.
 
 enum PetAnimationState: String, Codable {
     case idle

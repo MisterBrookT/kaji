@@ -2,31 +2,31 @@ import Foundation
 
 // MARK: - Provider configuration
 //
-// Per-provider display metadata. The glyph marks are placeholders — swap them
-// for real brand marks later. This map is the single place to add/remove a
+// Per-provider display metadata. The glyph marks are neutral placeholders.
+// This map is the single place to add/remove a
 // provider's display config; the data layer surfaces whatever quota.py emits.
 enum Providers {
-    /// Unicode FALLBACK marks. claude / codex / gemini / minimax render real
-    /// vector logos via `ProviderLogo` (Claude burst / OpenAI knot / Gemini
-    /// spark / MiniMax M monogram); these marks are only used for providers
-    /// without a vector logo.
+    /// Unicode fallback marks. Provider-specific keys may render vector marks
+    /// via `ProviderLogo`; these marks are used when no vector mark exists.
     static let marks: [String: String] = [
-        "claude":  "\u{2733}",   // ✳ burst — hints Claude's radial mark
-        "codex":   "\u{273B}",   // ✻ six-petalled florette — hints OpenAI knot
-        "minimax": "\u{272A}",   // ✪ circled white star — kept as fallback
-        "gemini":  "\u{2726}",   // ✦ four-point spark — hints Gemini
+        "claude":  "\u{2733}",   // ✳
+        "codex":   "\u{273B}",   // ✻
+        "minimax": "\u{272A}",   // ✪
+        "gemini":  "\u{2726}",   // ✦
         "ark-agent": "\u{25C7}",  // ◇
         "kiro":    "\u{25C9}",   // ◉
         "opencode": "\u{25B3}",  // △
     ]
 
-    /// Human-facing display names (capitalized). Falls back to the raw key.
+    /// Human-facing display names inside the app. Public repo copy can stay
+    /// vendor-neutral, but the actual control surface should name what users
+    /// recognize.
     static let displayNames: [String: String] = [
-        "claude":  "Claude",
+        "claude":  "Claude Code",
         "codex":   "Codex",
         "minimax": "MiniMax",
-        "gemini":  "Gemini",
         "ark-agent": "Ark Agent",
+        "gemini":  "Gemini",
         "kiro":    "Kiro",
         "opencode": "OpenCode",
     ]
@@ -38,11 +38,9 @@ enum Providers {
         "minimax", "gemini", "kiro", "opencode"
     ]
 
-    /// Providers surfaced by default on a fresh install. Ark Agent is available
-    /// in the toggle list when configured, but stays opt-in until quota is more
-    /// trustworthy.
-    /// MiniMax quota is wired through the `mmx` CLI (see `quota.py`'s
-    /// `_fetch_minimax_limits`).
+    /// Providers surfaced by default on a fresh install. Optional providers are
+    /// available in the toggle list when configured, but stay opt-in until the
+    /// quota source is trustworthy.
     static let visible: Set<String> = ["claude", "codex", "minimax"]
     static func isVisible(_ key: String) -> Bool { visible.contains(key) }
 

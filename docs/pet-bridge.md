@@ -14,7 +14,7 @@ quota.py -> QuotaStore -> PetBridge -> ~/Library/Application Support/Kaji/pet-st
 ```
 
 External runtimes can poll this file and map `animationState` to their own
-sprites, Live2D motions, or Codex pet states.
+sprites, Live2D motions, or pet states.
 
 ## Schema
 
@@ -24,13 +24,13 @@ sprites, Live2D motions, or Codex pet states.
   "generatedAt": "2026-06-27T10:00:00Z",
   "animationState": "review",
   "reason": "quota_pressure",
-  "summary": "Codex quota is getting tight.",
+  "summary": "Provider quota is getting tight.",
   "severity": 0.82,
-  "dominantProvider": "codex",
+  "dominantProvider": "provider-id",
   "providers": [
     {
-      "id": "codex",
-      "displayName": "Codex",
+      "id": "provider-id",
+      "displayName": "Provider B",
       "fiveHourPercent": 82,
       "sevenDayPercent": 64,
       "fiveHourResetsAt": "2026-06-27T11:00:00Z",
@@ -66,7 +66,7 @@ sprites, Live2D motions, or Codex pet states.
 
 ## Hatch-Pet Boundary
 
-`hatch-pet` creates Codex-compatible pet assets:
+`hatch-pet` creates runtime-compatible pet assets:
 
 ```text
 concept/reference -> 9 animation rows -> spritesheet.webp + pet.json

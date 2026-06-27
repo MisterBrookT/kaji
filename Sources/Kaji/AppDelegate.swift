@@ -44,6 +44,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
+        prefs.$showRemaining
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
         // Popover size + visible-providers reactive: when the user flips
         // S/M/L from the right-click menu (or toggles a provider) while the
         // popover is open, the host content rebuilds with the new size.
@@ -91,6 +95,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let view = StatusItemView(providers: visibleProviders,
                                   style: prefs.menubarStyle,
+                                  showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil)
         hostingView = NSHostingView(rootView: view)
         hostingView.configureKajiHost()
@@ -111,6 +116,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
                                                style: prefs.menubarStyle,
+                                               showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil)
         statusItem.length = statusItemLength
     }
@@ -217,7 +223,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         menu.addItem(.separator())
 
-        // Menu-bar style submenu (Mono / Color), radio-checked.
+        // Visual style submenu (Calm / Playful / Mono), radio-checked.
         let styleItem = NSMenuItem(title: L10n.t(.menubar, lang), action: nil, keyEquivalent: "")
         let styleMenu = NSMenu()
         let monoItem = NSMenuItem(title: L10n.t(.styleMono, lang),
@@ -230,6 +236,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         colorItem.target = self
         colorItem.state = prefs.menubarStyle == .color ? .on : .off
         styleMenu.addItem(colorItem)
+        let bwItem = NSMenuItem(title: L10n.t(.styleBlackWhite, lang),
+                                action: #selector(setMenubarBlackWhite), keyEquivalent: "")
+        bwItem.target = self
+        bwItem.state = prefs.menubarStyle == .blackWhite ? .on : .off
+        styleMenu.addItem(bwItem)
         styleItem.submenu = styleMenu
         menu.addItem(styleItem)
 
@@ -337,6 +348,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.menubarStyle = .color
     }
 
+    @objc private func setMenubarBlackWhite() {
+        prefs.menubarStyle = .blackWhite
+    }
+
     @objc private func setShowUsed() {
         prefs.showRemaining = false
     }
@@ -359,7 +374,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch size {
         case .small:  return L10n.t(.sizeSmall, lang)
         case .medium: return L10n.t(.sizeMedium, lang)
-        case .large:  return L10n.t(.sizeLarge, lang)
         }
     }
 }

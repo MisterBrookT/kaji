@@ -4,7 +4,8 @@
 
 **A beautiful macOS menu bar for AI coding usage.**
 
-本地读取 Claude、Codex、MiniMax、Ark Agent 的额度，用一组安静的状态环放进菜单栏。
+Kaji reads quota windows from multiple AI coding vendors and puts them in a
+quiet macOS menu bar signal.
 
 Kaji keeps your coding-agent quota visible before a long prompt hits a wall. It
 is local-first, native, and small enough to live beside Wi-Fi and battery.
@@ -13,16 +14,18 @@ Kaji 会在长任务撞上额度墙之前提醒你。它本地优先、原生、
 
 [中文](README.zh.md)
 
-<a href="https://github.com/interesting-vibe-coding/kaji/releases/latest"><img src="https://img.shields.io/github/v/release/interesting-vibe-coding/kaji?color=A76540&label=release&labelColor=1A1A1A" alt="latest release"></a>
-<a href="https://github.com/interesting-vibe-coding/kaji/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/interesting-vibe-coding/kaji/ci.yml?branch=main&label=build&labelColor=1A1A1A&color=A76540" alt="build status"></a>
-<a href="https://github.com/interesting-vibe-coding/kaji/stargazers"><img src="https://img.shields.io/github/stars/interesting-vibe-coding/kaji?style=flat&label=stars&labelColor=1A1A1A&color=A76540" alt="GitHub stars"></a>
-<img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-A76540?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/interesting-vibe-coding/kaji?color=A76540&labelColor=1A1A1A" alt="MIT license"></a>
+<a href="https://github.com/interesting-vibe-coding/kaji/releases/latest"><img src="https://img.shields.io/github/v/release/interesting-vibe-coding/kaji?color=5C86A3&label=release&labelColor=1A1A1A" alt="latest release"></a>
+<a href="https://github.com/interesting-vibe-coding/kaji/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/interesting-vibe-coding/kaji/ci.yml?branch=main&label=build&labelColor=1A1A1A&color=5C86A3" alt="build status"></a>
+<a href="https://github.com/interesting-vibe-coding/kaji/stargazers"><img src="https://img.shields.io/github/stars/interesting-vibe-coding/kaji?style=flat&label=stars&labelColor=1A1A1A&color=5C86A3" alt="GitHub stars"></a>
+<img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-5C86A3?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/interesting-vibe-coding/kaji?color=5C86A3&labelColor=1A1A1A" alt="MIT license"></a>
 
 <br>
 <br>
 
 <p align="center"><img src="docs/hero.png" width="820" alt="Kaji macOS menu bar quota app"></p>
+
+<p align="center"><img src="docs/demo.gif" width="720" alt="Kaji visual modes and quota display"></p>
 
 </div>
 
@@ -48,18 +51,21 @@ windows into a quiet menu bar signal: glance once, keep working.
 - **Menu bar rings**: compact dual-ring status for selected providers.
 - **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, S/M/L size, used/remaining mode, and EN/CN language.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
-- **Light/dark styling**: warm native colors with mono or color menu bar mode.
+- **Three visual modes**: Mono is the default; Calm adds blue-gray accents; Playful adds warmer orange accents.
 - **Update hint**: a small dot appears when a newer GitHub Release is available.
 - **Pet bridge**: local `pet-state.json` for desktop-pet runtimes. See [docs/pet-bridge.md](docs/pet-bridge.md).
 
 ## Supported Providers
 
-| Provider | What Kaji Tracks |
+Kaji currently supports four AI coding vendors. Vendor-specific adapters stay
+local-first and only read the account or CLI data that already exists on your
+machine.
+
+| Scope | What Kaji Tracks |
 | --- | --- |
-| Claude | Local Claude Code quota windows |
-| Codex | Local Codex usage windows |
-| MiniMax | Token-plan usage through the local `mmx` CLI |
-| Ark Agent | Volcengine Ark Agent Plan usage when local credentials exist |
+| Local vendor adapters | Local quota and usage windows |
+| CLI-backed adapters | Token-plan usage through local developer tools |
+| Credential-backed adapters | Optional remote quota windows when local credentials exist |
 
 ## How It Works
 
@@ -69,7 +75,8 @@ local CLI/account data -> bundled quota.py reader -> SwiftUI menu bar + popover
 
 - **Local reader**: a bundled Python script reads local quota/account windows.
 - **Native surface**: SwiftUI renders the menu bar rings and popover.
-- **Narrow network use**: GitHub Releases for update checks; Volcengine/Ark only when Ark Agent credentials are configured.
+- **Narrow network use**: GitHub Releases for update checks; optional provider
+  endpoints are contacted only when their local credentials are configured.
 
 Nothing is uploaded.
 
@@ -104,9 +111,10 @@ On CLT-only machines where SwiftPM linking fails, use:
 
 Kaji is not signed or notarized yet. The installer removes the quarantine flag and says so explicitly.
 
-**Where does Ark Agent configuration live?**
+**Where does optional provider configuration live?**
 
-Use `~/.config/kaji/volcengine.env`. Legacy `~/.config/kaji-gauge/volcengine.env` still works as a fallback.
+Use `~/.config/kaji/volcengine.env` for the optional remote adapter. Legacy
+`~/.config/kaji-gauge/volcengine.env` still works as a fallback.
 
 **Does Kaji replace provider billing dashboards?**
 

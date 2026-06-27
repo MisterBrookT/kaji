@@ -27,11 +27,11 @@ struct Snap {
     @MainActor
     static func makeMocks() -> [ProviderView] {
         [
-            ProviderView(id: "claude", mark: "", displayName: "Claude",
+            ProviderView(id: "claude", mark: "", displayName: "Claude Code",
                          fiveHourPercent: 56, weekPercent: 36, tokensToday: 120_000,
                          resetDate: Date(timeIntervalSinceNow: 72 * 60),
                          weekResetDate: Date(timeIntervalSinceNow: 38 * 3600),
-                         plan: "max",
+                         plan: "plan",
                          history: [20, 28, 22, 40, 55, 48, 60, 52, 68, 56]),
             ProviderView(id: "codex", mark: "", displayName: "Codex",
                          fiveHourPercent: 82, weekPercent: 64, tokensToday: 90_000,
@@ -39,35 +39,61 @@ struct Snap {
                          weekResetDate: Date(timeIntervalSinceNow: 5 * 24 * 3600),
                          plan: "plus",
                          history: [30, 45, 50, 62, 70, 75, 80, 78, 85, 82]),
+            ProviderView(id: "ark-agent", mark: "", displayName: "Ark Agent",
+                         fiveHourPercent: 0, weekPercent: 87, tokensToday: 12_000,
+                         resetDate: nil,
+                         weekResetDate: Date(timeIntervalSinceNow: 13 * 3600),
+                         plan: "team",
+                         history: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+            ProviderView(id: "minimax", mark: "", displayName: "MiniMax",
+                         fiveHourPercent: 69, weekPercent: 17, tokensToday: 42_000,
+                         resetDate: Date(timeIntervalSinceNow: 22 * 60),
+                         weekResetDate: Date(timeIntervalSinceNow: 14 * 3600),
+                         plan: "plan",
+                         history: [10, 15, 20, 28, 38, 46, 54, 61, 66, 69]),
         ]
     }
 
     @MainActor
-    static func makePrefs(_ lang: Lang) -> Prefs {
+    static func makePrefs(_ lang: Lang, style: MenubarStyle, showRemaining: Bool) -> Prefs {
         let p = Prefs()
         p.language = lang
-        p.visibleProviders = ["claude", "codex"]
-        p.menubarStyle = .mono
+        p.visibleProviders = ["claude", "codex", "ark-agent", "minimax"]
+        p.menubarStyle = style
+        p.showRemaining = showRemaining
+        p.panelSize = .medium
         return p
     }
 
     static func main() {
         MainActor.assumeIsolated {
             let mocks = makeMocks()
-            let lang: Lang = (CommandLine.arguments.contains("zh")) ? .zh : .en
-            let prefs = makePrefs(lang)
+            let args = Array(CommandLine.arguments.dropFirst())
+            let lang: Lang = args.contains("zh") ? .zh : .en
+            let showRemaining = args.contains("remaining")
+            let style: MenubarStyle
+            if args.contains("playful") || args.contains("color") {
+                style = .color
+            } else if args.contains("calm") || args.contains("blue") || args.contains("mono") {
+                style = .mono
+            } else {
+                style = .blackWhite
+            }
+            let prefs = makePrefs(lang, style: style, showRemaining: showRemaining)
 
             let panel = GaugeRowView(store: QuotaStore(previewProviders: mocks, updated: Date()),
-                                     prefs: prefs)
+                                     prefs: prefs,
+                                     panelSize: prefs.panelSize)
             let popover = GaugeRowView(
                 store: QuotaStore(previewProviders: mocks, updated: Date()),
                 prefs: prefs,
-                controls: .init(onRefresh: {}, onQuit: {})
+                controls: .init(onRefresh: {}, onQuit: {}),
+                panelSize: prefs.panelSize
             )
             // Menu-bar right cluster mock: the Kaji dual-rings sitting among the
             // real system status items (control center, wifi, battery, clock) so
             // the README shows the app *in the menu bar*, not floating on grey.
-            func statusStrip(_ scheme: ColorScheme, _ mbStyle: MenubarStyle = .mono) -> some View {
+            func statusStrip(_ scheme: ColorScheme, _ mbStyle: MenubarStyle = .blackWhite) -> some View {
                 let glyph: Color = scheme == .dark
                     ? Color.white.opacity(0.82) : Color.black.opacity(0.78)
                 func sys(_ name: String, _ size: CGFloat = 14) -> some View {
@@ -76,7 +102,7 @@ struct Snap {
                         .foregroundColor(glyph)
                 }
                 return HStack(spacing: 13) {
-                    StatusItemView(providers: mocks, style: mbStyle)
+                    StatusItemView(providers: mocks, style: mbStyle, showRemaining: showRemaining)
                     sys("switch.2", 13)
                     sys("wifi", 13)
                     sys("battery.75", 16)
@@ -98,7 +124,7 @@ struct Snap {
                 )
             }
 
-            let arg = CommandLine.arguments.dropFirst().first ?? "both"
+            let arg = args.first ?? "both"
             if arg == "dark" || arg == "both" {
                 render(panel, appearance: .darkAqua, scheme: .dark, to: "/tmp/gauge-dark.png")
                 render(statusStrip(.dark), appearance: .darkAqua, scheme: .dark, to: "/tmp/status-dark.png")

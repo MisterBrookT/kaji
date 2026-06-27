@@ -31,7 +31,7 @@ cp build/Kaji "$APP/Contents/MacOS/Kaji"
 cp Info.plist "$APP/Contents/Info.plist"
 # Resources/quota.py is the single source of truth for the bundled reader.
 # Always copy it so the .app never drifts from the repo (see the bundle-drift
-# pitfall that hid MiniMax in v0.4.4).
+# pitfall that hid one provider in v0.4.4).
 cp Resources/quota.py "$APP/Contents/Resources/quota.py"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 printf 'APPL????' > "$APP/Contents/PkgInfo"

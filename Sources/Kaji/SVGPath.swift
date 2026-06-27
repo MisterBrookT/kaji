@@ -4,12 +4,11 @@ import CoreGraphics
 // MARK: - SVGPath
 //
 // A minimal SVG path-data ("d" attribute) parser that builds a CGPath. Just
-// enough to render the brand logos we ship (OpenAI / Gemini) from the exact
-// same path strings the design preview uses — so the gauge and the HTML mock
-// stay pixel-faithful.
+// enough to render the vector marks we ship from the exact same path strings
+// the design preview uses, so the gauge and the HTML mock stay pixel-faithful.
 //
 // Supports: M m  L l  H h  V v  C c  S s  Q q  T t  A a  Z z
-// Arcs (A/a) are converted to cubic Béziers (the OpenAI mark needs them).
+// Arcs (A/a) are converted to cubic Béziers.
 // All logos author in a 24×24 viewBox; `path(in:)` consumers scale to fit.
 enum SVGPath {
     /// Parse SVG path data into a CGPath in the path's own coordinate space

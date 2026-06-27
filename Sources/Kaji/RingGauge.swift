@@ -17,6 +17,7 @@ import SwiftUI
 struct RingGauge: View {
     let provider: ProviderView
     var lang: Lang = .en
+    var style: MenubarStyle = .mono
     /// When true, the ring + % read as REMAINING (100% used → empty ring + 0%).
     var showRemaining: Bool = false
 
@@ -26,14 +27,15 @@ struct RingGauge: View {
     var ringSize: CGFloat = 84
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme) }
+    private var t: KajiTheme { .resolve(scheme, style) }
 
     // All ring geometry is derived from ringSize so the gauge scales as a unit.
     private var baseLineWidth: CGFloat { ringSize * (10.0 / 84.0) }
     private var innerLineWidth: CGFloat { ringSize * (5.0 / 84.0) }
     private var innerInset: CGFloat    { ringSize * (13.0 / 84.0) }
-    private var logoSize: CGFloat      { ringSize * (16.0 / 84.0) }
-    private var percentFont: CGFloat   { ringSize * (22.0 / 84.0) }
+    private var logoSize: CGFloat      { ringSize * (14.0 / 84.0) }
+    private var percentFont: CGFloat   { ringSize * (15.0 / 84.0) }
+    private var metricLabelFont: CGFloat { ringSize * (7.4 / 84.0) }
 
     /// "Near limit" is always USED-based regardless of display direction —
     /// we don't want the ring color to flip just because the user toggled
@@ -55,12 +57,14 @@ struct RingGauge: View {
         showRemaining ? 1.0 - provider.weekFraction : provider.weekFraction
     }
 
-    /// Center % text — shown as USED or REMAINING per the toggle.
-    private var percentText: String {
-        guard let p = provider.fiveHourPercent else { return "\u{2014}" }
+    private func displayPercent(_ raw: Double?) -> String {
+        guard let p = raw else { return "\u{2014}" }
         let shown = showRemaining ? (100.0 - p) : p
         return "\(Int(shown.rounded()))"
     }
+
+    private var fivePercentText: String { displayPercent(provider.fiveHourPercent) }
+    private var weekPercentText: String { displayPercent(provider.weekPercent) }
 
     private var numberColor: Color { provider.isNearLimit ? t.amber : t.cream }
 
@@ -89,12 +93,11 @@ struct RingGauge: View {
                     .rotationEffect(.degrees(-90))
                     .padding(innerInset)
 
-                VStack(spacing: 1) {
+                VStack(spacing: ringSize < 60 ? 0 : 1) {
                     ProviderLogo(key: provider.id, color: arcColor, size: logoSize)
-                    Text(percentText)
-                        .font(.system(size: percentFont, weight: .semibold, design: .rounded))
-                        .foregroundColor(numberColor)
-                        .monospacedDigit()
+                    metric("5h", fivePercentText, color: numberColor)
+                    metric(L10n.t(.week, lang), weekPercentText,
+                           color: provider.weekNearLimit ? t.amber : t.gold)
                 }
             }
             .frame(width: ringSize, height: ringSize)
@@ -103,11 +106,22 @@ struct RingGauge: View {
         }
     }
 
+    private func metric(_ label: String, _ value: String, color: Color) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(label)
+                .font(.system(size: metricLabelFont, weight: .medium, design: .rounded))
+                .foregroundColor(t.mute)
+            Text(value)
+                .font(.system(size: percentFont, weight: .semibold, design: .rounded))
+                .foregroundColor(color)
+                .monospacedDigit()
+        }
+        .lineLimit(1)
+        .minimumScaleFactor(0.6)
+    }
+
     private var label: some View {
-        let weekRaw = provider.weekPercent
-        let weekDisplayed = weekRaw.map { showRemaining ? (100 - $0) : $0 }
-        let week = weekDisplayed.map { "\(Int($0.rounded()))%" } ?? "\u{2014}"
-        // When the ring is small, drop the "5h · " and "周 {n}% · " prefixes.
+        // When the ring is small, drop long reset phrases.
         // The rings themselves encode the window visually; the countdown is
         // the load-bearing info and must remain readable in full.
         let narrow = ringSize < 78
@@ -127,18 +141,15 @@ struct RingGauge: View {
                 .foregroundColor(t.cream)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-            // 5h reset countdown (the outer ring's window).
-            (Text(narrow ? "" : "5h \u{00B7} ").foregroundColor(t.mute)
+            // Reset countdowns only. Percentages live in the center.
+            (Text("5h ").foregroundColor(t.mute)
                 + Text(fiveReset).foregroundColor(t.gold))
                 .font(.system(size: capFont, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .minimumScaleFactor(0.55)
-            // 7d used % + reset time. This is intentionally never dropped:
-            // weekly reset timing is the most common quota question.
             (Text("\(L10n.t(.week, lang)) ").foregroundColor(t.mute)
-                + Text(week).foregroundColor(provider.weekNearLimit ? t.amber : t.gold)
-                + Text("  \u{00B7} \(weekReset)").foregroundColor(t.gold.opacity(0.85)))
+                + Text(weekReset).foregroundColor(t.gold.opacity(0.85)))
                 .font(.system(size: capFont, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)

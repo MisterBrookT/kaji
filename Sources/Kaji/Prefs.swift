@@ -11,10 +11,8 @@ import CoreGraphics
 //     popover footer or the right-click menu. Never empties to zero.
 //   - language: EN / 中文. Drives all captions + menu text. First run follows
 //     the macOS locale.
-//   - menubarStyle: how the menu-bar glyph reads. `.mono` (default) draws the
-//     rings + provider logo in the adaptive label color, so the app sits quietly
-//     among the native monochrome menu-bar icons. `.color` draws them in muted
-//     copper for more presence. The popover/panel are always in full color.
+//   - menubarStyle: the visual language. `.blackWhite` is the default strict
+//     mono mode. `.mono` is Calm. `.color` is Playful.
 @MainActor
 final class Prefs: ObservableObject {
     @Published var visibleProviders: Set<String> {
@@ -59,7 +57,7 @@ final class Prefs: ObservableObject {
         if let raw = d.string(forKey: Key.menubarStyle), let s = MenubarStyle(rawValue: raw) {
             menubarStyle = s
         } else {
-            menubarStyle = .mono                    // quiet + native by default
+            menubarStyle = .blackWhite              // strict mono by default
         }
         // Default to showing USED — matches what the rings always did and
         // avoids surprising existing users on first launch after upgrade.
@@ -106,28 +104,33 @@ enum Lang: String {
 // MARK: - Menu-bar style
 
 enum MenubarStyle: String {
-    case mono     // adaptive label color — sits among native monochrome icons
-    case color    // muted copper — more presence
+    case mono     // Calm: blue/graphite popover
+    case color    // Playful: warmer accent mode
+    case blackWhite // Mono: black/white popover, default
 
-    var toggled: MenubarStyle { self == .mono ? .color : .mono }
+    var toggled: MenubarStyle {
+        switch self {
+        case .mono: return .color
+        case .color: return .blackWhite
+        case .blackWhite: return .mono
+        }
+    }
 }
 
 enum PanelSize: String, CaseIterable {
-    case small, medium, large
+    case small, medium
 
     var frameSize: CGSize {
         switch self {
-        case .small:  return CGSize(width: 236, height: 278)
+        case .small:  return CGSize(width: 246, height: 278)
         case .medium: return CGSize(width: 360, height: 206)
-        case .large:  return CGSize(width: 520, height: 246)
         }
     }
 
     var ringSize: CGFloat {
         switch self {
-        case .small:  return 52
-        case .medium: return 78
-        case .large:  return 98
+        case .small:  return 50
+        case .medium: return 76
         }
     }
 }
@@ -135,15 +138,15 @@ enum PanelSize: String, CaseIterable {
 // MARK: - L10n
 //
 // Minimal two-language string table, keyed by an enum so callers can't typo a
-// key. Brand words (Claude, Codex, Kaji, 5h, 7d) stay untranslated. Word-order-
+// key. Product and metric words (Kaji, 5h, 7d) stay untranslated. Word-order-
 // sensitive phrases (reset countdowns) are composed in the views, not here.
 enum L10n {
     enum K {
         case fiveHQuota, week, quit, stale, waiting, needPython
         case refreshNow, quitApp, language, providers, show
-        case menubar, styleMono, styleColor
+        case menubar, styleMono, styleColor, styleBlackWhite
             case usage, showUsed, showRemaining
-            case panelSize, sizeSmall, sizeMedium, sizeLarge
+            case panelSize, sizeSmall, sizeMedium
             case updateTo, checkUpdates
     }
 
@@ -165,16 +168,16 @@ enum L10n {
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
         .show:         ("Show",                "\u{663E}\u{793A}"),                         // 显示
-        .menubar:      ("Menu bar",           "\u{83DC}\u{5355}\u{680F}"),                 // 菜单栏
-        .styleMono:    ("Mono",               "\u{9ED1}\u{767D}"),                         // 黑白
-        .styleColor:   ("Color",              "\u{5F69}\u{8272}"),                         // 彩色
+        .menubar:      ("Style",              "\u{98CE}\u{683C}"),                         // 风格
+        .styleMono:    ("Calm",               "\u{6C89}\u{7A33}"),                         // 沉稳
+        .styleColor:   ("Playful",            "\u{6D3B}\u{6CFC}"),                         // 活泼
+        .styleBlackWhite: ("Mono",            "\u{9ED1}\u{767D}"),                         // 黑白
         .usage:        ("Usage",              "\u{7528}\u{91CF}"),                         // 用量
         .showUsed:     ("Used",               "\u{5DF2}\u{7528}"),                         // 已用
         .showRemaining:("Remaining",          "\u{5269}\u{4F59}"),                         // 剩余
         .panelSize:    ("Size",               "\u{5927}\u{5C0F}"),                         // 大小
         .sizeSmall:    ("S",                  "\u{5C0F}"),                                 // 小
         .sizeMedium:   ("M",                  "\u{4E2D}"),                                 // 中
-        .sizeLarge:    ("L",                  "\u{5927}"),                                 // 大
     ]
 
     static func t(_ k: K, _ lang: Lang) -> String {
