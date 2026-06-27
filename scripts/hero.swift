@@ -44,16 +44,18 @@ struct HeroView: View {
 
                     ZStack(alignment: .bottomTrailing) {
                         PNGImage(path: "docs/gauge-light.png")
-                            .frame(width: 470, height: 414)
-                            .padding(30)
+                            .frame(width: 390, height: 344)
+                            .padding(26)
                             .background(card)
+                            .frame(maxWidth: .infinity, alignment: .leading)
 
                         PetMascot()
-                            .frame(width: 164, height: 116)
-                            .offset(x: 18, y: 24)
+                            .frame(width: 210, height: 170)
+                            .offset(x: -70, y: 0)
                     }
+                    .frame(width: 620, height: 570, alignment: .topLeading)
                 }
-                .frame(width: 560)
+                .frame(width: 620)
             }
             .padding(.horizontal, 96)
         }
@@ -125,109 +127,205 @@ struct HeroView: View {
 
 private struct PetMascot: View {
     var body: some View {
-        ZStack(alignment: .topTrailing) {
+        ZStack(alignment: .topLeading) {
             speech
-                .offset(x: -6, y: -12)
+                .offset(x: 72, y: 78)
+                .zIndex(2)
 
             ZStack {
-                // Tail / body shadow.
-                Capsule()
-                    .fill(hex(0xD9D9D4))
-                    .frame(width: 118, height: 54)
-                    .rotationEffect(.degrees(-4))
-                    .offset(x: -10, y: 36)
-
-                Capsule()
-                    .fill(hex(0xF7F7F3))
-                    .frame(width: 118, height: 58)
-                    .overlay(Capsule().stroke(hex(0x2B2B28), lineWidth: 4))
-                    .rotationEffect(.degrees(-4))
-                    .offset(x: -10, y: 31)
-
-                // Head.
-                Circle()
-                    .fill(hex(0xF8F8F5))
-                    .frame(width: 58, height: 58)
-                    .overlay(Circle().stroke(hex(0x2B2B28), lineWidth: 4))
-                    .offset(x: 44, y: 18)
-
-                // Ears.
-                Circle()
-                    .fill(hex(0x2B2B28))
-                    .frame(width: 22, height: 22)
-                    .offset(x: 24, y: -4)
-                Circle()
-                    .fill(hex(0x2B2B28))
-                    .frame(width: 22, height: 22)
-                    .offset(x: 63, y: -2)
-
-                // Eye patches.
-                Capsule()
-                    .fill(hex(0x2B2B28))
-                    .frame(width: 18, height: 13)
-                    .rotationEffect(.degrees(-22))
-                    .offset(x: 34, y: 17)
-                Capsule()
-                    .fill(hex(0x2B2B28))
-                    .frame(width: 18, height: 13)
-                    .rotationEffect(.degrees(18))
-                    .offset(x: 55, y: 17)
-
-                Circle()
-                    .fill(hex(0xF8F8F5))
-                    .frame(width: 4, height: 4)
-                    .offset(x: 37, y: 15)
-                Circle()
-                    .fill(hex(0xF8F8F5))
-                    .frame(width: 4, height: 4)
-                    .offset(x: 52, y: 15)
-
-                // Nose / tired mouth.
-                Circle()
-                    .fill(hex(0x2B2B28))
-                    .frame(width: 6, height: 5)
-                    .offset(x: 45, y: 28)
-                Path { p in
-                    p.move(to: CGPoint(x: 84, y: 69))
-                    p.addQuadCurve(to: CGPoint(x: 98, y: 69),
-                                   control: CGPoint(x: 91, y: 75))
-                }
-                .stroke(hex(0x2B2B28), lineWidth: 2)
-
-                // Front paw hanging over the card.
-                Capsule()
-                    .fill(hex(0x2B2B28))
-                    .frame(width: 38, height: 16)
-                    .rotationEffect(.degrees(-8))
-                    .offset(x: 36, y: 60)
-
-                // Token battery tag.
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(hex(0xFFFFFF))
-                    .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .stroke(hex(0x2B2B28), lineWidth: 2))
-                    .frame(width: 44, height: 22)
-                    .overlay(
-                        Text("15%")
-                            .font(.system(size: 11, weight: .bold, design: .rounded))
-                            .foregroundColor(hex(0x2B2B28))
-                    )
-                    .offset(x: -30, y: 4)
+                shadow
+                pandaBody
+                hindLeg
+                head
+                ears
+                eyePatches
+                face
+                paws
+                tokenTag
             }
-            .offset(x: 12, y: 28)
+            .offset(x: 20, y: 54)
+            .zIndex(1)
         }
+    }
+
+    private var shadow: some View {
+        Ellipse()
+            .fill(.black.opacity(0.09))
+            .frame(width: 150, height: 24)
+            .offset(x: 20, y: 104)
+    }
+
+    private var pandaBody: some View {
+        ZStack {
+            Path { p in
+                p.move(to: CGPoint(x: 22, y: 88))
+                p.addCurve(to: CGPoint(x: 40, y: 44),
+                           control1: CGPoint(x: 16, y: 64),
+                           control2: CGPoint(x: 22, y: 48))
+                p.addCurve(to: CGPoint(x: 118, y: 38),
+                           control1: CGPoint(x: 62, y: 31),
+                           control2: CGPoint(x: 94, y: 30))
+                p.addCurve(to: CGPoint(x: 154, y: 74),
+                           control1: CGPoint(x: 139, y: 45),
+                           control2: CGPoint(x: 154, y: 54))
+                p.addCurve(to: CGPoint(x: 129, y: 111),
+                           control1: CGPoint(x: 157, y: 94),
+                           control2: CGPoint(x: 150, y: 108))
+                p.addCurve(to: CGPoint(x: 42, y: 112),
+                           control1: CGPoint(x: 94, y: 117),
+                           control2: CGPoint(x: 55, y: 116))
+                p.addCurve(to: CGPoint(x: 22, y: 88),
+                           control1: CGPoint(x: 30, y: 108),
+                           control2: CGPoint(x: 24, y: 101))
+            }
+            .fill(hex(0xF9F9F5))
+            .overlay(
+                Path { p in
+                    p.move(to: CGPoint(x: 22, y: 88))
+                    p.addCurve(to: CGPoint(x: 40, y: 44),
+                               control1: CGPoint(x: 16, y: 64),
+                               control2: CGPoint(x: 22, y: 48))
+                    p.addCurve(to: CGPoint(x: 118, y: 38),
+                               control1: CGPoint(x: 62, y: 31),
+                               control2: CGPoint(x: 94, y: 30))
+                    p.addCurve(to: CGPoint(x: 154, y: 74),
+                               control1: CGPoint(x: 139, y: 45),
+                               control2: CGPoint(x: 154, y: 54))
+                    p.addCurve(to: CGPoint(x: 129, y: 111),
+                               control1: CGPoint(x: 157, y: 94),
+                               control2: CGPoint(x: 150, y: 108))
+                    p.addCurve(to: CGPoint(x: 42, y: 112),
+                               control1: CGPoint(x: 94, y: 117),
+                               control2: CGPoint(x: 55, y: 116))
+                    p.addCurve(to: CGPoint(x: 22, y: 88),
+                               control1: CGPoint(x: 30, y: 108),
+                               control2: CGPoint(x: 24, y: 101))
+                }
+                .stroke(hex(0x2B2B28), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+            )
+
+            Capsule()
+                .fill(hex(0x2B2B28))
+                .frame(width: 82, height: 25)
+                .rotationEffect(.degrees(-2))
+                .offset(x: 35, y: 88)
+        }
+    }
+
+    private var hindLeg: some View {
+        Capsule()
+            .fill(hex(0x2B2B28))
+            .frame(width: 46, height: 25)
+            .rotationEffect(.degrees(-12))
+            .offset(x: 106, y: 102)
+    }
+
+    private var head: some View {
+        Ellipse()
+            .fill(hex(0xF9F9F5))
+            .frame(width: 76, height: 68)
+            .overlay(Ellipse().stroke(hex(0x2B2B28), lineWidth: 4))
+            .offset(x: 104, y: 32)
+    }
+
+    private var ears: some View {
+        ZStack {
+            Circle()
+                .fill(hex(0x2B2B28))
+                .frame(width: 27, height: 27)
+                .offset(x: 101, y: 23)
+            Circle()
+                .fill(hex(0x2B2B28))
+                .frame(width: 27, height: 27)
+                .offset(x: 157, y: 23)
+            Circle()
+                .fill(hex(0xF9F9F5))
+                .frame(width: 13, height: 13)
+                .offset(x: 101, y: 23)
+            Circle()
+                .fill(hex(0xF9F9F5))
+                .frame(width: 13, height: 13)
+                .offset(x: 157, y: 23)
+        }
+    }
+
+    private var eyePatches: some View {
+        ZStack {
+            Capsule()
+                .fill(hex(0x2B2B28))
+                .frame(width: 24, height: 17)
+                .rotationEffect(.degrees(-24))
+                .offset(x: 119, y: 54)
+            Capsule()
+                .fill(hex(0x2B2B28))
+                .frame(width: 24, height: 17)
+                .rotationEffect(.degrees(22))
+                .offset(x: 145, y: 54)
+        }
+    }
+
+    private var face: some View {
+        ZStack {
+            Circle()
+                .fill(hex(0xF9F9F5))
+                .frame(width: 4, height: 4)
+                .offset(x: 122, y: 52)
+            Circle()
+                .fill(hex(0xF9F9F5))
+                .frame(width: 4, height: 4)
+                .offset(x: 142, y: 52)
+            Ellipse()
+                .fill(hex(0x2B2B28))
+                .frame(width: 9, height: 7)
+                .offset(x: 132, y: 64)
+            Path { p in
+                p.move(to: CGPoint(x: 128, y: 73))
+                p.addQuadCurve(to: CGPoint(x: 136, y: 73),
+                               control: CGPoint(x: 132, y: 78))
+            }
+            .stroke(hex(0x2B2B28), lineWidth: 2)
+        }
+    }
+
+    private var paws: some View {
+        ZStack {
+            Capsule()
+                .fill(hex(0x2B2B28))
+                .frame(width: 48, height: 18)
+                .rotationEffect(.degrees(-5))
+                .offset(x: 58, y: 112)
+            Capsule()
+                .fill(hex(0x2B2B28))
+                .frame(width: 38, height: 18)
+                .rotationEffect(.degrees(-18))
+                .offset(x: 134, y: 116)
+        }
+    }
+
+    private var tokenTag: some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(hex(0xFFFFFF))
+            .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(hex(0x2B2B28), lineWidth: 2))
+            .frame(width: 48, height: 24)
+            .overlay(
+                Text("15%")
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .foregroundColor(hex(0x2B2B28))
+            )
+            .offset(x: 52, y: 52)
     }
 
     private var speech: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text("15% tokens")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
+                .font(.system(size: 13, weight: .bold, design: .rounded))
             Text("need recharge")
-                .font(.system(size: 10, weight: .medium, design: .rounded))
+                .font(.system(size: 11, weight: .medium, design: .rounded))
         }
         .foregroundColor(hex(0x2B2B28))
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(hex(0xFFFFFF))
