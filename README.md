@@ -8,9 +8,9 @@ Local-first quota rings for Claude, Codex, MiniMax, and Ark Agent.
 
 [中文](README.zh.md)
 
-<a href="https://github.com/interesting-vibe-coding/kaji-gauge/releases/latest"><img src="https://img.shields.io/github/v/release/interesting-vibe-coding/kaji-gauge?color=F25C05&label=release&labelColor=211C15" alt="latest release"></a>
+<a href="https://github.com/interesting-vibe-coding/kaji/releases/latest"><img src="https://img.shields.io/github/v/release/interesting-vibe-coding/kaji?color=F25C05&label=release&labelColor=211C15" alt="latest release"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-F25C05?labelColor=211C15" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/interesting-vibe-coding/kaji-gauge?color=F25C05&labelColor=211C15" alt="MIT license"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/interesting-vibe-coding/kaji?color=F25C05&labelColor=211C15" alt="MIT license"></a>
 
 <br>
 <br>
@@ -27,7 +27,7 @@ Local-first quota rings for Claude, Codex, MiniMax, and Ark Agent.
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/interesting-vibe-coding/kaji-gauge/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/interesting-vibe-coding/kaji/main/install.sh | bash
 ```
 
 Requires macOS 13+ on Apple Silicon. The installer downloads the latest release,
