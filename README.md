@@ -49,8 +49,9 @@ windows into a quiet menu bar signal: glance once, keep working.
 - **Menu bar rings**: compact dual-ring status for selected providers.
 - **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, S/M size, used/remaining mode, and EN/CN language.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
+- **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
 - **Three visual modes**: Mono is the default; Calm adds blue-gray accents; Playful adds warmer orange accents.
-- **One-click updates**: a small dot appears when a newer GitHub Release is available; right-click Kaji and choose `Update to vX`.
+- **One-click updates**: a small dot appears when a newer GitHub Release is available; open Kaji and choose `Update to vX`.
 - **Pet bridge**: local `pet-state.json` for desktop-pet runtimes. See [docs/pet-bridge.md](docs/pet-bridge.md).
 
 ## Supported Providers
@@ -75,6 +76,7 @@ local CLI/account data -> bundled quota.py reader -> SwiftUI menu bar + popover
 - **Native surface**: SwiftUI renders the menu bar rings and popover.
 - **Narrow network use**: GitHub Releases for update checks; optional provider
   endpoints are contacted only when their local credentials are configured.
+- **Explicit system control**: Keep Awake uses macOS `pmset disablesleep` and asks for administrator approval when toggled.
 
 Nothing is uploaded.
 

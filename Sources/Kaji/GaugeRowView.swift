@@ -10,6 +10,8 @@ import SwiftUI
 struct GaugeRowView: View {
     @ObservedObject var store: QuotaStore
     @ObservedObject var prefs: Prefs
+    @ObservedObject var updateChecker: UpdateChecker
+    @ObservedObject var sleepController: SleepController
 
     var controls: Controls? = nil
 
@@ -20,6 +22,8 @@ struct GaugeRowView: View {
 
     struct Controls {
         let onRefresh: () -> Void
+        let onUpdate: () -> Void
+        let onToggleKeepAwake: () -> Void
         let onQuit: () -> Void
     }
 
@@ -281,6 +285,31 @@ struct GaugeRowView: View {
                 }
             }
 
+            HStack(spacing: 7) {
+                Text(L10n.t(.system, prefs.language))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(t.mute)
+                Spacer(minLength: 8)
+                segment(L10n.t(.keepAwake, prefs.language), on: sleepController.isEnabled) {
+                    c.onToggleKeepAwake()
+                }
+                .opacity(sleepController.isBusy ? 0.55 : 1)
+                Button(action: c.onUpdate) {
+                    Text(updateTitle)
+                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(updateChecker.available == nil ? t.mute : t.bg)
+                        .lineLimit(1)
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 3)
+                        .background(
+                            Capsule()
+                                .fill(updateChecker.available == nil ? Color.clear : t.gold)
+                                .overlay(Capsule().stroke(updateChecker.available == nil ? t.track : Color.clear, lineWidth: 1))
+                        )
+                }
+                .buttonStyle(.plain)
+            }
+
             // Actions row: refresh on the left, quit on the right.
             HStack(spacing: 12) {
                 Button(action: c.onRefresh) {
@@ -296,6 +325,13 @@ struct GaugeRowView: View {
             .font(.system(size: 11, weight: .medium))
             .foregroundColor(t.mute)
         }
+    }
+
+    private var updateTitle: String {
+        if let release = updateChecker.available {
+            return L10n.t(.updateTo, prefs.language) + " " + release.tag
+        }
+        return L10n.t(.checkUpdates, prefs.language)
     }
 
     // A small toggle chip: filled (warm) when on, outlined when off.

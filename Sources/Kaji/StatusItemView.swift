@@ -20,7 +20,7 @@ struct StatusItemView: View {
     var style: MenubarStyle = .mono
     var showRemaining: Bool = false
     /// When a newer release exists, a small accent dot rides the top-trailing
-    /// corner of the glyph as a passive "update available" cue (right-click ->
+    /// corner of the glyph as a passive "update available" cue (open popover ->
     /// "Update to vX" to act on it). No notification permission needed.
     var updateAvailable: Bool = false
 

@@ -8,7 +8,7 @@ import Combine
 // On launch (and at most once per `minInterval`) it asks the GitHub Releases
 // API for the latest published tag and compares it to this bundle's version.
 // If a newer one exists it publishes `available`, which drives a passive cue:
-// a dot on the menubar glyph + an "Update to vX" item in the right-click menu.
+// a dot on the menubar glyph + an "Update to vX" item in the popover.
 //
 // The update action is explicit: it runs the same GitHub release installer path
 // as the README one-liner, clears quarantine, and relaunches Kaji. Fully silent

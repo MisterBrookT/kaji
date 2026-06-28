@@ -8,7 +8,7 @@ import CoreGraphics
 // menubar indicator + popover panel react live. Owned by AppDelegate.
 //
 //   - visibleProviders: which provider rings to show. Toggleable from the
-//     popover footer or the right-click menu. Never empties to zero.
+//     popover footer or the popover. Never empties to zero.
 //   - language: EN / 中文. Drives all captions + menu text. First run follows
 //     the macOS locale.
 //   - menubarStyle: the visual language. `.blackWhite` is the default strict
@@ -26,7 +26,7 @@ final class Prefs: ObservableObject {
     }
     /// Show the 5h percentage as USED (default, "100% means full") vs
     /// REMAINING ("0% means full"). Persisted; the toggle lives in both the
-    /// popover footer segment and the right-click menu on the status item.
+    /// popover footer segment and the popover on the status item.
     @Published var showRemaining: Bool {
         didSet { UserDefaults.standard.set(showRemaining, forKey: Key.showRemaining) }
     }
@@ -147,7 +147,7 @@ enum L10n {
         case menubar, styleMono, styleColor, styleBlackWhite
             case usage, showUsed, showRemaining
             case panelSize, sizeSmall, sizeMedium
-            case updateTo, checkUpdates
+            case updateTo, checkUpdates, system, keepAwake
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -164,6 +164,8 @@ enum L10n {
         .refreshNow:   ("Refresh Now",         "\u{7ACB}\u{5373}\u{5237}\u{65B0}"),         // 立即刷新
         .updateTo:     ("Update to",           "\u{66F4}\u{65B0}\u{5230}"),                 // 更新到
         .checkUpdates: ("Check for Updates\u{2026}", "\u{68C0}\u{67E5}\u{66F4}\u{65B0}\u{2026}"), // 检查更新…
+        .system:       ("System",              "\u{7CFB}\u{7EDF}"),                         // 系统
+        .keepAwake:    ("Keep Awake",          "\u{4E0D}\u{4F11}\u{7720}"),                 // 不休眠
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
