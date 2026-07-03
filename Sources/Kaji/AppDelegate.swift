@@ -23,6 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hostingView: NSHostingView<StatusItemView>!
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
+    private let petRunner = PetRunner()
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -76,6 +77,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshPopoverContentIfShown() }
             .store(in: &cancellables)
+        petRunner.$isRunning
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshPopoverContentIfShown() }
+            .store(in: &cancellables)
+        petRunner.$isBusy
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshPopoverContentIfShown() }
+            .store(in: &cancellables)
+        petRunner.$lastError
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.refreshPopoverContentIfShown() }
+            .store(in: &cancellables)
         // Check on launch; re-check when the app is reactivated (cheap, throttled
         // to once per interval inside the checker).
         updateChecker.checkIfDue()
@@ -91,6 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         store.stop()
+        petRunner.stop()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -174,11 +188,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onRefresh: { [weak self] in self?.store.refresh() },
             onUpdate: { [weak self] in self?.handleUpdateAction() },
             onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
+            onTogglePet: { [weak self] in self?.petRunner.toggle() },
             onQuit: { NSApp.terminate(nil) }
         )
         let content = GaugeRowView(store: store, prefs: prefs,
                                    updateChecker: updateChecker,
                                    sleepController: sleepController,
+                                   petRunner: petRunner,
                                    controls: controls,
                                    panelSize: prefs.panelSize)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

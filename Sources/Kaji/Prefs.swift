@@ -149,6 +149,7 @@ enum L10n {
             case panelSize, sizeSmall, sizeMedium
             case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
             case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
+            case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -175,6 +176,12 @@ enum L10n {
         .keepAwakeTurningOn: ("Turning On\u{2026}", "\u{5F00}\u{542F}\u{4E2D}\u{2026}"),     // 开启中…
         .keepAwakeTurningOff: ("Turning Off\u{2026}", "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),   // 关闭中…
         .keepAwakeFailed: ("Awake Failed",      "\u{8BBE}\u{7F6E}\u{5931}\u{8D25}"),         // 设置失败
+        .pet:          ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
+        .petOn:        ("Xiaochai On",          "\u{5C0F}\u{67F4}\u{5DF2}\u{5F00}"),         // 小柴已开
+        .petOff:       ("Xiaochai Off",         "\u{5C0F}\u{67F4}\u{5173}"),                 // 小柴关
+        .petTurningOn: ("Opening\u{2026}",       "\u{5F00}\u{542F}\u{4E2D}\u{2026}"),         // 开启中…
+        .petTurningOff: ("Closing\u{2026}",      "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),         // 关闭中…
+        .petFailed:    ("Pet Failed",           "\u{5BA0}\u{7269}\u{542F}\u{52A8}\u{5931}\u{8D25}"), // 宠物启动失败
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商

@@ -85,13 +85,15 @@ struct Snap {
                                      prefs: prefs,
                                      updateChecker: UpdateChecker(),
                                      sleepController: SleepController(previewEnabled: false),
+                                     petRunner: PetRunner(),
                                      panelSize: prefs.panelSize)
             let popover = GaugeRowView(
                 store: QuotaStore(previewProviders: mocks, updated: Date()),
                 prefs: prefs,
                 updateChecker: UpdateChecker(),
                 sleepController: SleepController(previewEnabled: false),
-                controls: .init(onRefresh: {}, onUpdate: {}, onToggleKeepAwake: {}, onQuit: {}),
+                petRunner: PetRunner(),
+                controls: .init(onRefresh: {}, onUpdate: {}, onToggleKeepAwake: {}, onTogglePet: {}, onQuit: {}),
                 panelSize: prefs.panelSize
             )
             // Menu-bar right cluster mock: the Kaji dual-rings sitting among the

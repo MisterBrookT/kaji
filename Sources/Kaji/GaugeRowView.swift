@@ -12,6 +12,7 @@ struct GaugeRowView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var updateChecker: UpdateChecker
     @ObservedObject var sleepController: SleepController
+    @ObservedObject var petRunner: PetRunner
 
     var controls: Controls? = nil
 
@@ -24,6 +25,7 @@ struct GaugeRowView: View {
         let onRefresh: () -> Void
         let onUpdate: () -> Void
         let onToggleKeepAwake: () -> Void
+        let onTogglePet: () -> Void
         let onQuit: () -> Void
     }
 
@@ -313,6 +315,19 @@ struct GaugeRowView: View {
                 .disabled(updateChecker.isChecking)
             }
 
+            HStack(spacing: 7) {
+                Text(L10n.t(.pet, prefs.language))
+                    .font(.system(size: 10.5, weight: .medium))
+                    .foregroundColor(t.mute)
+                Spacer(minLength: 8)
+                statusChip(petTitle,
+                           filled: petRunner.isRunning,
+                           emphasized: petRunner.isBusy || petRunner.lastError != nil) {
+                    c.onTogglePet()
+                }
+                .disabled(petRunner.isBusy)
+            }
+
             // Actions row: refresh on the left, quit on the right.
             HStack(spacing: 12) {
                 Button(action: c.onRefresh) {
@@ -362,6 +377,20 @@ struct GaugeRowView: View {
 
     private var keepAwakeIsActive: Bool {
         sleepController.targetEnabled ?? sleepController.isEnabled
+    }
+
+    private var petTitle: String {
+        if petRunner.isBusy {
+            return petRunner.isRunning
+                ? L10n.t(.petTurningOff, prefs.language)
+                : L10n.t(.petTurningOn, prefs.language)
+        }
+        if petRunner.lastError != nil {
+            return L10n.t(.petFailed, prefs.language)
+        }
+        return petRunner.isRunning
+            ? L10n.t(.petOn, prefs.language)
+            : L10n.t(.petOff, prefs.language)
     }
 
     // A small toggle chip: filled (warm) when on, outlined when off.
