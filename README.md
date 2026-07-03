@@ -51,7 +51,7 @@ windows into a quiet menu bar signal: glance once, keep working.
 - **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, EN/CN language, PetHatch gallery, and pet selection with noncommercial `NC` markers.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
 - **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
-- **Pet launcher**: start or stop the selected PetHatch pet from the Kaji popover; the control shows the current pet name.
+- **Pet launcher**: start or stop the selected PetHatch pet from the Kaji popover; the control shows the current pet name and runtime failures.
 - **Three visual modes**: Mono is the default; Calm adds blue-gray accents; Playful adds warmer orange accents.
 - **One-click updates**: a small dot appears when a newer GitHub Release is available; open Kaji and choose `Update to vX`.
 - **Pet bridge**: local `pet-state.json` for desktop-pet runtimes. See [docs/pet-bridge.md](docs/pet-bridge.md).

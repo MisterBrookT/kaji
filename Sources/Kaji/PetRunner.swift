@@ -11,6 +11,7 @@ final class PetRunner: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var process: Process?
+    private var requestedStopPids = Set<Int32>()
 
     deinit {
         if let process {
@@ -45,12 +46,20 @@ final class PetRunner: ObservableObject {
         let logHandle = Self.logFileHandle()
         process.standardOutput = logHandle
         process.standardError = logHandle
-        process.terminationHandler = { [weak self] _ in
+        process.terminationHandler = { [weak self] process in
+            let pid = process.processIdentifier
+            let failed = process.terminationReason != .exit || process.terminationStatus != 0
             Task { @MainActor in
                 guard let self else { return }
-                self.process = nil
+                let requestedStop = self.requestedStopPids.remove(pid) != nil
+                if self.process?.processIdentifier == pid {
+                    self.process = nil
+                }
                 self.isRunning = false
                 self.isBusy = false
+                if failed && !requestedStop {
+                    self.lastError = "runtime_failed"
+                }
             }
         }
 
@@ -70,6 +79,9 @@ final class PetRunner: ObservableObject {
         if isBusy { return }
         isBusy = true
         lastError = nil
+        if let process {
+            requestedStopPids.insert(process.processIdentifier)
+        }
         terminateCurrentProcess()
         process = nil
         isRunning = false
