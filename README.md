@@ -51,7 +51,7 @@ windows into a quiet menu bar signal: glance once, keep working.
 - **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, and EN/CN language.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
 - **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
-- **Pet launcher**: start or stop Xiaochai from the Kaji popover when PetHatch is available locally.
+- **Pet launcher**: start or stop the selected PetHatch pet from the Kaji popover when PetHatch is available locally.
 - **Three visual modes**: Mono is the default; Calm adds blue-gray accents; Playful adds warmer orange accents.
 - **One-click updates**: a small dot appears when a newer GitHub Release is available; open Kaji and choose `Update to vX`.
 - **Pet bridge**: local `pet-state.json` for desktop-pet runtimes. See [docs/pet-bridge.md](docs/pet-bridge.md).
@@ -96,10 +96,11 @@ asset compiler.
 
 Kaji can also launch the local PetHatch Xiaochai runtime from the popover. It
 checks `KAJI_PETHATCH_ROOT`, `defaults write dev.kaji petHatchRoot /path/to/pethatch`,
-then common developer paths such as `~/workspace/pethatch`. Advanced pet
-selection and packaged runtime discovery will move to settings later. When
-launched this way, Kaji passes the same `pet-state.json` to PetHatch so Xiaochai
-can react to quota pressure instead of running as a standalone timer only.
+then common developer paths such as `~/workspace/pethatch`. The Settings window
+can choose between known PetHatch pets such as Xiaochai and Openclaw. Packaged
+runtime discovery can move there later. When launched this way, Kaji passes the
+same `pet-state.json` to PetHatch so the pet can react to quota pressure instead
+of running as a standalone timer only.
 
 ## Build from Source
 

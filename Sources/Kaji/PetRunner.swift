@@ -17,11 +17,11 @@ final class PetRunner: ObservableObject {
         process?.terminate()
     }
 
-    func toggle() {
-        isRunning ? stop() : start()
+    func toggle(petId: String) {
+        isRunning ? stop() : start(petId: petId)
     }
 
-    func start() {
+    func start(petId: String) {
         if isBusy || isRunning { return }
         guard let root = findPetHatchRoot() else {
             lastError = "pethatch_missing"
@@ -35,7 +35,7 @@ final class PetRunner: ObservableObject {
         process.executableURL = root.appendingPathComponent("bin/pethatch")
         process.currentDirectoryURL = root
         process.arguments = [
-            "run", "xiaochai",
+            "run", petId,
             "--size", "small",
             "--pin",
             "--state-file", PetBridge.outputURL.path,

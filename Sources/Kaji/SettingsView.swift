@@ -45,6 +45,13 @@ struct SettingsView: View {
                     prefs.panelSize = .medium
                 }
             }
+            settingRow(title: L10n.t(.petChoice, prefs.language)) {
+                ForEach(PetChoice.allCases, id: \.rawValue) { pet in
+                    segment(pet.displayName, on: prefs.petId == pet) {
+                        prefs.petId = pet
+                    }
+                }
+            }
         }
         .padding(18)
         .frame(width: 360, alignment: .topLeading)

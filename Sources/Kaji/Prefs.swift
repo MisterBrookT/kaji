@@ -33,6 +33,9 @@ final class Prefs: ObservableObject {
     @Published var panelSize: PanelSize {
         didSet { UserDefaults.standard.set(panelSize.rawValue, forKey: Key.panelSize) }
     }
+    @Published var petId: PetChoice {
+        didSet { UserDefaults.standard.set(petId.rawValue, forKey: Key.petId) }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -40,6 +43,7 @@ final class Prefs: ObservableObject {
         static let menubarStyle = "menubarStyle"
         static let showRemaining = "showRemaining"
         static let panelSize = "panelSize"
+        static let petId = "petId"
     }
 
     init() {
@@ -70,6 +74,11 @@ final class Prefs: ObservableObject {
             panelSize = size
         } else {
             panelSize = .medium
+        }
+        if let raw = d.string(forKey: Key.petId), let pet = PetChoice(rawValue: raw) {
+            petId = pet
+        } else {
+            petId = .xiaochai
         }
     }
 
@@ -135,6 +144,18 @@ enum PanelSize: String, CaseIterable {
     }
 }
 
+enum PetChoice: String, CaseIterable {
+    case xiaochai
+    case openclaw
+
+    var displayName: String {
+        switch self {
+        case .xiaochai: return "小柴"
+        case .openclaw: return "Openclaw"
+        }
+    }
+}
+
 // MARK: - L10n
 //
 // Minimal two-language string table, keyed by an enum so callers can't typo a
@@ -149,7 +170,7 @@ enum L10n {
             case panelSize, sizeSmall, sizeMedium
             case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
             case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
-            case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed
+            case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -178,11 +199,12 @@ enum L10n {
         .keepAwakeTurningOff: ("Turning Off\u{2026}", "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),   // 关闭中…
         .keepAwakeFailed: ("Awake Failed",      "\u{8BBE}\u{7F6E}\u{5931}\u{8D25}"),         // 设置失败
         .pet:          ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
-        .petOn:        ("Xiaochai On",          "\u{5C0F}\u{67F4}\u{5DF2}\u{5F00}"),         // 小柴已开
-        .petOff:       ("Xiaochai Off",         "\u{5C0F}\u{67F4}\u{5173}"),                 // 小柴关
+        .petOn:        ("Pet On",              "\u{5BA0}\u{7269}\u{5DF2}\u{5F00}"),         // 宠物已开
+        .petOff:       ("Pet Off",             "\u{5BA0}\u{7269}\u{5173}"),                 // 宠物关
         .petTurningOn: ("Opening\u{2026}",       "\u{5F00}\u{542F}\u{4E2D}\u{2026}"),         // 开启中…
         .petTurningOff: ("Closing\u{2026}",      "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),         // 关闭中…
         .petFailed:    ("Pet Failed",           "\u{5BA0}\u{7269}\u{542F}\u{52A8}\u{5931}\u{8D25}"), // 宠物启动失败
+        .petChoice:    ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商

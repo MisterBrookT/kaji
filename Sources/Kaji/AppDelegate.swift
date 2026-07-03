@@ -189,7 +189,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onRefresh: { [weak self] in self?.store.refresh() },
             onUpdate: { [weak self] in self?.handleUpdateAction() },
             onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
-            onTogglePet: { [weak self] in self?.petRunner.toggle() },
+            onTogglePet: { [weak self] in
+                guard let self else { return }
+                self.petRunner.toggle(petId: self.prefs.petId.rawValue)
+            },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onQuit: { NSApp.terminate(nil) }
         )
