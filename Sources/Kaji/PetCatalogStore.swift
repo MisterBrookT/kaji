@@ -45,12 +45,15 @@ final class PetCatalogStore: ObservableObject {
             let manifest = try JSONDecoder().decode(PetHatchManifest.self, from: data)
             let pets = manifest.pets
                 .filter { !$0.id.isEmpty }
-                .map { entry in
-                    let pet = Self.petInfo(for: entry, root: root)
+                .compactMap { entry -> PetOption? in
+                    guard Self.isRunnable(entry, root: root),
+                          let pet = Self.petInfo(for: entry, root: root) else {
+                        return nil
+                    }
                     return PetOption(id: entry.id,
                                      displayName: entry.displayName.isEmpty ? entry.id : entry.displayName,
-                                     assetLicense: pet?.license?.assets,
-                                     commercialUseAllowed: pet?.license?.commercialUse,
+                                     assetLicense: pet.license?.assets,
+                                     commercialUseAllowed: pet.license?.commercialUse,
                                      sourceURL: Self.sourceURL(for: pet))
                 }
             options = pets.isEmpty ? Self.withSelectedFallback(selectedPetId) : Self.withSelected(pets, selectedPetId)
@@ -105,6 +108,18 @@ final class PetCatalogStore: ObservableObject {
         }
     }
 
+    private static func isRunnable(_ entry: PetHatchManifestPet, root: URL) -> Bool {
+        guard let manifest = entry.manifest, !manifest.isEmpty,
+              let runtime = entry.runtime, !runtime.isEmpty,
+              let spritesheet = entry.spritesheet, !spritesheet.isEmpty else {
+            return false
+        }
+        let fm = FileManager.default
+        return fm.fileExists(atPath: root.appendingPathComponent(manifest).path)
+            && fm.fileExists(atPath: root.appendingPathComponent(runtime).path)
+            && fm.fileExists(atPath: root.appendingPathComponent(spritesheet).path)
+    }
+
     private static func sourceURL(for pet: PetHatchPetManifest?) -> URL? {
         let raw = pet?.author?.url ?? pet?.license?.source
         guard let raw, !raw.isEmpty else { return nil }
@@ -120,6 +135,8 @@ private struct PetHatchManifestPet: Decodable {
     let id: String
     let displayName: String
     let manifest: String?
+    let runtime: String?
+    let spritesheet: String?
 }
 
 private struct PetHatchPetManifest: Decodable {

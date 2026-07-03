@@ -97,7 +97,7 @@ asset compiler.
 Kaji can also launch the selected local PetHatch runtime from the popover. It
 checks `KAJI_PETHATCH_ROOT`, `defaults write dev.kaji petHatchRoot /path/to/pethatch`,
 then common developer paths such as `~/workspace/pethatch`. The Settings window
-discovers available pets from the local PetHatch `manifest.json`, with Xiaochai
+discovers runnable pets from the local PetHatch `manifest.json`, with Xiaochai
 and Openclaw as a safe fallback when PetHatch is missing. Settings can refresh
 that local registry after PetHatch changes. Settings also links to the PetHatch
 gallery and shows a compact ready/NC registry summary, while the main popover
