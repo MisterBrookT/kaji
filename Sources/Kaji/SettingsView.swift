@@ -55,6 +55,30 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
+                HStack {
+                    Spacer()
+                    Button {
+                        petCatalog.refresh(selectedPetId: prefs.petId)
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10.5, weight: .semibold))
+                            Text(L10n.t(.refreshNow, prefs.language))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .lineLimit(1)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule()
+                            .fill(Color.clear)
+                            .overlay(Capsule().stroke(t.track, lineWidth: 1))
+                    )
+                    .accessibilityLabel(Text(L10n.t(.refreshNow, prefs.language)))
+                }
             }
         }
         .padding(18)
