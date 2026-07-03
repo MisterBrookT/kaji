@@ -11,6 +11,7 @@ final class PetRunner: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var process: Process?
+    private let petHatchRootKey = "petHatchRoot"
 
     deinit {
         process?.terminate()
@@ -22,7 +23,7 @@ final class PetRunner: ObservableObject {
 
     func start() {
         if isBusy || isRunning { return }
-        guard let root = Self.findPetHatchRoot() else {
+        guard let root = findPetHatchRoot() else {
             lastError = "pethatch_missing"
             return
         }
@@ -31,14 +32,12 @@ final class PetRunner: ObservableObject {
         lastError = nil
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.executableURL = root.appendingPathComponent("bin/pethatch")
         process.currentDirectoryURL = root
-        process.arguments = [
-            "-lc",
-            "./bin/pethatch run xiaochai --size small --pin >> /tmp/kaji-xiaochai.log 2>&1",
-        ]
-        process.standardOutput = Pipe()
-        process.standardError = Pipe()
+        process.arguments = ["run", "xiaochai", "--size", "small", "--pin"]
+        let logHandle = Self.logFileHandle()
+        process.standardOutput = logHandle
+        process.standardError = logHandle
         process.terminationHandler = { [weak self] _ in
             Task { @MainActor in
                 guard let self else { return }
@@ -70,13 +69,37 @@ final class PetRunner: ObservableObject {
         isBusy = false
     }
 
-    private static func findPetHatchRoot() -> URL? {
-        let candidates = [
+    private func findPetHatchRoot() -> URL? {
+        let candidates = configuredRoots() + [
             URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("workspace/pethatch"),
             URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Developer/pethatch"),
         ]
         return candidates.first { url in
             FileManager.default.fileExists(atPath: url.appendingPathComponent("bin/pethatch").path)
+        }
+    }
+
+    private func configuredRoots() -> [URL] {
+        var roots: [URL] = []
+        if let env = ProcessInfo.processInfo.environment["KAJI_PETHATCH_ROOT"], !env.isEmpty {
+            roots.append(URL(fileURLWithPath: NSString(string: env).expandingTildeInPath))
+        }
+        if let raw = UserDefaults.standard.string(forKey: petHatchRootKey), !raw.isEmpty {
+            roots.append(URL(fileURLWithPath: NSString(string: raw).expandingTildeInPath))
+        }
+        return roots
+    }
+
+    private static func logFileHandle() -> FileHandle {
+        let path = "/tmp/kaji-xiaochai.log"
+        FileManager.default.createFile(atPath: path, contents: nil)
+        let url = URL(fileURLWithPath: path)
+        do {
+            let handle = try FileHandle(forWritingTo: url)
+            try handle.seekToEnd()
+            return handle
+        } catch {
+            return FileHandle.nullDevice
         }
     }
 }

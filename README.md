@@ -93,8 +93,9 @@ Desktop-pet runtimes can map it to `idle`, `running`, `review`, `waiting`, or
 `failed` animation. Kaji stays the quota/status layer; `hatch-pet` stays the pet
 asset compiler.
 
-Kaji can also launch the local PetHatch Xiaochai runtime from the popover. This
-developer integration expects PetHatch at `~/workspace/pethatch`; advanced pet
+Kaji can also launch the local PetHatch Xiaochai runtime from the popover. It
+checks `KAJI_PETHATCH_ROOT`, `defaults write dev.kaji petHatchRoot /path/to/pethatch`,
+then common developer paths such as `~/workspace/pethatch`. Advanced pet
 selection and packaged runtime discovery will move to settings later.
 
 ## Build from Source

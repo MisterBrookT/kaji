@@ -83,8 +83,9 @@ Kaji 会写出一个本地状态文件：
 桌宠 runtime 可以把它映射到 `idle`、`running`、`review`、`waiting`、`failed`
 动画。Kaji 只做 quota/status 层；`hatch-pet` 只做 pet 资产编译器。
 
-Kaji 也可以从悬浮窗启动本地 PetHatch 小柴 runtime。当前是开发集成，
-默认查找 `~/workspace/pethatch`；高级宠物选择和正式 runtime discovery 后续放进设置。
+Kaji 也可以从悬浮窗启动本地 PetHatch 小柴 runtime。它会依次查找
+`KAJI_PETHATCH_ROOT`、`defaults write dev.kaji petHatchRoot /path/to/pethatch`
+和 `~/workspace/pethatch` 等常见开发路径；高级宠物选择和正式 runtime discovery 后续放进设置。
 
 ## 源码构建
 
