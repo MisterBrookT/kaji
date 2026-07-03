@@ -86,6 +86,7 @@ Kaji 会写出一个本地状态文件：
 Kaji 也可以从悬浮窗启动本地 PetHatch 小柴 runtime。它会依次查找
 `KAJI_PETHATCH_ROOT`、`defaults write dev.kaji petHatchRoot /path/to/pethatch`
 和 `~/workspace/pethatch` 等常见开发路径；高级宠物选择和正式 runtime discovery 后续放进设置。
+通过 Kaji 启动时，会把同一个 `pet-state.json` 传给 PetHatch，所以小柴能响应 quota 压力，而不只是独立计时器。
 
 ## 源码构建
 

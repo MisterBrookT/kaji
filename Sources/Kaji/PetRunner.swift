@@ -34,7 +34,12 @@ final class PetRunner: ObservableObject {
         let process = Process()
         process.executableURL = root.appendingPathComponent("bin/pethatch")
         process.currentDirectoryURL = root
-        process.arguments = ["run", "xiaochai", "--size", "small", "--pin"]
+        process.arguments = [
+            "run", "xiaochai",
+            "--size", "small",
+            "--pin",
+            "--state-file", PetBridge.outputURL.path,
+        ]
         let logHandle = Self.logFileHandle()
         process.standardOutput = logHandle
         process.standardError = logHandle

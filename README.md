@@ -96,7 +96,9 @@ asset compiler.
 Kaji can also launch the local PetHatch Xiaochai runtime from the popover. It
 checks `KAJI_PETHATCH_ROOT`, `defaults write dev.kaji petHatchRoot /path/to/pethatch`,
 then common developer paths such as `~/workspace/pethatch`. Advanced pet
-selection and packaged runtime discovery will move to settings later.
+selection and packaged runtime discovery will move to settings later. When
+launched this way, Kaji passes the same `pet-state.json` to PetHatch so Xiaochai
+can react to quota pressure instead of running as a standalone timer only.
 
 ## Build from Source
 
