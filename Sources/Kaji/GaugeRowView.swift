@@ -26,6 +26,7 @@ struct GaugeRowView: View {
         let onUpdate: () -> Void
         let onToggleKeepAwake: () -> Void
         let onTogglePet: () -> Void
+        let onOpenSettings: () -> Void
         let onQuit: () -> Void
     }
 
@@ -221,71 +222,23 @@ struct GaugeRowView: View {
         }
     }
 
-    // MARK: Footer (settings — popover only)
+    // MARK: Footer (popover controls)
 
     private func footer(_ c: Controls) -> some View {
         VStack(spacing: 9) {
             Rectangle().fill(t.track).frame(height: 1).opacity(0.7)
 
-            // Settings row: provider toggles + language. A flow layout wraps to
-            // the next line when the popover is too narrow for one row (small
-            // size + 4-5 providers) — so pills never get crushed into vertical
-            // text. Each pill keeps its natural width (lineLimit 1 + fixedSize).
+            // Provider toggles stay in the main popover because they directly
+            // affect the visible quota surface. Slower preferences live in the
+            // Settings window.
             FlowLayout(spacing: 7, lineSpacing: 7) {
                 ForEach(available) { p in
                     pill(p.displayName, on: prefs.isVisible(p.id)) {
                         prefs.toggleProvider(p.id)
                     }
                 }
-                langToggle
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Visual style row: Calm / Playful / Mono.
-            HStack(spacing: 7) {
-                Text(L10n.t(.menubar, prefs.language))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundColor(t.mute)
-                Spacer(minLength: 8)
-                segment(L10n.t(.styleMono, prefs.language), on: prefs.menubarStyle == .mono) {
-                    prefs.menubarStyle = .mono
-                }
-                segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
-                    prefs.menubarStyle = .color
-                }
-                segment(L10n.t(.styleBlackWhite, prefs.language), on: prefs.menubarStyle == .blackWhite) {
-                    prefs.menubarStyle = .blackWhite
-                }
-            }
-
-            // Usage row: show 5h as USED vs REMAINING. Defaults to USED, which
-            // matches the historical ring direction; REMAINING reads "0% means
-            // full" with a reversed trim. The menubar follows along.
-            HStack(spacing: 7) {
-                Text(L10n.t(.usage, prefs.language))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundColor(t.mute)
-                Spacer(minLength: 8)
-                segment(L10n.t(.showUsed, prefs.language), on: !prefs.showRemaining) {
-                    prefs.showRemaining = false
-                }
-                segment(L10n.t(.showRemaining, prefs.language), on: prefs.showRemaining) {
-                    prefs.showRemaining = true
-                }
-            }
-
-            HStack(spacing: 7) {
-                Text(L10n.t(.panelSize, prefs.language))
-                    .font(.system(size: 10.5, weight: .medium))
-                    .foregroundColor(t.mute)
-                Spacer(minLength: 8)
-                segment(L10n.t(.sizeSmall, prefs.language), on: prefs.panelSize == .small) {
-                    prefs.panelSize = .small
-                }
-                segment(L10n.t(.sizeMedium, prefs.language), on: prefs.panelSize == .medium) {
-                    prefs.panelSize = .medium
-                }
-            }
 
             HStack(spacing: 7) {
                 Text(L10n.t(.system, prefs.language))
@@ -335,6 +288,11 @@ struct GaugeRowView: View {
                         Image(systemName: "arrow.clockwise")
                         Text(L10n.t(.refreshNow, prefs.language))
                     }
+                }
+                Button(action: c.onOpenSettings) {
+                    Image(systemName: "gearshape")
+                        .font(.system(size: 12, weight: .semibold))
+                        .accessibilityLabel(Text(L10n.t(.settings, prefs.language)))
                 }
                 Spacer(minLength: 10)
                 Button(action: c.onQuit) { Text(L10n.t(.quit, prefs.language)) }
@@ -412,23 +370,6 @@ struct GaugeRowView: View {
         .buttonStyle(.plain)
     }
 
-    // One segment of a small two-option control (filled when selected).
-    private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                .foregroundColor(on ? t.bg : t.mute)
-                .padding(.horizontal, 9)
-                .padding(.vertical, 3)
-                .background(
-                    Capsule()
-                        .fill(on ? t.gold : Color.clear)
-                        .overlay(Capsule().stroke(on ? Color.clear : t.track, lineWidth: 1))
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
     private func statusChip(_ title: String, filled: Bool, emphasized: Bool,
                             action: @escaping () -> Void) -> some View {
         Button(action: action) {
@@ -447,21 +388,6 @@ struct GaugeRowView: View {
                                         lineWidth: 1)
                         )
                 )
-        }
-        .buttonStyle(.plain)
-    }
-
-    // EN | 中文 segmented toggle.
-    private var langToggle: some View {
-        Button(action: { prefs.language = prefs.language.toggled }) {
-            Text(prefs.language.label)
-                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                .foregroundColor(t.cream)
-                .lineLimit(1)
-                .fixedSize()
-                .padding(.horizontal, 8)
-                .padding(.vertical, 3)
-                .background(Capsule().stroke(t.track, lineWidth: 1))
         }
         .buttonStyle(.plain)
     }

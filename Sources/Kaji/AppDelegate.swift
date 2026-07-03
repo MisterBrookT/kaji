@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
     private var popoverHostingController: NSHostingController<AnyView>?
+    private var settingsWindow: NSWindow?
     private var hostingView: NSHostingView<StatusItemView>!
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
@@ -189,6 +190,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onUpdate: { [weak self] in self?.handleUpdateAction() },
             onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
             onTogglePet: { [weak self] in self?.petRunner.toggle() },
+            onOpenSettings: { [weak self] in self?.openSettings() },
             onQuit: { NSApp.terminate(nil) }
         )
         let content = GaugeRowView(store: store, prefs: prefs,
@@ -238,6 +240,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSApp.terminate(nil)
         } catch {
             NSWorkspace.shared.open(rel.url)
+        }
+    }
+
+    private func openSettings() {
+        if let settingsWindow {
+            settingsWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let controller = NSHostingController(rootView: SettingsView(prefs: prefs))
+        controller.view.configureKajiHost(cornerRadius: 12)
+        let window = NSWindow(contentViewController: controller)
+        window.title = "Kaji Settings"
+        window.styleMask = [.titled, .closable]
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.delegate = self
+        settingsWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+extension AppDelegate: NSWindowDelegate {
+    nonisolated func windowWillClose(_ notification: Notification) {
+        Task { @MainActor [weak self] in
+            guard let window = notification.object as? NSWindow,
+                  window === self?.settingsWindow else { return }
+            self?.settingsWindow = nil
         }
     }
 }

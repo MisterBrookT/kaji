@@ -143,7 +143,7 @@ enum PanelSize: String, CaseIterable {
 enum L10n {
     enum K {
         case fiveHQuota, week, quit, stale, waiting, needPython
-        case refreshNow, quitApp, language, providers, show
+        case refreshNow, quitApp, settings, language, providers, show
         case menubar, styleMono, styleColor, styleBlackWhite
             case usage, showUsed, showRemaining
             case panelSize, sizeSmall, sizeMedium
@@ -164,6 +164,7 @@ enum L10n {
                         "\u{9700}\u{8981} Python 3 \u{00B7} \u{8FD0}\u{884C}  xcode-select --install"), // 需要 Python 3 · 运行
 
         .refreshNow:   ("Refresh Now",         "\u{7ACB}\u{5373}\u{5237}\u{65B0}"),         // 立即刷新
+        .settings:     ("Settings",            "\u{8BBE}\u{7F6E}"),                         // 设置
         .updateTo:     ("Update to",           "\u{66F4}\u{65B0}\u{5230}"),                 // 更新到
         .checkUpdates: ("Check for Updates\u{2026}", "\u{68C0}\u{67E5}\u{66F4}\u{65B0}\u{2026}"), // 检查更新…
         .updateChecking: ("Checking\u{2026}",   "\u{68C0}\u{67E5}\u{4E2D}\u{2026}"),         // 检查中…

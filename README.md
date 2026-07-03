@@ -47,7 +47,8 @@ windows into a quiet menu bar signal: glance once, keep working.
 ## What It Shows
 
 - **Menu bar rings**: compact dual-ring status for selected providers.
-- **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, S/M size, used/remaining mode, and EN/CN language.
+- **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, refresh, updates, Keep Awake, and Xiaochai.
+- **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, and EN/CN language.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
 - **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
 - **Pet launcher**: start or stop Xiaochai from the Kaji popover when PetHatch is available locally.
