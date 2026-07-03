@@ -48,7 +48,7 @@ windows into a quiet menu bar signal: glance once, keep working.
 
 - **Menu bar rings**: compact dual-ring status for selected providers.
 - **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, refresh, updates, Keep Awake, and Xiaochai.
-- **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, EN/CN language, and PetHatch pet selection with noncommercial `NC` markers.
+- **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, EN/CN language, PetHatch gallery, and pet selection with noncommercial `NC` markers.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
 - **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
 - **Pet launcher**: start or stop the selected PetHatch pet from the Kaji popover; the control shows the current pet name.
@@ -99,11 +99,12 @@ checks `KAJI_PETHATCH_ROOT`, `defaults write dev.kaji petHatchRoot /path/to/peth
 then common developer paths such as `~/workspace/pethatch`. The Settings window
 discovers available pets from the local PetHatch `manifest.json`, with Xiaochai
 and Openclaw as a safe fallback when PetHatch is missing. Settings can refresh
-that local registry after PetHatch changes. It also reads each PetHatch `pet.json`
-license block and marks noncommercial asset packs with `NC`, so marketplace
-licensing stays visible before a pet is selected. When launched this way, Kaji
-passes the same `pet-state.json` to PetHatch so the pet can react to quota
-pressure instead of running as a standalone timer only.
+that local registry after PetHatch changes. Settings also links to the PetHatch
+gallery, while the main popover keeps only the selected pet on/off control. Kaji
+reads each PetHatch `pet.json` license block and marks noncommercial asset packs
+with `NC`, so marketplace licensing stays visible before a pet is selected.
+When launched this way, Kaji passes the same `pet-state.json` to PetHatch so the
+pet can react to quota pressure instead of running as a standalone timer only.
 
 ## Build from Source
 

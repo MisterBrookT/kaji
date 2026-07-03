@@ -13,7 +13,10 @@ final class PetRunner: ObservableObject {
     private var process: Process?
 
     deinit {
-        process?.terminate()
+        if let process {
+            Self.terminateChildren(of: process.processIdentifier)
+            process.terminate()
+        }
     }
 
     func toggle(petId: String) {
@@ -67,10 +70,30 @@ final class PetRunner: ObservableObject {
         if isBusy { return }
         isBusy = true
         lastError = nil
-        process?.terminate()
+        terminateCurrentProcess()
         process = nil
         isRunning = false
         isBusy = false
+    }
+
+    private func terminateCurrentProcess() {
+        guard let process else { return }
+        Self.terminateChildren(of: process.processIdentifier)
+        process.terminate()
+    }
+
+    nonisolated private static func terminateChildren(of pid: Int32) {
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/pkill")
+        task.arguments = ["-TERM", "-P", String(pid)]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        do {
+            try task.run()
+            task.waitUntilExit()
+        } catch {
+            // Best-effort cleanup; the parent process is still terminated below.
+        }
     }
 
     private static func logFileHandle() -> FileHandle {

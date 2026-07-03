@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - SettingsView
@@ -61,27 +62,12 @@ struct SettingsView: View {
                 }
                 HStack {
                     Spacer()
-                    Button {
-                        petCatalog.refresh(selectedPetId: prefs.petId)
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "arrow.clockwise")
-                                .font(.system(size: 10.5, weight: .semibold))
-                            Text(L10n.t(.refreshNow, prefs.language))
-                        }
+                    outlineButton(title: L10n.t(.petGallery, prefs.language), systemImage: "globe") {
+                        openPetGallery()
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .lineLimit(1)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 4)
-                    .background(
-                        Capsule()
-                            .fill(Color.clear)
-                            .overlay(Capsule().stroke(t.track, lineWidth: 1))
-                    )
-                    .accessibilityLabel(Text(L10n.t(.refreshNow, prefs.language)))
+                    outlineButton(title: L10n.t(.refreshNow, prefs.language), systemImage: "arrow.clockwise") {
+                        petCatalog.refresh(selectedPetId: prefs.petId)
+                    }
                 }
             }
         }
@@ -129,6 +115,33 @@ struct SettingsView: View {
 
     private var petColumns: [GridItem] {
         [GridItem(.adaptive(minimum: 86, maximum: 132), spacing: 7, alignment: .trailing)]
+    }
+
+    private func openPetGallery() {
+        guard let url = URL(string: "https://misterbrookt.github.io/pethatch/") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    private func outlineButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 10.5, weight: .semibold))
+                Text(title)
+            }
+        }
+        .buttonStyle(.plain)
+        .font(.system(size: 11, weight: .semibold, design: .rounded))
+        .foregroundColor(t.mute)
+        .lineLimit(1)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(Color.clear)
+                .overlay(Capsule().stroke(t.track, lineWidth: 1))
+        )
+        .accessibilityLabel(Text(title))
     }
 
     private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {

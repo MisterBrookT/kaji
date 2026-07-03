@@ -158,7 +158,7 @@ enum L10n {
             case panelSize, sizeSmall, sizeMedium
             case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
             case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
-            case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice
+            case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -195,6 +195,7 @@ enum L10n {
         .petTurningOff: ("Closing\u{2026}",      "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),         // 关闭中…
         .petFailed:    ("Pet Failed",           "\u{5BA0}\u{7269}\u{542F}\u{52A8}\u{5931}\u{8D25}"), // 宠物启动失败
         .petChoice:    ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
+        .petGallery:   ("PetHatch Gallery",    "\u{5BA0}\u{7269}\u{5E02}\u{573A}"),         // 宠物市场
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
