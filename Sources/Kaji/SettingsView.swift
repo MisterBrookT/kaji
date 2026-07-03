@@ -6,6 +6,7 @@ import SwiftUI
 // focused on quota, system state, and pet controls.
 struct SettingsView: View {
     @ObservedObject var prefs: Prefs
+    @ObservedObject var petCatalog: PetCatalogStore
 
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
@@ -46,9 +47,9 @@ struct SettingsView: View {
                 }
             }
             settingRow(title: L10n.t(.petChoice, prefs.language)) {
-                ForEach(PetChoice.allCases, id: \.rawValue) { pet in
-                    segment(pet.displayName, on: prefs.petId == pet) {
-                        prefs.petId = pet
+                ForEach(petCatalog.options) { pet in
+                    segment(pet.displayName, on: prefs.petId == pet.id) {
+                        prefs.petId = pet.id
                     }
                 }
             }
@@ -56,6 +57,9 @@ struct SettingsView: View {
         .padding(18)
         .frame(width: 360, alignment: .topLeading)
         .background(t.bg)
+        .onAppear {
+            petCatalog.refresh(selectedPetId: prefs.petId)
+        }
     }
 
     private var header: some View {

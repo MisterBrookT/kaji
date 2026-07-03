@@ -25,10 +25,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
     private let petRunner = PetRunner()
+    private let petCatalog = PetCatalogStore()
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         store.start()
+        petCatalog.refresh(selectedPetId: prefs.petId)
 
         setupStatusItem()
         setupPopover()
@@ -191,7 +193,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
             onTogglePet: { [weak self] in
                 guard let self else { return }
-                self.petRunner.toggle(petId: self.prefs.petId.rawValue)
+                self.petRunner.toggle(petId: self.prefs.petId)
             },
             onOpenSettings: { [weak self] in self?.openSettings() },
             onQuit: { NSApp.terminate(nil) }
@@ -247,13 +249,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openSettings() {
+        petCatalog.refresh(selectedPetId: prefs.petId)
         if let settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
 
-        let controller = NSHostingController(rootView: SettingsView(prefs: prefs))
+        let controller = NSHostingController(rootView: SettingsView(prefs: prefs, petCatalog: petCatalog))
         controller.view.configureKajiHost(cornerRadius: 12)
         let window = NSWindow(contentViewController: controller)
         window.title = "Kaji Settings"

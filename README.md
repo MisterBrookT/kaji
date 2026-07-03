@@ -48,7 +48,7 @@ windows into a quiet menu bar signal: glance once, keep working.
 
 - **Menu bar rings**: compact dual-ring status for selected providers.
 - **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, refresh, updates, Keep Awake, and Xiaochai.
-- **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, and EN/CN language.
+- **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, EN/CN language, and PetHatch pet selection.
 - **Quiet native surface**: no dashboard, no dock icon, no floating panel.
 - **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
 - **Pet launcher**: start or stop the selected PetHatch pet from the Kaji popover when PetHatch is available locally.
@@ -94,13 +94,13 @@ Desktop-pet runtimes can map it to `idle`, `running`, `review`, `waiting`, or
 `failed` animation. Kaji stays the quota/status layer; `hatch-pet` stays the pet
 asset compiler.
 
-Kaji can also launch the local PetHatch Xiaochai runtime from the popover. It
+Kaji can also launch the selected local PetHatch runtime from the popover. It
 checks `KAJI_PETHATCH_ROOT`, `defaults write dev.kaji petHatchRoot /path/to/pethatch`,
 then common developer paths such as `~/workspace/pethatch`. The Settings window
-can choose between known PetHatch pets such as Xiaochai and Openclaw. Packaged
-runtime discovery can move there later. When launched this way, Kaji passes the
-same `pet-state.json` to PetHatch so the pet can react to quota pressure instead
-of running as a standalone timer only.
+discovers available pets from the local PetHatch `manifest.json`, with Xiaochai
+and Openclaw as a safe fallback when PetHatch is missing. When launched this way,
+Kaji passes the same `pet-state.json` to PetHatch so the pet can react to quota
+pressure instead of running as a standalone timer only.
 
 ## Build from Source
 

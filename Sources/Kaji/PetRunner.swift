@@ -11,7 +11,6 @@ final class PetRunner: ObservableObject {
     @Published private(set) var lastError: String?
 
     private var process: Process?
-    private let petHatchRootKey = "petHatchRoot"
 
     deinit {
         process?.terminate()
@@ -23,7 +22,7 @@ final class PetRunner: ObservableObject {
 
     func start(petId: String) {
         if isBusy || isRunning { return }
-        guard let root = findPetHatchRoot() else {
+        guard let root = PetHatchLocator.findRoot() else {
             lastError = "pethatch_missing"
             return
         }
@@ -74,29 +73,8 @@ final class PetRunner: ObservableObject {
         isBusy = false
     }
 
-    private func findPetHatchRoot() -> URL? {
-        let candidates = configuredRoots() + [
-            URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("workspace/pethatch"),
-            URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Developer/pethatch"),
-        ]
-        return candidates.first { url in
-            FileManager.default.fileExists(atPath: url.appendingPathComponent("bin/pethatch").path)
-        }
-    }
-
-    private func configuredRoots() -> [URL] {
-        var roots: [URL] = []
-        if let env = ProcessInfo.processInfo.environment["KAJI_PETHATCH_ROOT"], !env.isEmpty {
-            roots.append(URL(fileURLWithPath: NSString(string: env).expandingTildeInPath))
-        }
-        if let raw = UserDefaults.standard.string(forKey: petHatchRootKey), !raw.isEmpty {
-            roots.append(URL(fileURLWithPath: NSString(string: raw).expandingTildeInPath))
-        }
-        return roots
-    }
-
     private static func logFileHandle() -> FileHandle {
-        let path = "/tmp/kaji-xiaochai.log"
+        let path = "/tmp/kaji-pethatch.log"
         FileManager.default.createFile(atPath: path, contents: nil)
         let url = URL(fileURLWithPath: path)
         do {

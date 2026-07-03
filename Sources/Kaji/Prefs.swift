@@ -33,8 +33,8 @@ final class Prefs: ObservableObject {
     @Published var panelSize: PanelSize {
         didSet { UserDefaults.standard.set(panelSize.rawValue, forKey: Key.panelSize) }
     }
-    @Published var petId: PetChoice {
-        didSet { UserDefaults.standard.set(petId.rawValue, forKey: Key.petId) }
+    @Published var petId: String {
+        didSet { UserDefaults.standard.set(petId, forKey: Key.petId) }
     }
 
     enum Key {
@@ -75,10 +75,10 @@ final class Prefs: ObservableObject {
         } else {
             panelSize = .medium
         }
-        if let raw = d.string(forKey: Key.petId), let pet = PetChoice(rawValue: raw) {
-            petId = pet
+        if let raw = d.string(forKey: Key.petId), !raw.isEmpty {
+            petId = raw
         } else {
-            petId = .xiaochai
+            petId = "xiaochai"
         }
     }
 
@@ -140,18 +140,6 @@ enum PanelSize: String, CaseIterable {
         switch self {
         case .small:  return 50
         case .medium: return 76
-        }
-    }
-}
-
-enum PetChoice: String, CaseIterable {
-    case xiaochai
-    case openclaw
-
-    var displayName: String {
-        switch self {
-        case .xiaochai: return "小柴"
-        case .openclaw: return "Openclaw"
         }
     }
 }
