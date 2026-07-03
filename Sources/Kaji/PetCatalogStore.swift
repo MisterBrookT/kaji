@@ -56,7 +56,7 @@ final class PetCatalogStore: ObservableObject {
                                      commercialUseAllowed: pet.license?.commercialUse,
                                      sourceURL: Self.sourceURL(for: pet))
                 }
-            options = pets.isEmpty ? Self.withSelectedFallback(selectedPetId) : Self.withSelected(pets, selectedPetId)
+            options = pets.isEmpty ? Self.withSelectedFallback(selectedPetId) : pets
         } catch {
             options = Self.withSelectedFallback(selectedPetId)
         }
