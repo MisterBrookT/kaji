@@ -34,6 +34,10 @@ final class PetCatalogStore: ObservableObject {
         }
     }
 
+    func displayName(for petId: String) -> String {
+        options.first(where: { $0.id == petId })?.displayName ?? petId
+    }
+
     private static let fallbackOptions: [PetOption] = [
         PetOption(id: "xiaochai", displayName: "小柴"),
         PetOption(id: "openclaw", displayName: "Openclaw"),

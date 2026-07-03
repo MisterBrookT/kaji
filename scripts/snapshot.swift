@@ -80,12 +80,14 @@ struct Snap {
                 style = .blackWhite
             }
             let prefs = makePrefs(lang, style: style, showRemaining: showRemaining)
+            let petCatalog = PetCatalogStore()
 
             let panel = GaugeRowView(store: QuotaStore(previewProviders: mocks, updated: Date()),
                                      prefs: prefs,
                                      updateChecker: UpdateChecker(),
                                      sleepController: SleepController(previewEnabled: false),
                                      petRunner: PetRunner(),
+                                     petCatalog: petCatalog,
                                      panelSize: prefs.panelSize)
             let popover = GaugeRowView(
                 store: QuotaStore(previewProviders: mocks, updated: Date()),
@@ -93,7 +95,8 @@ struct Snap {
                 updateChecker: UpdateChecker(),
                 sleepController: SleepController(previewEnabled: false),
                 petRunner: PetRunner(),
-                controls: .init(onRefresh: {}, onUpdate: {}, onToggleKeepAwake: {}, onTogglePet: {}, onQuit: {}),
+                petCatalog: petCatalog,
+                controls: .init(onRefresh: {}, onUpdate: {}, onToggleKeepAwake: {}, onTogglePet: {}, onOpenSettings: {}, onQuit: {}),
                 panelSize: prefs.panelSize
             )
             // Menu-bar right cluster mock: the Kaji dual-rings sitting among the

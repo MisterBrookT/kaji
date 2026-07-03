@@ -202,6 +202,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                    updateChecker: updateChecker,
                                    sleepController: sleepController,
                                    petRunner: petRunner,
+                                   petCatalog: petCatalog,
                                    controls: controls,
                                    panelSize: prefs.panelSize)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))

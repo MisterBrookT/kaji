@@ -13,6 +13,7 @@ struct GaugeRowView: View {
     @ObservedObject var updateChecker: UpdateChecker
     @ObservedObject var sleepController: SleepController
     @ObservedObject var petRunner: PetRunner
+    @ObservedObject var petCatalog: PetCatalogStore
 
     var controls: Controls? = nil
 
@@ -340,15 +341,19 @@ struct GaugeRowView: View {
     private var petTitle: String {
         if petRunner.isBusy {
             return petRunner.isRunning
-                ? L10n.t(.petTurningOff, prefs.language)
-                : L10n.t(.petTurningOn, prefs.language)
+                ? namedPetTitle(en: "Closing\u{2026}", zh: "\u{5173}\u{95ED}\u{4E2D}\u{2026}")
+                : namedPetTitle(en: "Opening\u{2026}", zh: "\u{5F00}\u{542F}\u{4E2D}\u{2026}")
         }
         if petRunner.lastError != nil {
-            return L10n.t(.petFailed, prefs.language)
+            return namedPetTitle(en: "Failed", zh: "\u{542F}\u{52A8}\u{5931}\u{8D25}")
         }
         return petRunner.isRunning
-            ? L10n.t(.petOn, prefs.language)
-            : L10n.t(.petOff, prefs.language)
+            ? namedPetTitle(en: "On", zh: "\u{5DF2}\u{5F00}")
+            : namedPetTitle(en: "Off", zh: "\u{5173}")
+    }
+
+    private func namedPetTitle(en: String, zh: String) -> String {
+        "\(petCatalog.displayName(for: prefs.petId)) \(prefs.language == .zh ? zh : en)"
     }
 
     // A small toggle chip: filled (warm) when on, outlined when off.
@@ -377,6 +382,7 @@ struct GaugeRowView: View {
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .foregroundColor(filled ? t.bg : t.mute)
                 .lineLimit(1)
+                .minimumScaleFactor(0.75)
                 .padding(.horizontal, 9)
                 .padding(.vertical, 3)
                 .background(
