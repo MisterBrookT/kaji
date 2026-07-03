@@ -12,7 +12,7 @@ struct PetOption: Identifiable, Equatable {
         isNonCommercial ? "\(displayName) \u{00B7} NC" : displayName
     }
 
-    private var isNonCommercial: Bool {
+    var isNonCommercial: Bool {
         if commercialUseAllowed == false { return true }
         return assetLicense?.lowercased().contains("nc") == true
     }
@@ -53,6 +53,16 @@ final class PetCatalogStore: ObservableObject {
 
     func displayName(for petId: String) -> String {
         options.first(where: { $0.id == petId })?.displayName ?? petId
+    }
+
+    func summary(language: Lang) -> String {
+        let total = options.count
+        let nonCommercial = options.filter(\.isNonCommercial).count
+        let ready = max(total - nonCommercial, 0)
+        if language == .zh {
+            return "\(total) \u{53EA}\u{5BA0}\u{7269} \u{00B7} \(ready) \u{53EA}\u{53EF}\u{5546}\u{7528} \u{00B7} \(nonCommercial) \u{53EA} NC"
+        }
+        return "\(total) pets \u{00B7} \(ready) ready \u{00B7} \(nonCommercial) NC"
     }
 
     private static let fallbackOptions: [PetOption] = [

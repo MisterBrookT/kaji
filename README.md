@@ -100,9 +100,10 @@ then common developer paths such as `~/workspace/pethatch`. The Settings window
 discovers available pets from the local PetHatch `manifest.json`, with Xiaochai
 and Openclaw as a safe fallback when PetHatch is missing. Settings can refresh
 that local registry after PetHatch changes. Settings also links to the PetHatch
-gallery, while the main popover keeps only the selected pet on/off control. Kaji
-reads each PetHatch `pet.json` license block and marks noncommercial asset packs
-with `NC`, so marketplace licensing stays visible before a pet is selected.
+gallery and shows a compact ready/NC registry summary, while the main popover
+keeps only the selected pet on/off control. Kaji reads each PetHatch `pet.json`
+license block and marks noncommercial asset packs with `NC`, so marketplace
+licensing stays visible before a pet is selected.
 When launched this way, Kaji passes the same `pet-state.json` to PetHatch so the
 pet can react to quota pressure instead of running as a standalone timer only.
 

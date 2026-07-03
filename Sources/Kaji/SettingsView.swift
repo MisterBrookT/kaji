@@ -52,6 +52,10 @@ struct SettingsView: View {
                 }
             }
             settingBlock(title: L10n.t(.petChoice, prefs.language)) {
+                Text(petCatalog.summary(language: prefs.language))
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute.opacity(0.82))
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 LazyVGrid(columns: petColumns, alignment: .trailing, spacing: 7) {
                     ForEach(petCatalog.options) { pet in
                         segment(pet.choiceTitle, on: prefs.petId == pet.id) {
