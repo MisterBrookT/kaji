@@ -152,7 +152,7 @@ enum PanelSize: String, CaseIterable {
 enum L10n {
     enum K {
         case fiveHQuota, week, quit, stale, waiting, needPython
-        case refreshNow, quitApp, settings, language, providers, show
+        case refreshNow, quitApp, settings, advancedSettings, appearance, language, providers, show
         case menubar, styleMono, styleColor, styleBlackWhite
             case usage, showUsed, showRemaining
             case panelSize, sizeSmall, sizeMedium
@@ -174,6 +174,8 @@ enum L10n {
 
         .refreshNow:   ("Refresh Now",         "\u{7ACB}\u{5373}\u{5237}\u{65B0}"),         // 立即刷新
         .settings:     ("Settings",            "\u{8BBE}\u{7F6E}"),                         // 设置
+        .advancedSettings: ("Advanced",         "\u{9AD8}\u{7EA7}\u{8BBE}\u{7F6E}"),         // 高级设置
+        .appearance:   ("Appearance",          "\u{5916}\u{89C2}"),                         // 外观
         .updateTo:     ("Update to",           "\u{66F4}\u{65B0}\u{5230}"),                 // 更新到
         .checkUpdates: ("Check for Updates\u{2026}", "\u{68C0}\u{67E5}\u{66F4}\u{65B0}\u{2026}"), // 检查更新…
         .updateChecking: ("Checking\u{2026}",   "\u{68C0}\u{67E5}\u{4E2D}\u{2026}"),         // 检查中…

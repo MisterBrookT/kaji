@@ -291,10 +291,12 @@ struct GaugeRowView: View {
                     }
                 }
                 Button(action: c.onOpenSettings) {
-                    Image(systemName: "gearshape")
-                        .font(.system(size: 12, weight: .semibold))
-                        .accessibilityLabel(Text(L10n.t(.settings, prefs.language)))
+                    HStack(spacing: 5) {
+                        Image(systemName: "gearshape")
+                        Text(L10n.t(.advancedSettings, prefs.language))
+                    }
                 }
+                .accessibilityLabel(Text(L10n.t(.advancedSettings, prefs.language)))
                 Spacer(minLength: 10)
                 Button(action: c.onQuit) { Text(L10n.t(.quit, prefs.language)) }
             }

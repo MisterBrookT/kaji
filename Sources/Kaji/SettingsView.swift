@@ -14,36 +14,40 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            settingRow(title: L10n.t(.language, prefs.language)) {
-                segment(prefs.language.label, on: true) {
-                    prefs.language = prefs.language.toggled
-                }
-            }
-            settingRow(title: L10n.t(.menubar, prefs.language)) {
-                segment(L10n.t(.styleBlackWhite, prefs.language), on: prefs.menubarStyle == .blackWhite) {
-                    prefs.menubarStyle = .blackWhite
-                }
-                segment(L10n.t(.styleMono, prefs.language), on: prefs.menubarStyle == .mono) {
-                    prefs.menubarStyle = .mono
-                }
-                segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
-                    prefs.menubarStyle = .color
-                }
-            }
-            settingRow(title: L10n.t(.usage, prefs.language)) {
-                segment(L10n.t(.showUsed, prefs.language), on: !prefs.showRemaining) {
-                    prefs.showRemaining = false
-                }
-                segment(L10n.t(.showRemaining, prefs.language), on: prefs.showRemaining) {
-                    prefs.showRemaining = true
-                }
-            }
-            settingRow(title: L10n.t(.panelSize, prefs.language)) {
-                segment(L10n.t(.sizeSmall, prefs.language), on: prefs.panelSize == .small) {
-                    prefs.panelSize = .small
-                }
-                segment(L10n.t(.sizeMedium, prefs.language), on: prefs.panelSize == .medium) {
-                    prefs.panelSize = .medium
+            settingBlock(title: L10n.t(.appearance, prefs.language)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    settingRow(title: L10n.t(.language, prefs.language)) {
+                        segment(prefs.language.label, on: true) {
+                            prefs.language = prefs.language.toggled
+                        }
+                    }
+                    settingRow(title: L10n.t(.menubar, prefs.language)) {
+                        segment(L10n.t(.styleBlackWhite, prefs.language), on: prefs.menubarStyle == .blackWhite) {
+                            prefs.menubarStyle = .blackWhite
+                        }
+                        segment(L10n.t(.styleMono, prefs.language), on: prefs.menubarStyle == .mono) {
+                            prefs.menubarStyle = .mono
+                        }
+                        segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
+                            prefs.menubarStyle = .color
+                        }
+                    }
+                    settingRow(title: L10n.t(.usage, prefs.language)) {
+                        segment(L10n.t(.showUsed, prefs.language), on: !prefs.showRemaining) {
+                            prefs.showRemaining = false
+                        }
+                        segment(L10n.t(.showRemaining, prefs.language), on: prefs.showRemaining) {
+                            prefs.showRemaining = true
+                        }
+                    }
+                    settingRow(title: L10n.t(.panelSize, prefs.language)) {
+                        segment(L10n.t(.sizeSmall, prefs.language), on: prefs.panelSize == .small) {
+                            prefs.panelSize = .small
+                        }
+                        segment(L10n.t(.sizeMedium, prefs.language), on: prefs.panelSize == .medium) {
+                            prefs.panelSize = .medium
+                        }
+                    }
                 }
             }
             settingBlock(title: L10n.t(.petChoice, prefs.language)) {
