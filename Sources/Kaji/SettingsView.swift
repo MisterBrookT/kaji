@@ -56,6 +56,7 @@ struct SettingsView: View {
                     .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                     .foregroundColor(t.mute.opacity(0.82))
                     .frame(maxWidth: .infinity, alignment: .trailing)
+                selectedPetMeta
                 LazyVGrid(columns: petColumns, alignment: .trailing, spacing: 7) {
                     ForEach(petCatalog.options) { pet in
                         segment(pet.choiceTitle, on: prefs.petId == pet.id) {
@@ -119,6 +120,23 @@ struct SettingsView: View {
 
     private var petColumns: [GridItem] {
         [GridItem(.adaptive(minimum: 86, maximum: 132), spacing: 7, alignment: .trailing)]
+    }
+
+    private var selectedPetMeta: some View {
+        HStack(spacing: 7) {
+            Spacer()
+            if let pet = petCatalog.selectedPet(for: prefs.petId) {
+                Text("\(pet.displayName) \u{00B7} \(pet.licenseTitle)")
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute.opacity(0.82))
+                    .lineLimit(1)
+                if let sourceURL = pet.sourceURL {
+                    outlineButton(title: L10n.t(.source, prefs.language), systemImage: "link") {
+                        NSWorkspace.shared.open(sourceURL)
+                    }
+                }
+            }
+        }
     }
 
     private func openPetGallery() {

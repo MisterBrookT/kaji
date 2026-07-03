@@ -7,6 +7,7 @@ struct PetOption: Identifiable, Equatable {
     let displayName: String
     let assetLicense: String?
     let commercialUseAllowed: Bool?
+    let sourceURL: URL?
 
     var choiceTitle: String {
         isNonCommercial ? "\(displayName) \u{00B7} NC" : displayName
@@ -15,6 +16,12 @@ struct PetOption: Identifiable, Equatable {
     var isNonCommercial: Bool {
         if commercialUseAllowed == false { return true }
         return assetLicense?.lowercased().contains("nc") == true
+    }
+
+    var licenseTitle: String {
+        var parts = [assetLicense ?? "unknown"]
+        parts.append(isNonCommercial ? "NC" : "ready")
+        return parts.joined(separator: " \u{00B7} ")
     }
 }
 
@@ -39,11 +46,12 @@ final class PetCatalogStore: ObservableObject {
             let pets = manifest.pets
                 .filter { !$0.id.isEmpty }
                 .map { entry in
-                    let license = Self.licenseInfo(for: entry, root: root)
+                    let pet = Self.petInfo(for: entry, root: root)
                     return PetOption(id: entry.id,
                                      displayName: entry.displayName.isEmpty ? entry.id : entry.displayName,
-                                     assetLicense: license?.assets,
-                                     commercialUseAllowed: license?.commercialUse)
+                                     assetLicense: pet?.license?.assets,
+                                     commercialUseAllowed: pet?.license?.commercialUse,
+                                     sourceURL: Self.sourceURL(for: pet))
                 }
             options = pets.isEmpty ? Self.withSelectedFallback(selectedPetId) : Self.withSelected(pets, selectedPetId)
         } catch {
@@ -65,9 +73,13 @@ final class PetCatalogStore: ObservableObject {
         return "\(total) pets \u{00B7} \(ready) ready \u{00B7} \(nonCommercial) NC"
     }
 
+    func selectedPet(for petId: String) -> PetOption? {
+        options.first(where: { $0.id == petId })
+    }
+
     private static let fallbackOptions: [PetOption] = [
-        PetOption(id: "xiaochai", displayName: "小柴", assetLicense: "CC-BY-NC-4.0", commercialUseAllowed: false),
-        PetOption(id: "openclaw", displayName: "Openclaw", assetLicense: "MIT", commercialUseAllowed: true),
+        PetOption(id: "xiaochai", displayName: "小柴", assetLicense: "CC-BY-NC-4.0", commercialUseAllowed: false, sourceURL: nil),
+        PetOption(id: "openclaw", displayName: "Openclaw", assetLicense: "MIT", commercialUseAllowed: true, sourceURL: nil),
     ]
 
     private static func withSelectedFallback(_ selectedPetId: String?) -> [PetOption] {
@@ -79,19 +91,24 @@ final class PetCatalogStore: ObservableObject {
               !options.contains(where: { $0.id == selectedPetId }) else {
             return options
         }
-        return [PetOption(id: selectedPetId, displayName: selectedPetId, assetLicense: nil, commercialUseAllowed: nil)] + options
+        return [PetOption(id: selectedPetId, displayName: selectedPetId, assetLicense: nil, commercialUseAllowed: nil, sourceURL: nil)] + options
     }
 
-    private static func licenseInfo(for entry: PetHatchManifestPet, root: URL) -> PetHatchPetLicense? {
+    private static func petInfo(for entry: PetHatchManifestPet, root: URL) -> PetHatchPetManifest? {
         guard let manifestPath = entry.manifest, !manifestPath.isEmpty else { return nil }
         let url = root.appendingPathComponent(manifestPath)
         do {
             let data = try Data(contentsOf: url)
-            let pet = try JSONDecoder().decode(PetHatchPetManifest.self, from: data)
-            return pet.license
+            return try JSONDecoder().decode(PetHatchPetManifest.self, from: data)
         } catch {
             return nil
         }
+    }
+
+    private static func sourceURL(for pet: PetHatchPetManifest?) -> URL? {
+        let raw = pet?.author?.url ?? pet?.license?.source
+        guard let raw, !raw.isEmpty else { return nil }
+        return URL(string: raw)
     }
 }
 
@@ -107,9 +124,15 @@ private struct PetHatchManifestPet: Decodable {
 
 private struct PetHatchPetManifest: Decodable {
     let license: PetHatchPetLicense?
+    let author: PetHatchPetAuthor?
 }
 
 private struct PetHatchPetLicense: Decodable {
     let assets: String?
     let commercialUse: Bool?
+    let source: String?
+}
+
+private struct PetHatchPetAuthor: Decodable {
+    let url: String?
 }
