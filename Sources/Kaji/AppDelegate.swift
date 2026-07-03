@@ -265,11 +265,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 extension AppDelegate: NSWindowDelegate {
-    nonisolated func windowWillClose(_ notification: Notification) {
-        Task { @MainActor [weak self] in
-            guard let window = notification.object as? NSWindow,
-                  window === self?.settingsWindow else { return }
-            self?.settingsWindow = nil
-        }
+    func windowWillClose(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window === settingsWindow else { return }
+        settingsWindow = nil
     }
 }
