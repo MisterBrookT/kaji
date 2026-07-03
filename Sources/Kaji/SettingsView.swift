@@ -53,7 +53,7 @@ struct SettingsView: View {
             settingBlock(title: L10n.t(.petChoice, prefs.language)) {
                 LazyVGrid(columns: petColumns, alignment: .trailing, spacing: 7) {
                     ForEach(petCatalog.options) { pet in
-                        segment(pet.displayName, on: prefs.petId == pet.id) {
+                        segment(pet.choiceTitle, on: prefs.petId == pet.id) {
                             prefs.petId = pet.id
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -128,7 +128,7 @@ struct SettingsView: View {
     }
 
     private var petColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 78, maximum: 118), spacing: 7, alignment: .trailing)]
+        [GridItem(.adaptive(minimum: 86, maximum: 132), spacing: 7, alignment: .trailing)]
     }
 
     private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
