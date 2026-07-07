@@ -1,4 +1,17 @@
 import AppKit
+import SwiftUI
+
+final class KajiHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        true
+    }
+}
+
+final class KajiHostingController<Content: View>: NSHostingController<Content> {
+    override func loadView() {
+        view = KajiHostingView(rootView: rootView)
+    }
+}
 
 // Shared AppKit host setup for SwiftUI surfaces.
 extension NSView {

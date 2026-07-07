@@ -36,6 +36,8 @@ enum Config {
     static let kQuotaScriptPath = "quotaScriptPath"
     static let kPythonInterpreter = "pythonInterpreter" // user override (optional)
     static let kSparkHistory    = "sparklineHistory" // [providerKey: [Double]]
+    static let kTokenHistory    = "tokenHistory" // [providerKey: [Double]]
+    static let kTokenHistoryV2  = "tokenHistoryV2" // [providerKey: [TimedSample]]
 }
 
 // A single provider's view-ready data, decoupled from the raw Codable model.
@@ -49,7 +51,10 @@ struct ProviderView: Identifiable, Equatable {
     let resetDate: Date?           // five-hour reset
     let weekResetDate: Date?       // seven-day reset
     let plan: String?
+    let costTodayUSD: Double?
+    let costIsEstimated: Bool
     let history: [Double]          // rolling 5h used% samples for the sparkline
+    let tokenHistory: [Double]     // rolling tokens_today samples
 
     /// 0...1 fraction for the 5h ring trim. Clamped. nil percent -> 0 (empty).
     var usedFraction: Double {
@@ -77,16 +82,20 @@ struct ProviderView: Identifiable, Equatable {
     var hasData: Bool { fiveHourPercent != nil }
 }
 
+private struct TimedSample: Codable, Equatable {
+    let date: Date
+    let value: Double
+}
+
 // MARK: - QuotaStore
 //
 // Runs quota.py on a timer, decodes the JSON, maintains a rolling per-provider
 // history of 5h used% for the sparkline, and publishes view-ready providers.
 //
-// SPARKLINE NOTE: quota.py does not expose 24h history. We approximate it by
-// appending each polled 5h used% sample to a rolling buffer (persisted in
-// UserDefaults so it survives restarts). It seeds empty and fills over time;
-// early on the sparkline will be short or flat. This is intentional — there is
-// no real historical series to draw from.
+// SPARKLINE NOTE: quota.py exposes current usage, not a historical time series.
+// We persist sampled values locally and keep only recent points. Token history
+// is timestamped and pruned to a rolling 24h window so stale day-boundary data
+// cannot draw misleading trends.
 @MainActor
 final class QuotaStore: ObservableObject {
     @Published private(set) var providers: [ProviderView] = []
@@ -95,6 +104,7 @@ final class QuotaStore: ObservableObject {
 
     private var timer: Timer?
     private var history: [String: [Double]] = [:]
+    private var tokenHistory: [String: [TimedSample]] = [:]
 
     init() {
         loadHistory()
@@ -279,6 +289,7 @@ final class QuotaStore: ObservableObject {
         // Visibility is a user preference applied by the views; filtering only
         // to default-visible providers here would hide Ark from the toggles.
         let keys = Providers.sorted(snap.keys.filter { Providers.isAvailable($0) })
+        let now = Date()
 
         var views: [ProviderView] = []
         for key in keys {
@@ -295,7 +306,18 @@ final class QuotaStore: ObservableObject {
                 }
                 history[key] = arr
             }
+            if let tokens = q.tokensToday {
+                var arr = tokenHistory[key] ?? []
+                let sample = Double(tokens)
+                arr = Self.prunedTokenHistory(arr, now: now)
+                if Self.shouldAppendTokenSample(arr, value: sample, now: now) {
+                    arr.append(TimedSample(date: now, value: sample))
+                    arr = Self.prunedTokenHistory(arr, now: now)
+                }
+                tokenHistory[key] = arr
+            }
 
+            let tokenValues = Self.prunedTokenHistory(tokenHistory[key] ?? [], now: now).map(\.value)
             views.append(ProviderView(
                 id: key,
                 mark: Providers.mark(for: key),
@@ -306,7 +328,10 @@ final class QuotaStore: ObservableObject {
                 resetDate: limits?.fiveHourResetsAt?.date,
                 weekResetDate: limits?.sevenDayResetsAt?.date,
                 plan: limits?.plan,
-                history: history[key] ?? []
+                costTodayUSD: q.costTodayUSD ?? Self.estimatedCostUSD(provider: key, tokens: q.tokensToday),
+                costIsEstimated: q.costIsEstimated ?? true,
+                history: history[key] ?? [],
+                tokenHistory: tokenValues
             ))
         }
 
@@ -329,9 +354,51 @@ final class QuotaStore: ObservableObject {
             as? [String: [Double]] {
             history = dict
         }
+        if let data = UserDefaults.standard.data(forKey: Config.kTokenHistoryV2),
+           let dict = try? JSONDecoder().decode([String: [TimedSample]].self, from: data) {
+            let now = Date()
+            tokenHistory = dict.mapValues { Self.prunedTokenHistory($0, now: now) }
+        }
+        UserDefaults.standard.removeObject(forKey: Config.kTokenHistory)
     }
 
     private func saveHistory() {
         UserDefaults.standard.set(history, forKey: Config.kSparkHistory)
+        if let data = try? JSONEncoder().encode(tokenHistory) {
+            UserDefaults.standard.set(data, forKey: Config.kTokenHistoryV2)
+        }
+        UserDefaults.standard.removeObject(forKey: Config.kTokenHistory)
+    }
+
+    private static func prunedTokenHistory(_ arr: [TimedSample], now: Date) -> [TimedSample] {
+        let cutoff = now.addingTimeInterval(-24 * 60 * 60)
+        let kept = arr.filter { $0.date >= cutoff }.sorted { $0.date < $1.date }
+        let maxSamples = 24 * 12 // 5-minute resolution over one day.
+        if kept.count > maxSamples {
+            return Array(kept.suffix(maxSamples))
+        }
+        return kept
+    }
+
+    private static func shouldAppendTokenSample(_ arr: [TimedSample], value: Double, now: Date) -> Bool {
+        guard let last = arr.last else { return true }
+        if last.value != value { return true }
+        return now.timeIntervalSince(last.date) >= 15 * 60
+    }
+
+    private static func estimatedCostUSD(provider: String, tokens: Int?) -> Double? {
+        guard let tokens, tokens > 0 else { return nil }
+        let perMillion: Double
+        switch provider {
+        case "codex":
+            // Rough blended GPT-5.4-family estimate. Codex subscriptions are quota-based.
+            perMillion = 2.0
+        case "claude":
+            // Rough blended Claude Sonnet-family estimate.
+            perMillion = 6.0
+        default:
+            return nil
+        }
+        return Double(tokens) / 1_000_000 * perMillion
     }
 }

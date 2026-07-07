@@ -12,7 +12,7 @@ import CoreGraphics
 //   - language: EN / 中文. Drives all captions + menu text. First run follows
 //     the macOS locale.
 //   - menubarStyle: the visual language. `.blackWhite` is the default strict
-//     mono mode. `.mono` is Calm. `.color` is Playful.
+//     mono mode. `.color` is the green accent mode. `.mono` is legacy only.
 @MainActor
 final class Prefs: ObservableObject {
     @Published var visibleProviders: Set<String> {
@@ -36,6 +36,21 @@ final class Prefs: ObservableObject {
     @Published var petId: String {
         didSet { UserDefaults.standard.set(petId, forKey: Key.petId) }
     }
+    @Published var focusMinutes: Int {
+        didSet { UserDefaults.standard.set(focusMinutes, forKey: Key.focusMinutes) }
+    }
+    @Published var breakMinutes: Int {
+        didSet { UserDefaults.standard.set(breakMinutes, forKey: Key.breakMinutes) }
+    }
+    @Published var allowBreakSkip: Bool {
+        didSet { UserDefaults.standard.set(allowBreakSkip, forKey: Key.allowBreakSkip) }
+    }
+    @Published var autoCleanEnabled: Bool {
+        didSet { UserDefaults.standard.set(autoCleanEnabled, forKey: Key.autoCleanEnabled) }
+    }
+    @Published var launchAtLogin: Bool {
+        didSet { UserDefaults.standard.set(launchAtLogin, forKey: Key.launchAtLogin) }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -44,22 +59,35 @@ final class Prefs: ObservableObject {
         static let showRemaining = "showRemaining"
         static let panelSize = "panelSize"
         static let petId = "petId"
+        static let focusMinutes = "focusMinutes"
+        static let breakMinutes = "breakMinutes"
+        static let allowBreakSkip = "allowBreakSkip"
+        static let visibleProvidersV2 = "visibleProvidersV2"
+        static let autoCleanEnabled = "autoCleanEnabled"
+        static let launchAtLogin = "launchAtLogin"
     }
 
     init() {
         let d = UserDefaults.standard
         if let arr = d.array(forKey: Key.visibleProviders) as? [String], !arr.isEmpty {
-            visibleProviders = Set(arr)
+            let saved = Set(arr)
+            if !d.bool(forKey: Key.visibleProvidersV2),
+               saved == Set(["claude", "codex", "minimax"]) {
+                visibleProviders = Providers.visible
+            } else {
+                visibleProviders = saved
+            }
         } else {
             visibleProviders = Providers.visible   // default: claude + codex
         }
+        d.set(true, forKey: Key.visibleProvidersV2)
         if let raw = d.string(forKey: Key.language), let l = Lang(rawValue: raw) {
             language = l
         } else {
             language = Lang.system                  // follow macOS locale on first run
         }
         if let raw = d.string(forKey: Key.menubarStyle), let s = MenubarStyle(rawValue: raw) {
-            menubarStyle = s
+            menubarStyle = s == .mono ? .blackWhite : s
         } else {
             menubarStyle = .blackWhite              // strict mono by default
         }
@@ -73,12 +101,28 @@ final class Prefs: ObservableObject {
         if let raw = d.string(forKey: Key.panelSize), let size = PanelSize(rawValue: raw) {
             panelSize = size
         } else {
-            panelSize = .medium
+            panelSize = .small
         }
-        if let raw = d.string(forKey: Key.petId), !raw.isEmpty {
-            petId = raw
+        petId = "navi"
+        d.set("navi", forKey: Key.petId)
+        let savedFocus = d.integer(forKey: Key.focusMinutes)
+        focusMinutes = savedFocus > 0 ? savedFocus : 45
+        let savedBreak = d.integer(forKey: Key.breakMinutes)
+        breakMinutes = savedBreak > 0 ? savedBreak : 2
+        if d.object(forKey: Key.allowBreakSkip) != nil {
+            allowBreakSkip = d.bool(forKey: Key.allowBreakSkip)
         } else {
-            petId = "xiaochai"
+            allowBreakSkip = true
+        }
+        if d.object(forKey: Key.autoCleanEnabled) != nil {
+            autoCleanEnabled = d.bool(forKey: Key.autoCleanEnabled)
+        } else {
+            autoCleanEnabled = false
+        }
+        if d.object(forKey: Key.launchAtLogin) != nil {
+            launchAtLogin = d.bool(forKey: Key.launchAtLogin)
+        } else {
+            launchAtLogin = LoginItemManager.isEnabled
         }
     }
 
@@ -113,15 +157,15 @@ enum Lang: String {
 // MARK: - Menu-bar style
 
 enum MenubarStyle: String {
-    case mono     // Calm: blue/graphite popover
-    case color    // Playful: warmer accent mode
+    case mono     // Legacy stored value; migrated to .blackWhite on load.
+    case color    // Green accent mode.
     case blackWhite // Mono: black/white popover, default
 
     var toggled: MenubarStyle {
         switch self {
-        case .mono: return .color
+        case .mono: return .blackWhite
         case .color: return .blackWhite
-        case .blackWhite: return .mono
+        case .blackWhite: return .color
         }
     }
 }
@@ -131,8 +175,8 @@ enum PanelSize: String, CaseIterable {
 
     var frameSize: CGSize {
         switch self {
-        case .small:  return CGSize(width: 246, height: 278)
-        case .medium: return CGSize(width: 360, height: 206)
+        case .small:  return CGSize(width: 300, height: 420)
+        case .medium: return CGSize(width: 340, height: 460)
         }
     }
 
@@ -159,6 +203,8 @@ enum L10n {
             case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
             case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
             case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
+            case work, focusLength, breakLength, skipBreak
+            case launchAtLogin
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -195,15 +241,20 @@ enum L10n {
         .petTurningOff: ("Closing\u{2026}",      "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),         // 关闭中…
         .petFailed:    ("Pet Failed",           "\u{5BA0}\u{7269}\u{542F}\u{52A8}\u{5931}\u{8D25}"), // 宠物启动失败
         .petChoice:    ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
-        .petGallery:   ("PetHatch Gallery",    "\u{5BA0}\u{7269}\u{5E02}\u{573A}"),         // 宠物市场
+        .petGallery:   ("Pet Details",         "\u{5BA0}\u{7269}\u{8BE6}\u{60C5}"),         // 宠物详情
         .source:       ("Source",              "\u{6765}\u{6E90}"),                         // 来源
+        .launchAtLogin: ("Launch",             "\u{5F00}\u{673A}\u{542F}\u{52A8}"),         // 开机启动
+        .work:         ("Work",                "\u{5DE5}\u{4F5C}"),                         // 工作
+        .focusLength:  ("Focus",               "\u{4E13}\u{6CE8}"),                         // 专注
+        .breakLength:  ("Break",               "\u{4F11}\u{606F}"),                         // 休息
+        .skipBreak:    ("Allow Skip",          "\u{5141}\u{8BB8}\u{8DF3}\u{8FC7}"),         // 允许跳过
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
         .show:         ("Show",                "\u{663E}\u{793A}"),                         // 显示
         .menubar:      ("Style",              "\u{98CE}\u{683C}"),                         // 风格
-        .styleMono:    ("Calm",               "\u{6C89}\u{7A33}"),                         // 沉稳
-        .styleColor:   ("Playful",            "\u{6D3B}\u{6CFC}"),                         // 活泼
+        .styleMono:    ("Legacy",             "\u{65E7}\u{7248}"),                         // 旧版
+        .styleColor:   ("Green",              "\u{7EFF}\u{8272}"),                         // 绿色
         .styleBlackWhite: ("Mono",            "\u{9ED1}\u{767D}"),                         // 黑白
         .usage:        ("Usage",              "\u{7528}\u{91CF}"),                         // 用量
         .showUsed:     ("Used",               "\u{5DF2}\u{7528}"),                         // 已用

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<!--
+  DESIGN / ARCHITECTURE DOC TEMPLATE  (preview skill — Mode C)
+  Warm paper-ink theme for explaining a system: architecture, pipeline,
+  design rationale, mechanism. Restrained, no emoji, monospace accents.
+-->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kaji Harness Pool — Mode A Briefing</title>
+<style>
+  :root{
+    --paper:#f3ede1; --paper2:#ece4d4; --ink:#2b2620; --ink2:#5c5247;
+    --line:#cdbfa6; --accent:#b45309; --accent2:#1d6a6a; --ok:#3f7d3f; --bad:#a23b2d;
+    --mono:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:960px;margin:0 auto;padding:48px 28px 96px}
+  h1{font-size:30px;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
+  .sub{color:var(--ink2);font-size:15px;margin:0 0 4px}
+  .tag{display:inline-block;font:12px/1 var(--mono);color:var(--accent);
+    border:1px solid var(--line);border-radius:3px;padding:5px 8px;margin:14px 6px 0 0;background:var(--paper2)}
+  h2{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--accent);margin:46px 0 14px;border-bottom:1px solid var(--line);padding-bottom:7px}
+  p{margin:0 0 12px;max-width:72ch}
+  .mono{font-family:var(--mono)}
+  .card{background:var(--paper2);border:1px solid var(--line);border-radius:8px;padding:18px 20px;margin:14px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2,.grid3{grid-template-columns:1fr}}
+  .k{font:12px/1.5 var(--mono);color:var(--ink2)}
+  .stage{display:flex;align-items:flex-start;gap:14px;padding:11px 0;border-bottom:1px dashed var(--line)}
+  .stage:last-child{border-bottom:0}
+  .num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--ink);color:var(--paper);
+    display:grid;place-items:center;font:13px/1 var(--mono);font-weight:600}
+  .stage h3{margin:2px 0 2px;font-size:15px}
+  .stage .det{color:var(--ink2);font-size:13.5px}
+  .det b{color:var(--ink)}
+  .flow{display:flex;flex-wrap:wrap;align-items:center;gap:8px;font:12.5px/1 var(--mono);margin:6px 0 2px}
+  .pill{border:1px solid var(--line);background:var(--paper);border-radius:20px;padding:7px 12px}
+  .pill.acc{border-color:var(--accent);color:var(--accent)}
+  .pill.t2{border-color:var(--accent2);color:var(--accent2)}
+  .arr{color:var(--ink2)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:8px 0}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font:12px/1 var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:.05em}
+  td.mono,code{font-family:var(--mono);font-size:12.5px}
+  code{background:var(--paper2);border:1px solid var(--line);border-radius:4px;padding:1px 5px}
+  .live{background:#11100d;color:#e9e0cf;border-radius:8px;padding:16px 18px;font:12.5px/1.7 var(--mono);overflow-x:auto}
+  .live .ok{color:#8fd18f}.live .warn{color:#e0a96d}.live .dim{color:#8c8270}.live .bad{color:#e08a7a}
+  .two-layer{display:grid;grid-template-columns:1fr 28px 1fr 28px 1fr;align-items:center;gap:6px;text-align:center;margin:6px 0}
+  @media(max-width:720px){.two-layer{grid-template-columns:1fr;gap:10px}.two-layer .op{display:none}}
+  .layer{border:1px solid var(--line);border-radius:8px;padding:14px 12px;background:var(--paper)}
+  .layer .t{font-weight:600;font-size:14px}.layer .d{color:var(--ink2);font-size:12.5px;margin-top:4px}
+  .op{font:20px/1 var(--mono);color:var(--accent)}
+  .note{color:var(--ink2);font-size:12.5px;margin-top:4px}
+  .badge{font:11px/1 var(--mono);padding:3px 7px;border-radius:4px;border:1px solid currentColor}
+  .b-done{color:var(--ok)}.b-run{color:var(--accent)}.b-todo{color:var(--ink2)}
+  .toolbar{position:fixed;top:16px;right:20px;z-index:99;display:flex;gap:8px}
+  .dl-btn,.pdf-btn{font:12px/1 var(--mono);border:1px solid var(--line);border-radius:6px;
+    padding:7px 14px;cursor:pointer;text-decoration:none;transition:background .15s,border-color .15s}
+  .dl-btn{color:var(--accent2);background:var(--paper2)}
+  .dl-btn:hover{background:var(--paper);border-color:var(--accent2)}
+  .pdf-btn{color:var(--paper);background:var(--accent);border-color:var(--accent)}
+  .pdf-btn:hover{background:#8f4207}
+  @media print{
+    @page{margin:14mm 12mm}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .toolbar{display:none}
+    body{background:#fff}
+    .wrap,.main{max-width:none;margin:0;padding:0}
+    .sidebar{display:none}
+    h1{font-size:24px} h2{margin-top:22px;break-after:avoid}
+    .card,tr,.stage,.grid2,.grid3,.two-layer{break-inside:avoid}
+  }
+  .layout{display:flex;min-height:100vh}
+  .sidebar{width:220px;flex-shrink:0;background:var(--paper2);border-right:1px solid var(--line);
+    padding:24px 0;position:sticky;top:0;height:100vh;overflow-y:auto}
+  .sidebar-title{font:11px/1 var(--mono);color:var(--accent);text-transform:uppercase;
+    letter-spacing:.08em;padding:0 18px 14px;border-bottom:1px solid var(--line);margin-bottom:8px}
+  .sidebar-item{display:block;padding:10px 18px;font-size:13px;color:var(--ink2);
+    text-decoration:none;border-left:3px solid transparent;transition:all .15s}
+  .sidebar-item:hover{background:var(--paper);color:var(--ink)}
+  .sidebar-item.active{border-left-color:var(--accent);color:var(--ink);background:var(--paper);font-weight:600}
+  .sidebar-date{font:11px/1 var(--mono);color:var(--ink2);opacity:.7;display:block;margin-top:3px}
+  .sidebar-section{font:10px/1 var(--mono);color:var(--accent);text-transform:uppercase;
+    letter-spacing:.08em;padding:16px 18px 6px}
+  .main{flex:1;min-width:0;padding:48px 48px 96px;max-width:960px;margin:0 auto}
+  @media(max-width:800px){.layout{flex-direction:column}.sidebar{width:100%;height:auto;position:static;
+    border-right:0;border-bottom:1px solid var(--line);padding:12px 0;display:flex;flex-wrap:wrap;gap:4px}
+    .sidebar-item{padding:6px 12px;border-left:0;border-bottom:2px solid transparent}
+    .sidebar-item.active{border-bottom-color:var(--accent);border-left:0}
+    .sidebar-title,.sidebar-section{display:none}.main{padding:28px 20px 60px}}
+  .commit-group{margin:10px 0}
+  .commit-group-title{font:12px/1 var(--mono);color:var(--accent);margin-bottom:8px}
+  .commit-row{display:flex;align-items:baseline;gap:10px;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .commit-row:last-child{border-bottom:0}
+  .commit-hash{font:12px/1 var(--mono);color:var(--accent2);background:rgba(29,106,106,.08);
+    border:1px solid rgba(29,106,106,.2);border-radius:4px;padding:2px 7px;flex-shrink:0}
+  .commit-msg{font-size:13.5px;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <a class="dl-btn" id="dlBtn" download="kaji-harness-pool-briefing.html">Download HTML</a>
+  <a class="pdf-btn" id="pdfBtn" href="#">Export PDF</a>
+</div>
+<div class="wrap">
+  <h1>Kaji Harness Pool</h1>
+  <p class="sub">把 Claude Code、Codex、MiniMax/Ark、Gemini CLI、OpenCode 等 harness 先纳入一个本地额度与会话控制面。</p>
+  <div>
+    <span class="tag">Mode A · one-page briefing</span>
+    <span class="tag">local-first</span>
+    <span class="tag">quota before routing</span>
+    <span class="tag">2026-06-17</span>
+  </div>
+
+  <h2>Core decision</h2>
+  <p>
+    当前最稳的切入点不是立刻做请求路由，而是把 Kaji Gauge 扩成
+    <b>harness pool cockpit</b>：统一看额度、会话、当前账号/配置、可切换能力和重启要求。
+  </p>
+  <div class="card">
+    <div class="k">WHY THIS FIRST</div>
+    <p style="margin:8px 0 0">
+      路由要处理 streaming、tool calls、模型映射、失败重试、协议转换和账号风险；
+      quota cockpit 则复用现有 <code>Resources/quota.py</code>，先解决每天真实痛点：
+      哪个 harness 还能用、哪个快烧完、该开哪个新 session。
+    </p>
+  </div>
+
+  <h2>Competitive map</h2>
+  <table>
+    <tr><th>Project</th><th>Shape</th><th>Useful lesson</th><th>Fit</th></tr>
+    <tr>
+      <td class="mono">sub2api</td>
+      <td>server gateway</td>
+      <td>多账号池、sticky session、token billing、并发/限速、admin dashboard。</td>
+      <td>适合服务端分发；对个人本地工具过重。</td>
+    </tr>
+    <tr>
+      <td class="mono">cc-switch</td>
+      <td>desktop control panel</td>
+      <td>provider presets、配置切换、本地 proxy、usage dashboard、MCP/Skills 管理。</td>
+      <td>最接近 Kaji 的本地控制面方向。</td>
+    </tr>
+    <tr>
+      <td class="mono">cc-account-switcher</td>
+      <td>small auth switcher</td>
+      <td>只换 Claude Code auth state 可以很轻，但需要重启。</td>
+      <td>说明 account switching 可作为后续小功能，而非第一步。</td>
+    </tr>
+    <tr>
+      <td class="mono">ccs</td>
+      <td>account + proxy + dashboard</td>
+      <td>生态正在往“本地切换器”和“代理网关”两类收敛。</td>
+      <td>可参考形态，不直接照搬。</td>
+    </tr>
+  </table>
+
+  <h2>Layering</h2>
+  <div class="two-layer">
+    <div class="layer"><div class="t">Observe</div><div class="d">quota · session · health · reset</div></div>
+    <div class="op">→</div>
+    <div class="layer"><div class="t">Control</div><div class="d">profile · config · new-session target</div></div>
+    <div class="op">→</div>
+    <div class="layer"><div class="t">Route</div><div class="d">local proxy · policy · failover</div></div>
+  </div>
+  <p class="note">建议严格按层推进。Observe 层不改用户配置，风险最低；Route 层最后做，且应是独立 daemon。</p>
+
+  <h2>Proposed phases</h2>
+  <div class="card">
+    <div class="stage"><div class="num">1</div><div><h3>Harness inventory</h3><div class="det">扩展 <code>quota.py</code> 输出结构：harness id、quota、sessions、cwd、capabilities。<b>仍然只读。</b></div></div></div>
+    <div class="stage"><div class="num">2</div><div><h3>Profile registry</h3><div class="det">本地记录 provider profile、model alias、默认 harness binding；先展示，不写入目标工具配置。</div></div></div>
+    <div class="stage"><div class="num">3</div><div><h3>Safe config switching</h3><div class="det">挑一个 harness 做原子写入、备份、验证、rollback，并明确标注 <b>needs restart</b>。</div></div></div>
+    <div class="stage"><div class="num">4</div><div><h3>Optional local router</h3><div class="det">独立 localhost daemon；按协议边界做 adapter，不做一个万能 endpoint。</div></div></div>
+  </div>
+
+  <h2>Candidate data contract</h2>
+  <div class="live">
+{
+  "id": "codex",
+  "kind": "harness",
+  "display_name": "Codex",
+  "quota": {
+    "five_hour_used_percent": 42,
+    "seven_day_used_percent": 18,
+    "resets_at": "2026-06-17T18:00:00Z"
+  },
+  "capabilities": {
+    "usage": "native-local",
+    "config_switch": "possible",
+    "account_switch": "unknown",
+    "local_proxy": "possible"
+  }
+}
+  </div>
+
+  <h2>Risk boundary</h2>
+  <div class="grid3">
+    <div class="card"><div class="k">LOW RISK</div><p style="margin:6px 0 0"><span class="badge b-done">start</span> read local usage, quota windows, sessions.</p></div>
+    <div class="card"><div class="k">MEDIUM</div><p style="margin:6px 0 0"><span class="badge b-run">later</span> write configs with backup and rollback.</p></div>
+    <div class="card"><div class="k">HIGH</div><p style="margin:6px 0 0"><span class="badge b-todo">defer</span> reverse proxy, subscription-to-API, account pooling.</p></div>
+  </div>
+
+  <h2>Review questions</h2>
+  <div class="card">
+    <div class="flow">
+      <span class="pill acc">quota cockpit?</span><span class="arr">or</span>
+      <span class="pill">config switcher?</span><span class="arr">or</span>
+      <span class="pill t2">router?</span>
+    </div>
+    <p style="margin-top:12px">
+      需要先定边界：这是 Kaji Gauge 的新 tab，还是拆出 <code>kaji-harnessd</code>？
+      第一批支持 Claude Code / Codex / MiniMax-Ark 是否足够？
+      account switching 要不要做，还是只做 provider/profile switching？
+    </p>
+  </div>
+
+  <h2>Current artifact</h2>
+  <div class="card">
+    <div class="commit-group">
+      <div class="commit-group-title">research/harness-pool</div>
+      <div class="commit-row"><span class="commit-hash">README</span><span class="commit-msg">full research notes and phased recommendation</span></div>
+      <div class="commit-row"><span class="commit-hash">preview</span><span class="commit-msg">this Mode A briefing page for fast review</span></div>
+    </div>
+  </div>
+</div>
+<script>
+document.getElementById('dlBtn').addEventListener('click', function(e){
+  e.preventDefault();
+  var blob = new Blob([document.documentElement.outerHTML], {type:'text/html'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = this.download; a.click();
+  URL.revokeObjectURL(url);
+});
+document.getElementById('pdfBtn').addEventListener('click', function(e){
+  e.preventDefault();
+  window.print();
+});
+</script>
+</body>
+</html>

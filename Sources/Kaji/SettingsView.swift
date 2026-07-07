@@ -26,9 +26,6 @@ struct SettingsView: View {
                         segment(L10n.t(.styleBlackWhite, prefs.language), on: prefs.menubarStyle == .blackWhite) {
                             prefs.menubarStyle = .blackWhite
                         }
-                        segment(L10n.t(.styleMono, prefs.language), on: prefs.menubarStyle == .mono) {
-                            prefs.menubarStyle = .mono
-                        }
                         segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
                             prefs.menubarStyle = .color
                         }
@@ -49,29 +46,41 @@ struct SettingsView: View {
                             prefs.panelSize = .medium
                         }
                     }
+                    settingRow(title: L10n.t(.launchAtLogin, prefs.language)) {
+                        segment(prefs.launchAtLogin ? "On" : "Off", on: prefs.launchAtLogin) {
+                            prefs.launchAtLogin.toggle()
+                        }
+                    }
                 }
             }
-            settingBlock(title: L10n.t(.petChoice, prefs.language)) {
-                Text(petCatalog.summary(language: prefs.language))
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute.opacity(0.82))
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-                selectedPetMeta
-                LazyVGrid(columns: petColumns, alignment: .trailing, spacing: 7) {
-                    ForEach(petCatalog.options) { pet in
-                        segment(pet.choiceTitle, on: prefs.petId == pet.id) {
-                            prefs.petId = pet.id
+            settingBlock(title: L10n.t(.work, prefs.language)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    settingRow(title: L10n.t(.focusLength, prefs.language)) {
+                        segment("25m", on: prefs.focusMinutes == 25) { prefs.focusMinutes = 25 }
+                        segment("45m", on: prefs.focusMinutes == 45) { prefs.focusMinutes = 45 }
+                        segment("60m", on: prefs.focusMinutes == 60) { prefs.focusMinutes = 60 }
+                    }
+                    settingRow(title: L10n.t(.breakLength, prefs.language)) {
+                        segment("2m", on: prefs.breakMinutes == 2) { prefs.breakMinutes = 2 }
+                        segment("5m", on: prefs.breakMinutes == 5) { prefs.breakMinutes = 5 }
+                        segment("10m", on: prefs.breakMinutes == 10) { prefs.breakMinutes = 10 }
+                    }
+                    settingRow(title: L10n.t(.skipBreak, prefs.language)) {
+                        segment(prefs.allowBreakSkip ? "On" : "Off", on: prefs.allowBreakSkip) {
+                            prefs.allowBreakSkip.toggle()
                         }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
                     }
                 }
-                HStack {
-                    Spacer()
-                    outlineButton(title: L10n.t(.petGallery, prefs.language), systemImage: "globe") {
-                        openPetGallery()
-                    }
-                    outlineButton(title: L10n.t(.refreshNow, prefs.language), systemImage: "arrow.clockwise") {
-                        petCatalog.refresh(selectedPetId: prefs.petId)
+            }
+            settingBlock(title: L10n.t(.pet, prefs.language)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    selectedPetMeta
+                }
+            }
+            settingBlock(title: "AI") {
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(providerSettingsKeys, id: \.self) { key in
+                        providerRow(key)
                     }
                 }
             }
@@ -80,7 +89,7 @@ struct SettingsView: View {
         .frame(width: 360, alignment: .topLeading)
         .background(t.bg)
         .onAppear {
-            petCatalog.refresh(selectedPetId: prefs.petId)
+            refreshPetCatalogSelection()
         }
     }
 
@@ -139,9 +148,53 @@ struct SettingsView: View {
         }
     }
 
+    private var providerSettingsKeys: [String] {
+        Providers.sorted(Array(Providers.available))
+    }
+
+    private func providerRow(_ key: String) -> some View {
+        HStack(spacing: 8) {
+            ProviderLogo(key: key, color: prefs.isVisible(key) ? t.gold : t.ash, size: 13)
+            Text(Providers.displayName(for: key))
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Button {
+                prefs.toggleProvider(key)
+            } label: {
+                HStack(spacing: 5) {
+                    Image(systemName: prefs.isVisible(key) ? "eye" : "eye.slash")
+                        .font(.system(size: 10, weight: .semibold))
+                    Text(prefs.isVisible(key) ? "Show" : "Hide")
+                }
+                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                .foregroundColor(prefs.isVisible(key) ? t.bg : t.mute)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule()
+                        .fill(prefs.isVisible(key) ? t.gold : Color.clear)
+                        .overlay(Capsule().stroke(prefs.isVisible(key) ? Color.clear : t.track, lineWidth: 1))
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(prefs.isVisible(key) && prefs.visibleProviders.count <= 1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.65)))
+    }
+
     private func openPetGallery() {
         guard let url = URL(string: "https://misterbrookt.github.io/pethatch/") else { return }
         NSWorkspace.shared.open(url)
+    }
+
+    private func refreshPetCatalogSelection() {
+        let resolvedPetId = petCatalog.refresh(selectedPetId: prefs.petId)
+        guard !resolvedPetId.isEmpty, prefs.petId != resolvedPetId else { return }
+        prefs.petId = resolvedPetId
     }
 
     private func outlineButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {

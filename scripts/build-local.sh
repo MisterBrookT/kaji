@@ -22,7 +22,7 @@ TARGET="arm64-apple-macos13"
 echo "==> swiftc -O"
 rm -rf build && mkdir -p build
 swiftc -O Sources/Kaji/*.swift \
-  -framework AppKit -framework SwiftUI \
+  -framework AppKit -framework SwiftUI -framework ServiceManagement \
   -o build/Kaji -target "$TARGET"
 
 echo "==> assemble $APP"
@@ -34,6 +34,7 @@ cp Info.plist "$APP/Contents/Info.plist"
 # pitfall that hid one provider in v0.4.4).
 cp Resources/quota.py "$APP/Contents/Resources/quota.py"
 [ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+[ -f Resources/navi-panda.png ] && cp Resources/navi-panda.png "$APP/Contents/Resources/navi-panda.png"
 printf 'APPL????' > "$APP/Contents/PkgInfo"
 
 echo "==> md5 quota.py (source vs bundle — must match)"

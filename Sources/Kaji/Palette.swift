@@ -1,11 +1,11 @@
 import SwiftUI
 
-// MARK: - KajiTheme (Calm / Playful, Light / Dark)
+// MARK: - KajiTheme (Mono / Green, Light / Dark)
 //
-// Kaji has two design modes:
-//   - Calm: default, paper + graphite + restrained blue.
-//   - Playful: same structure, warmer paper + muted orange.
-//   - Mono: same structure, strict black/white/gray.
+// Kaji has two user-facing design modes:
+//   - Mono: strict black/white/gray.
+//   - Green: utility green accent for active state and progress.
+// `.mono` remains as a legacy stored value and resolves to the old calm theme.
 //
 // Views read `@Environment(\.colorScheme)` and a persisted style preference,
 // then resolve a plain value type. No NSColor dynamic-resolution quirks.
@@ -59,29 +59,29 @@ struct KajiTheme {
     )
 
     static let playfulDark = KajiTheme(
-        bg:    Color(hex: 0x151311),
-        bgTop: Color(hex: 0x1E1A16),
-        panel: Color(hex: 0x242019),
-        cream: Color(hex: 0xF0ECE5),
-        mute:  Color(hex: 0xA2998F),
-        ash:   Color(hex: 0x685E54),
-        track: Color(hex: 0x393229),
-        gold:  Color(hex: 0xD08A55),
-        amber: Color(hex: 0xD46F37),
-        sun:   Color(hex: 0xD08A55)
+        bg:    Color(hex: 0x0F1813),
+        bgTop: Color(hex: 0x18261E),
+        panel: Color(hex: 0x1C2D23),
+        cream: Color(hex: 0xF1F7F2),
+        mute:  Color(hex: 0xA2B5A8),
+        ash:   Color(hex: 0x667A6B),
+        track: Color(hex: 0x2E4637),
+        gold:  Color(hex: 0x50C878),
+        amber: Color(hex: 0x9BE7B0),
+        sun:   Color(hex: 0x50C878)
     )
 
     static let playfulLight = KajiTheme(
-        bg:    Color(hex: 0xFAF7F2),
-        bgTop: Color(hex: 0xFFFCF7),
-        panel: Color(hex: 0xFFFDF8),
-        cream: Color(hex: 0x28231F),
-        mute:  Color(hex: 0x756B61),
-        ash:   Color(hex: 0xB8AEA3),
-        track: Color(hex: 0xE8DFD3),
-        gold:  Color(hex: 0xB87343),
-        amber: Color(hex: 0xD46F37),
-        sun:   Color(hex: 0xC67A45)
+        bg:    Color(hex: 0xF2FAF5),
+        bgTop: Color(hex: 0xFBFFF9),
+        panel: Color(hex: 0xF8FEFA),
+        cream: Color(hex: 0x1D2B22),
+        mute:  Color(hex: 0x657668),
+        ash:   Color(hex: 0xA9BCAF),
+        track: Color(hex: 0xD8EADF),
+        gold:  Color(hex: 0x2FAA5F),
+        amber: Color(hex: 0x167A42),
+        sun:   Color(hex: 0x2FAA5F)
     )
 
     static let monoDark = KajiTheme(

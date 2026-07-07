@@ -433,26 +433,47 @@ def _codex_last_token_count(path):
     return info, rl, cwd
 
 
+def _codex_rollout_files():
+    base = CODEX_SESSIONS
+    if not base.exists():
+        return []
+    try:
+        return sorted(base.glob("*/*/*/rollout-*.jsonl"), key=lambda p: p.stat().st_mtime)
+    except OSError:
+        return []
+
+
+def _codex_recent_rollout_files(hours=24):
+    cutoff = time.time() - hours * 3600
+    files = []
+    for p in _codex_rollout_files():
+        try:
+            if p.stat().st_mtime >= cutoff:
+                files.append(p)
+        except OSError:
+            pass
+    return files
+
+
 def codex():
     """Returns (sessions_today, tokens_today, last_active_ts, limits|None, by_project, context).
 
     tokens: token_count events are session-CUMULATIVE — take the LAST event
-    per file and sum across today's files (UTC date dirs).
+    per file and sum across sessions active in the last 24h. Directory dates are
+    not reliable for a menu bar app because UTC/local day boundaries differ.
     limits: from the freshest session overall (account-level, not today-bound):
     {primary_used_percent?, secondary_used_percent?, *_resets_at?, plan?}.
     """
     base = CODEX_SESSIONS
     if not base.exists():
         return 0, None, None, None, {}, {}
-    today = datetime.now(timezone.utc)
-    day_dir = base / f"{today:%Y}" / f"{today:%m}" / f"{today:%d}"
-    files_today = sorted(day_dir.glob("rollout-*.jsonl")) if day_dir.exists() else []
+    files_recent = _codex_recent_rollout_files(hours=24)
 
     tokens_today, last = 0, None
     by_project = {}
     context = {}        # cwd -> {"used", "window"} from the freshest session
     ctx_mtime = {}
-    for p in files_today:
+    for p in files_recent:
         info, _, cwd = _codex_last_token_count(p)
         try:
             m = p.stat().st_mtime
@@ -472,10 +493,7 @@ def codex():
         last = max(last or 0, m) if m else last
 
     limits = None
-    try:
-        all_files = sorted(base.glob("*/*/*/rollout-*.jsonl"), key=lambda p: p.stat().st_mtime)
-    except OSError:
-        all_files = []
+    all_files = _codex_rollout_files()
     # Walk sessions freshest-first and take the first that actually carries a
     # rate_limits event. The single newest file may be a brand-new session with
     # no token_count yet (rl=None) — using only all_files[-1] would then drop
@@ -496,7 +514,33 @@ def codex():
         limits = limits or None
         break
 
-    return len(files_today), (tokens_today or None), last, limits, by_project, context
+    return len(files_recent), (tokens_today or None), last, limits, by_project, context
+
+
+def codex_cost_today():
+    """Best-effort Codex USD estimate from last-24h token_count totals.
+
+    Codex sessions expose cumulative per-file input/cached/output tokens. Pricing
+    uses GPT-5.4 short-context API rates as an estimate; subscriptions remain
+    quota-based, not direct per-token billing.
+    """
+    input_rate = 1.25
+    cached_rate = 0.13
+    output_rate = 7.50
+    total = 0.0
+    found = False
+    for p in _codex_recent_rollout_files(hours=24):
+        info, _, _ = _codex_last_token_count(p)
+        usage = (info or {}).get("total_token_usage") or {}
+        if not usage:
+            continue
+        input_tokens = usage.get("input_tokens") or 0
+        cached_tokens = usage.get("cached_input_tokens") or 0
+        output_tokens = usage.get("output_tokens") or 0
+        uncached = max(input_tokens - cached_tokens, 0)
+        total += (uncached * input_rate + cached_tokens * cached_rate + output_tokens * output_rate) / 1_000_000
+        found = True
+    return total if found else None
 
 
 def fmt_tokens(n):
@@ -891,6 +935,11 @@ def emit_json():
             # Additive key — existing consumers (kaku.lua status bar) read
             # tokens_today/sessions_today only and are unaffected.
             out[name]["limits"] = limits
+        if name == "codex":
+            cost = codex_cost_today()
+            if cost is not None:
+                out[name]["cost_today_usd"] = round(cost, 4)
+                out[name]["cost_is_estimated"] = True
         if by_project:
             out[name]["by_project"] = by_project
         if context:

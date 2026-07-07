@@ -12,8 +12,8 @@ import SwiftUI
 // shows roughly how full each window is.
 //
 // Style (Prefs.menubarStyle):
-//   - .mono  = Calm: restrained blue glyphs in the menu bar.
-//   - .color = Playful: warm accent glyphs for more presence.
+//   - .mono  = legacy calm glyphs.
+//   - .color = green accent glyphs.
 //   - .blackWhite = monochrome popover, adaptive menu-bar glyphs.
 struct StatusItemView: View {
     let providers: [ProviderView]

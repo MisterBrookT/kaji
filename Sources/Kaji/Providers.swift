@@ -41,7 +41,7 @@ enum Providers {
     /// Providers surfaced by default on a fresh install. Optional providers are
     /// available in the toggle list when configured, but stay opt-in until the
     /// quota source is trustworthy.
-    static let visible: Set<String> = ["claude", "codex", "minimax"]
+    static let visible: Set<String> = ["claude", "codex"]
     static func isVisible(_ key: String) -> Bool { visible.contains(key) }
 
     /// Providers allowed into UI controls when quota.py emits them. This is

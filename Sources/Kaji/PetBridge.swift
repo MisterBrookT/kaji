@@ -1,3 +1,5 @@
+import AppKit
+import CoreGraphics
 import Foundation
 
 // MARK: - Pet bridge
@@ -32,7 +34,22 @@ struct PetBridgeState: Codable, Equatable {
     let summary: String
     let severity: Double
     let dominantProvider: String?
+    let appContext: PetAppContext?
+    let codexContext: PetCodexContext?
     let providers: [PetProviderSignal]
+}
+
+struct PetAppContext: Codable, Equatable {
+    let appName: String?
+    let bundleIdentifier: String?
+    let windowTitle: String?
+}
+
+struct PetCodexContext: Codable, Equatable {
+    let role: String
+    let text: String
+    let updatedAt: Date?
+    let sourcePath: String?
 }
 
 enum PetBridge {
@@ -46,8 +63,24 @@ enum PetBridge {
             .appendingPathComponent("pet-state.json")
     }
 
-    static func write(providers: [ProviderView], lastError: String?, generatedAt: Date = Date()) {
-        let state = makeState(providers: providers, lastError: lastError, generatedAt: generatedAt)
+    static var replyURL: URL {
+        outputURL.deletingLastPathComponent().appendingPathComponent("pet-replies.jsonl")
+    }
+
+    static var messageTemplateURL: URL {
+        outputURL.deletingLastPathComponent().appendingPathComponent("pet-messages.json")
+    }
+
+    static func write(providers: [ProviderView],
+                      lastError: String?,
+                      generatedAt: Date = Date(),
+                      appContext: PetAppContext? = currentAppContext(),
+                      codexContext: PetCodexContext? = nil) {
+        let state = makeState(providers: providers,
+                              lastError: lastError,
+                              generatedAt: generatedAt,
+                              appContext: appContext,
+                              codexContext: codexContext)
         do {
             let url = outputURL
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
@@ -64,7 +97,9 @@ enum PetBridge {
 
     static func makeState(providers: [ProviderView],
                           lastError: String?,
-                          generatedAt: Date = Date()) -> PetBridgeState {
+                          generatedAt: Date = Date(),
+                          appContext: PetAppContext? = currentAppContext(),
+                          codexContext: PetCodexContext? = nil) -> PetBridgeState {
         let signals = providers.map(signal)
         let dominant = providers.max { pressureScore($0) < pressureScore($1) }
         let severity = min(max(dominant.map(pressureScore) ?? 0, 0), 1)
@@ -80,6 +115,8 @@ enum PetBridge {
                     : "Kaji could not refresh quota data.",
                 severity: max(severity, 0.75),
                 dominantProvider: dominant?.id,
+                appContext: appContext,
+                codexContext: codexContext,
                 providers: signals
             )
         }
@@ -93,6 +130,8 @@ enum PetBridge {
                 summary: "Kaji has no readable provider quota data yet.",
                 severity: 0.5,
                 dominantProvider: nil,
+                appContext: appContext,
+                codexContext: codexContext,
                 providers: signals
             )
         }
@@ -129,6 +168,8 @@ enum PetBridge {
             summary: summary,
             severity: score,
             dominantProvider: dominant.id,
+            appContext: appContext,
+            codexContext: codexContext,
             providers: signals
         )
     }
@@ -168,11 +209,118 @@ enum PetBridge {
     }
 
     private static func isRising(_ provider: ProviderView) -> Bool {
+        if provider.tokenHistory.count >= 2,
+           let last = provider.tokenHistory.last,
+           let prev = provider.tokenHistory.dropLast().last {
+            return last - prev >= 1_000
+        }
         guard provider.history.count >= 2,
               let last = provider.history.last,
-              let prev = provider.history.dropLast().last else {
-            return false
-        }
+              let prev = provider.history.dropLast().last else { return false }
         return last - prev >= 0.5
+    }
+
+    private static func currentAppContext() -> PetAppContext? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        let title = frontmostWindowTitle(pid: app.processIdentifier)
+        return PetAppContext(appName: app.localizedName,
+                             bundleIdentifier: app.bundleIdentifier,
+                             windowTitle: title)
+    }
+
+    private static func frontmostWindowTitle(pid: pid_t) -> String? {
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                       kCGNullWindowID) as? [[String: Any]] else {
+            return nil
+        }
+        for window in windows {
+            guard let ownerPID = window[kCGWindowOwnerPID as String] as? pid_t,
+                  ownerPID == pid,
+                  let layer = window[kCGWindowLayer as String] as? Int,
+                  layer == 0 else { continue }
+            if let title = window[kCGWindowName as String] as? String,
+               !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return title
+            }
+        }
+        return nil
+    }
+}
+
+enum CodexMessageProbe {
+    static func latestVisibleMessage() -> PetCodexContext? {
+        let root = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent(".codex/sessions", isDirectory: true)
+        guard let file = latestJSONLFile(under: root) else { return nil }
+        guard let text = tailText(file, maxBytes: 512 * 1024) else { return nil }
+        let lines = text.split(whereSeparator: \.isNewline).reversed()
+
+        for line in lines {
+            guard let data = String(line).data(using: .utf8),
+                  let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  object["type"] as? String == "response_item",
+                  let payload = object["payload"] as? [String: Any],
+                  payload["type"] as? String == "message",
+                  let role = payload["role"] as? String,
+                  role == "user" || role == "assistant",
+                  let content = payload["content"] as? [[String: Any]],
+                  let message = extractText(from: content),
+                  !message.isEmpty else { continue }
+
+            let updatedAt = (try? file.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
+            return PetCodexContext(role: role,
+                                   text: compact(message, limit: 120),
+                                   updatedAt: updatedAt,
+                                   sourcePath: file.path)
+        }
+        return nil
+    }
+
+    private static func latestJSONLFile(under root: URL) -> URL? {
+        let fm = FileManager.default
+        guard let enumerator = fm.enumerator(at: root,
+                                             includingPropertiesForKeys: [.contentModificationDateKey, .isRegularFileKey],
+                                             options: [.skipsHiddenFiles]) else { return nil }
+        var best: (url: URL, date: Date)?
+        for case let url as URL in enumerator {
+            guard url.pathExtension == "jsonl",
+                  let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .isRegularFileKey]),
+                  values.isRegularFile == true,
+                  let date = values.contentModificationDate else { continue }
+            if best == nil || date > best!.date {
+                best = (url, date)
+            }
+        }
+        return best?.url
+    }
+
+    private static func tailText(_ url: URL, maxBytes: UInt64) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        let size = (try? handle.seekToEnd()) ?? 0
+        let offset = size > maxBytes ? size - maxBytes : 0
+        try? handle.seek(toOffset: offset)
+        let data = (try? handle.readToEnd()) ?? Data()
+        return String(data: data, encoding: .utf8)
+    }
+
+    private static func extractText(from content: [[String: Any]]) -> String? {
+        let chunks = content.compactMap { item -> String? in
+            if let text = item["text"] as? String { return text }
+            if let text = item["input_text"] as? String { return text }
+            if let text = item["output_text"] as? String { return text }
+            return nil
+        }
+        let text = chunks.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+        return text.isEmpty ? nil : text
+    }
+
+    private static func compact(_ text: String, limit: Int) -> String {
+        let oneLine = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard oneLine.count > limit else { return oneLine }
+        return String(oneLine.prefix(limit - 1)) + "…"
     }
 }

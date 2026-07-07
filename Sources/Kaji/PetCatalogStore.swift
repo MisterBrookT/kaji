@@ -10,7 +10,7 @@ struct PetOption: Identifiable, Equatable {
     let sourceURL: URL?
 
     var choiceTitle: String {
-        isNonCommercial ? "\(displayName) \u{00B7} NC" : displayName
+        displayName
     }
 
     var isNonCommercial: Bool {
@@ -19,47 +19,25 @@ struct PetOption: Identifiable, Equatable {
     }
 
     var licenseTitle: String {
-        var parts = [assetLicense ?? "unknown"]
-        parts.append(isNonCommercial ? "NC" : "ready")
-        return parts.joined(separator: " \u{00B7} ")
+        assetLicense ?? "unknown"
     }
 }
 
 @MainActor
 final class PetCatalogStore: ObservableObject {
     @Published private(set) var options: [PetOption]
+    @Published private(set) var resolvedPetId: String
 
     init() {
         options = PetCatalogStore.fallbackOptions
+        resolvedPetId = PetCatalogStore.defaultFallbackPetId
     }
 
-    func refresh(selectedPetId: String? = nil) {
-        guard let root = PetHatchLocator.findRoot() else {
-            options = Self.withSelectedFallback(selectedPetId)
-            return
-        }
-
-        let manifestURL = root.appendingPathComponent("manifest.json")
-        do {
-            let data = try Data(contentsOf: manifestURL)
-            let manifest = try JSONDecoder().decode(PetHatchManifest.self, from: data)
-            let pets = manifest.pets
-                .filter { !$0.id.isEmpty }
-                .compactMap { entry -> PetOption? in
-                    guard Self.isRunnable(entry, root: root),
-                          let pet = Self.petInfo(for: entry, root: root) else {
-                        return nil
-                    }
-                    return PetOption(id: entry.id,
-                                     displayName: entry.displayName.isEmpty ? entry.id : entry.displayName,
-                                     assetLicense: pet.license?.assets,
-                                     commercialUseAllowed: pet.license?.commercialUse,
-                                     sourceURL: Self.sourceURL(for: pet))
-                }
-            options = pets.isEmpty ? Self.withSelectedFallback(selectedPetId) : pets
-        } catch {
-            options = Self.withSelectedFallback(selectedPetId)
-        }
+    @discardableResult
+    func refresh(selectedPetId: String? = nil) -> String {
+        options = Self.fallbackOptions
+        resolvedPetId = "navi"
+        return resolvedPetId
     }
 
     func displayName(for petId: String) -> String {
@@ -67,13 +45,10 @@ final class PetCatalogStore: ObservableObject {
     }
 
     func summary(language: Lang) -> String {
-        let total = options.count
-        let nonCommercial = options.filter(\.isNonCommercial).count
-        let ready = max(total - nonCommercial, 0)
         if language == .zh {
-            return "\(total) \u{53EA}\u{5BA0}\u{7269} \u{00B7} \(ready) \u{53EA}\u{53EF}\u{5546}\u{7528} \u{00B7} \(nonCommercial) \u{53EA} NC"
+            return "\u{9ED8}\u{8BA4}\u{5BA0}\u{7269}\u{FF1A}navi"
         }
-        return "\(total) pets \u{00B7} \(ready) ready \u{00B7} \(nonCommercial) NC"
+        return "Default pet: navi"
     }
 
     func selectedPet(for petId: String) -> PetOption? {
@@ -81,20 +56,15 @@ final class PetCatalogStore: ObservableObject {
     }
 
     private static let fallbackOptions: [PetOption] = [
-        PetOption(id: "xiaochai", displayName: "小柴", assetLicense: "CC-BY-NC-4.0", commercialUseAllowed: false, sourceURL: nil),
-        PetOption(id: "openclaw", displayName: "Openclaw", assetLicense: "MIT", commercialUseAllowed: true, sourceURL: nil),
+        PetOption(id: "navi", displayName: "navi", assetLicense: "MIT", commercialUseAllowed: true, sourceURL: nil),
     ]
 
-    private static func withSelectedFallback(_ selectedPetId: String?) -> [PetOption] {
-        withSelected(fallbackOptions, selectedPetId)
+    private static var defaultFallbackPetId: String {
+        resolveSelectedPetId(nil, in: fallbackOptions)
     }
 
-    private static func withSelected(_ options: [PetOption], _ selectedPetId: String?) -> [PetOption] {
-        guard let selectedPetId, !selectedPetId.isEmpty,
-              !options.contains(where: { $0.id == selectedPetId }) else {
-            return options
-        }
-        return [PetOption(id: selectedPetId, displayName: selectedPetId, assetLicense: nil, commercialUseAllowed: nil, sourceURL: nil)] + options
+    private static func resolveSelectedPetId(_ selectedPetId: String?, in options: [PetOption]) -> String {
+        "navi"
     }
 
     private static func petInfo(for entry: PetHatchManifestPet, root: URL) -> PetHatchPetManifest? {
@@ -128,7 +98,19 @@ final class PetCatalogStore: ObservableObject {
 }
 
 private struct PetHatchManifest: Decodable {
+    let featuredPetIds: [String]
     let pets: [PetHatchManifestPet]
+
+    private enum CodingKeys: String, CodingKey {
+        case featuredPetIds
+        case pets
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        featuredPetIds = try container.decodeIfPresent([String].self, forKey: .featuredPetIds) ?? []
+        pets = try container.decode([PetHatchManifestPet].self, forKey: .pets)
+    }
 }
 
 private struct PetHatchManifestPet: Decodable {

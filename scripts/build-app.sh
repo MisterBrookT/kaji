@@ -69,6 +69,10 @@ else
 	echo "warning: Resources/quota.py missing — app will fall back to a dev path" >&2
 fi
 
+if [[ -f "Resources/navi-panda.png" ]]; then
+	cp "Resources/navi-panda.png" "${BUNDLE}/Contents/Resources/navi-panda.png"
+fi
+
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
 

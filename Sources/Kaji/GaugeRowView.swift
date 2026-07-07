@@ -275,7 +275,7 @@ struct GaugeRowView: View {
                     .foregroundColor(t.mute)
                 Spacer(minLength: 8)
                 statusChip(petTitle,
-                           filled: petRunner.isRunning,
+                           filled: petIsSelectedRunning,
                            emphasized: petRunner.isBusy || petRunner.lastError != nil) {
                     c.onTogglePet()
                 }
@@ -342,20 +342,21 @@ struct GaugeRowView: View {
 
     private var petTitle: String {
         if petRunner.isBusy {
-            return petRunner.isRunning
-                ? namedPetTitle(en: "Closing\u{2026}", zh: "\u{5173}\u{95ED}\u{4E2D}\u{2026}")
-                : namedPetTitle(en: "Opening\u{2026}", zh: "\u{5F00}\u{542F}\u{4E2D}\u{2026}")
+            return petIsSelectedRunning
+                ? L10n.t(.petTurningOff, prefs.language)
+                : L10n.t(.petTurningOn, prefs.language)
         }
         if petRunner.lastError != nil {
-            return namedPetTitle(en: "Failed", zh: "\u{542F}\u{52A8}\u{5931}\u{8D25}")
+            return L10n.t(.petFailed, prefs.language)
         }
-        return petRunner.isRunning
-            ? namedPetTitle(en: "On", zh: "\u{5DF2}\u{5F00}")
-            : namedPetTitle(en: "Off", zh: "\u{5173}")
+        if petRunner.isRunning {
+            return L10n.t(.petOn, prefs.language)
+        }
+        return L10n.t(.petOff, prefs.language)
     }
 
-    private func namedPetTitle(en: String, zh: String) -> String {
-        "\(petCatalog.displayName(for: prefs.petId)) \(prefs.language == .zh ? zh : en)"
+    private var petIsSelectedRunning: Bool {
+        petRunner.isRunning && petRunner.runningPetId == prefs.petId
     }
 
     // A small toggle chip: filled (warm) when on, outlined when off.
