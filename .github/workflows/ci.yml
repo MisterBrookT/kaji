@@ -3,21 +3,21 @@ name: CI
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.webp'
+    paths:
+      - 'Package.swift'
+      - 'Sources/**'
+      - 'Resources/**'
+      - 'scripts/**'
+      - 'Info.plist'
+      - '.github/workflows/ci.yml'
   pull_request:
-    paths-ignore:
-      - '**/*.md'
-      - 'docs/**'
-      - '**/*.png'
-      - '**/*.jpg'
-      - '**/*.jpeg'
-      - '**/*.webp'
+    paths:
+      - 'Package.swift'
+      - 'Sources/**'
+      - 'Resources/**'
+      - 'scripts/**'
+      - 'Info.plist'
+      - '.github/workflows/ci.yml'
 
 jobs:
   build:
