@@ -53,19 +53,6 @@ Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer r
 | **Pet** | Navi Panda, quota-aware 9-state animation, no message noise |
 | **Keep Awake** | Optional macOS sleep prevention for long agent runs |
 
-## Preview
-
-<table>
-  <tr>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-light.jpg" alt="Kaji menu bar light" /></td>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-dark.jpg" alt="Kaji menu bar dark" /></td>
-  </tr>
-  <tr>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-light.jpg" alt="Kaji quota popover light" /></td>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-dark.jpg" alt="Kaji quota popover dark" /></td>
-  </tr>
-</table>
-
 ## Navi Panda
 
 Navi is not a chat widget. It is a small state layer for your coding session:
@@ -96,7 +83,9 @@ Kaji does not kill arbitrary dev servers.
 
 ## Star History
 
-<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-star-history.svg" width="860" alt="Kaji GitHub star history" />
+<a href="https://star-history.com/#MisterBrookT/kaji&Date">
+  <img src="https://api.star-history.com/svg?repos=MisterBrookT/kaji&type=Date" alt="Kaji GitHub star history" />
+</a>
 
 ## Build
 

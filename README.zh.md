@@ -53,19 +53,6 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 | **Pet** | Navi 熊猫、quota-aware 九态动画、默认无消息打扰 |
 | **Keep Awake** | 长时间 agent 任务时阻止 macOS 休眠 |
 
-## 预览
-
-<table>
-  <tr>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-light.jpg" alt="Kaji 菜单栏浅色" /></td>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-dark.jpg" alt="Kaji 菜单栏深色" /></td>
-  </tr>
-  <tr>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-light.jpg" alt="Kaji 浅色弹窗" /></td>
-    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-dark.jpg" alt="Kaji 深色弹窗" /></td>
-  </tr>
-</table>
-
 ## Navi 熊猫
 
 Navi 不是聊天组件。它是 coding session 的状态层：
@@ -96,7 +83,9 @@ Kaji 不会杀任意 dev server。
 
 ## Star History
 
-<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-star-history.svg" width="860" alt="Kaji GitHub star history" />
+<a href="https://star-history.com/#MisterBrookT/kaji&Date">
+  <img src="https://api.star-history.com/svg?repos=MisterBrookT/kaji&type=Date" alt="Kaji GitHub star history" />
+</a>
 
 ## 构建
 
