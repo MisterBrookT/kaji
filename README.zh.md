@@ -42,6 +42,8 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 需要 macOS 13+ 和 Apple Silicon。Kaji 目前未签名；安装脚本会清除 quarantine，并把最新版安装到 `/Applications`。
 
+如果浏览器直接下载后提示“已损坏”，请用上面的安装命令。见 [分发说明](docs/distribution.md)。
+
 ## Kaji 能做什么
 
 | 模块 | 能力 |
@@ -104,6 +106,7 @@ swift run
 
 - [桌宠桥接](docs/pet-bridge.md)
 - [设计语言](docs/design-language.md)
+- [分发说明](docs/distribution.md)
 - [最新 Release](https://github.com/MisterBrookT/kaji/releases/latest)
 
 ## License

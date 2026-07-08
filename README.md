@@ -42,6 +42,8 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the latest release to `/Applications`.
 
+If a direct browser download says the app is damaged, use the install command above. See [Distribution](docs/distribution.md).
+
 ## What Kaji Does
 
 | Surface | What you get |
@@ -104,6 +106,7 @@ Use `scripts/build-local.sh` for release-style local app bundles. It assembles `
 
 - [Pet bridge](docs/pet-bridge.md)
 - [Design language](docs/design-language.md)
+- [Distribution](docs/distribution.md)
 - [Latest release](https://github.com/MisterBrookT/kaji/releases/latest)
 
 ## License
