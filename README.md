@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -20,7 +20,7 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 <br />
 <br />
 
-<img src="docs/readme-hero.jpg" width="860" alt="Kaji menu bar popover" />
+<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-hero.jpg" width="860" alt="Kaji menu bar popover" />
 
 </div>
 
@@ -57,12 +57,12 @@ Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer r
 
 <table>
   <tr>
-    <td><img src="docs/readme-menubar-light.jpg" alt="Kaji menu bar light" /></td>
-    <td><img src="docs/readme-menubar-dark.jpg" alt="Kaji menu bar dark" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-light.jpg" alt="Kaji menu bar light" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-dark.jpg" alt="Kaji menu bar dark" /></td>
   </tr>
   <tr>
-    <td><img src="docs/readme-gauge-light.jpg" alt="Kaji quota popover light" /></td>
-    <td><img src="docs/readme-gauge-dark.jpg" alt="Kaji quota popover dark" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-light.jpg" alt="Kaji quota popover light" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-dark.jpg" alt="Kaji quota popover dark" /></td>
   </tr>
 </table>
 
@@ -93,6 +93,10 @@ System cleanup is intentionally conservative:
 - terminate only safe Kaji-owned orphan processes
 
 Kaji does not kill arbitrary dev servers.
+
+## Star History
+
+<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-star-history.svg" width="860" alt="Kaji GitHub star history" />
 
 ## Build
 

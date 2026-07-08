@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -20,7 +20,7 @@
 <br />
 <br />
 
-<img src="docs/readme-hero.jpg" width="860" alt="Kaji 菜单栏弹窗" />
+<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-hero.jpg" width="860" alt="Kaji 菜单栏弹窗" />
 
 </div>
 
@@ -57,12 +57,12 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 <table>
   <tr>
-    <td><img src="docs/readme-menubar-light.jpg" alt="Kaji 菜单栏浅色" /></td>
-    <td><img src="docs/readme-menubar-dark.jpg" alt="Kaji 菜单栏深色" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-light.jpg" alt="Kaji 菜单栏浅色" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-menubar-dark.jpg" alt="Kaji 菜单栏深色" /></td>
   </tr>
   <tr>
-    <td><img src="docs/readme-gauge-light.jpg" alt="Kaji 浅色弹窗" /></td>
-    <td><img src="docs/readme-gauge-dark.jpg" alt="Kaji 深色弹窗" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-light.jpg" alt="Kaji 浅色弹窗" /></td>
+    <td><img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-gauge-dark.jpg" alt="Kaji 深色弹窗" /></td>
   </tr>
 </table>
 
@@ -93,6 +93,10 @@ System 清理刻意保守：
 - 只终止安全的 Kaji-owned 孤儿进程
 
 Kaji 不会杀任意 dev server。
+
+## Star History
+
+<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-star-history.svg" width="860" alt="Kaji GitHub star history" />
 
 ## 构建
 
