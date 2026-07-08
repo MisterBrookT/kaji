@@ -3,303 +3,365 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Kaji - macOS menu bar command center for AI coding</title>
-  <meta name="description" content="Track Claude Code and Codex usage, token pressure, focus breaks, goals, and system pressure from one quiet macOS menu bar surface.">
+  <title>Kaji - quiet menu bar for AI coding usage</title>
+  <meta name="description" content="Kaji is a macOS menu bar command center for AI coding usage, token pressure, focus breaks, daily goals, and Navi Panda reminders.">
   <meta property="og:title" content="Kaji">
-  <meta property="og:description" content="A macOS menu bar command center for AI coding.">
+  <meta property="og:description" content="A quiet macOS menu bar for AI coding usage.">
   <meta property="og:image" content="https://raw.githubusercontent.com/MisterBrookT/kaji/main/docs/readme-hero-20260708.jpg">
   <meta property="og:type" content="website">
-  <meta name="theme-color" content="#e9f4ee">
+  <meta name="theme-color" content="#fbfbf8">
   <style>
     :root {
       color-scheme: light;
-      --paper: #f7f8f4;
-      --ink: #20221f;
-      --muted: #686e66;
-      --line: #dfe4dc;
-      --mint: #bfead0;
-      --mint-strong: #1c8f58;
-      --panel: rgba(255, 255, 252, 0.82);
-      --shadow: 0 30px 80px rgba(26, 40, 31, 0.16);
+      --bg: #fbfbf8;
+      --ink: #20211f;
+      --muted: #73756f;
+      --soft: #efefea;
+      --line: #deded8;
+      --pill: #686b63;
+      --mint: #d7f4e0;
+      --green: #16a05e;
+      --shadow: 0 28px 84px rgba(24, 27, 21, 0.12);
     }
 
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
-      background:
-        radial-gradient(circle at 18% 8%, rgba(28, 143, 88, 0.26), transparent 30%),
-        radial-gradient(circle at 88% 4%, rgba(190, 234, 208, 0.8), transparent 35%),
-        var(--paper);
+      background: var(--bg);
       color: var(--ink);
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
-      line-height: 1.5;
+      line-height: 1.45;
     }
 
     a { color: inherit; }
 
-    .wrap {
-      width: min(1120px, calc(100% - 40px));
+    .shell {
+      width: min(1420px, calc(100% - 48px));
       margin: 0 auto;
     }
 
-    header {
-      min-height: 100dvh;
-      padding: 38px 0 56px;
-      display: grid;
-      align-items: center;
-    }
-
     nav {
+      height: 76px;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      gap: 18px;
-      margin-bottom: 54px;
+      gap: 20px;
+      font-size: 15px;
+      font-weight: 760;
     }
 
     .brand {
       display: flex;
       align-items: center;
       gap: 12px;
-      font-weight: 760;
-      letter-spacing: 0;
+      text-decoration: none;
     }
 
-    .brand img { width: 42px; height: auto; }
+    .brand img {
+      width: 44px;
+      height: auto;
+    }
 
-    .links {
+    .nav-links {
       display: flex;
-      gap: 16px;
+      align-items: center;
+      gap: 18px;
       color: var(--muted);
-      font-size: 14px;
-      font-weight: 650;
     }
 
-    .links a { text-decoration: none; }
-    .links a:hover { color: var(--ink); }
+    .nav-links a {
+      text-decoration: none;
+    }
 
     .hero {
+      min-height: calc(100dvh - 76px);
       display: grid;
-      grid-template-columns: 0.82fr 1.18fr;
-      gap: 44px;
+      grid-template-columns: 0.78fr 1fr;
+      gap: clamp(34px, 5vw, 84px);
       align-items: center;
+      padding: 34px 0 72px;
     }
 
     h1 {
       margin: 0;
-      font-size: clamp(52px, 8vw, 104px);
-      line-height: 0.92;
+      font-size: clamp(76px, 11vw, 154px);
+      line-height: 0.88;
       letter-spacing: 0;
-      max-width: 7ch;
     }
 
-    .lead {
-      margin: 24px 0 0;
+    .subhead {
+      margin: 34px 0 0;
+      font-size: clamp(28px, 3.2vw, 45px);
+      line-height: 1.08;
+      letter-spacing: 0;
+      max-width: 660px;
+      font-weight: 820;
+    }
+
+    .copy {
+      margin: 22px 0 0;
+      max-width: 680px;
       color: var(--muted);
-      font-size: clamp(18px, 2.2vw, 24px);
-      max-width: 560px;
+      font-size: clamp(18px, 1.7vw, 25px);
+      font-weight: 650;
     }
 
-    .actions {
-      margin-top: 34px;
+    .pills {
       display: flex;
       flex-wrap: wrap;
-      gap: 12px;
+      gap: 16px;
+      margin-top: 42px;
     }
 
-    .btn {
+    .pill {
+      min-width: 224px;
+      min-height: 66px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-height: 48px;
-      padding: 0 22px;
+      padding: 0 30px;
       border-radius: 999px;
-      border: 1px solid var(--line);
+      border: 2px solid var(--line);
       text-decoration: none;
-      font-weight: 760;
-      white-space: nowrap;
-      background: rgba(255, 255, 255, 0.65);
+      font-size: 22px;
+      font-weight: 850;
+      background: #fff;
     }
 
-    .btn.primary {
-      background: var(--ink);
+    .pill.primary {
+      background: var(--pill);
+      border-color: var(--pill);
       color: #fff;
-      border-color: var(--ink);
     }
 
-    .shot {
-      display: block;
-      width: 100%;
-      border-radius: 34px;
-      box-shadow: var(--shadow);
-    }
-
-    .facts {
-      margin-top: 32px;
+    .feature-list {
+      margin-top: 112px;
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
+      gap: 30px;
+      max-width: 620px;
     }
 
-    .fact {
-      border-top: 1px solid var(--line);
-      padding-top: 14px;
+    .feature {
+      display: grid;
+      grid-template-columns: 88px 1fr;
+      align-items: baseline;
+      gap: 26px;
+      font-size: clamp(22px, 2.1vw, 32px);
+      font-weight: 860;
     }
 
-    .fact strong {
+    .feature b {
+      color: var(--muted);
+      font-size: clamp(28px, 3.2vw, 44px);
+      letter-spacing: 0;
+    }
+
+    .stage {
+      position: relative;
+      min-height: 760px;
+      display: grid;
+      align-content: center;
+      gap: 34px;
+      padding-bottom: 120px;
+    }
+
+    .hero-shot {
+      width: 100%;
+      border-radius: 42px;
+      box-shadow: var(--shadow);
       display: block;
+    }
+
+    .panda {
+      position: absolute;
+      right: 5%;
+      bottom: 0;
+      width: min(280px, 32vw);
+      filter: drop-shadow(0 18px 28px rgba(15, 18, 13, 0.12));
+    }
+
+    section {
+      padding: 104px 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .break {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: clamp(34px, 6vw, 94px);
+      align-items: center;
+    }
+
+    .kicker {
+      display: inline-flex;
+      min-height: 36px;
+      align-items: center;
+      padding: 0 14px;
+      border-radius: 999px;
+      background: var(--mint);
+      color: #12653e;
+      font-weight: 820;
+      margin-bottom: 22px;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(44px, 6vw, 88px);
+      line-height: 0.96;
+      letter-spacing: 0;
+      max-width: 840px;
+    }
+
+    .section-copy {
+      margin: 26px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 1.6vw, 24px);
+      font-weight: 650;
+      max-width: 720px;
+    }
+
+    .notes {
+      margin-top: 42px;
+      display: grid;
+      gap: 18px;
+    }
+
+    .note {
+      display: grid;
+      grid-template-columns: 64px 1fr;
+      gap: 18px;
+      align-items: start;
+      padding-top: 18px;
+      border-top: 1px solid var(--line);
+    }
+
+    .note b {
+      color: var(--muted);
       font-size: 28px;
       line-height: 1;
     }
 
-    .fact span {
-      color: var(--muted);
-      font-size: 14px;
-      font-weight: 650;
-    }
-
-    section { padding: 86px 0; }
-
-    .section-title {
-      margin: 0 0 26px;
-      font-size: clamp(32px, 4vw, 56px);
-      line-height: 1;
-      letter-spacing: 0;
-    }
-
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 18px;
-    }
-
-    .card {
-      background: var(--panel);
-      border: 1px solid rgba(40, 48, 38, 0.08);
-      border-radius: 26px;
-      padding: 24px;
-      box-shadow: 0 18px 42px rgba(26, 40, 31, 0.08);
-    }
-
-    .card h2, .card h3 {
-      margin: 0 0 10px;
+    .note span {
       font-size: 22px;
-      line-height: 1.1;
+      font-weight: 820;
+      line-height: 1.18;
     }
 
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      font-size: 16px;
+    .break-shot {
+      width: 100%;
+      border-radius: 34px;
+      box-shadow: var(--shadow);
+      display: block;
+      background: #fff;
+    }
+
+    .install {
+      display: grid;
+      grid-template-columns: 0.72fr 1.28fr;
+      gap: 34px;
+      align-items: center;
     }
 
     code {
       display: block;
       overflow-x: auto;
-      background: #20221f;
-      color: #f5f6f1;
-      border-radius: 18px;
-      padding: 18px;
-      font: 700 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      background: var(--ink);
+      color: #f8f8f4;
+      border-radius: 24px;
+      padding: 24px;
+      font: 760 16px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     }
 
     footer {
-      padding: 48px 0 72px;
+      padding: 48px 0 70px;
       color: var(--muted);
-      font-size: 14px;
+      font-weight: 650;
     }
 
-    @media (max-width: 840px) {
-      header { padding-top: 24px; }
-      nav { align-items: flex-start; margin-bottom: 34px; }
-      .links { flex-wrap: wrap; justify-content: flex-end; }
-      .hero { grid-template-columns: 1fr; }
-      h1 { max-width: none; }
-      .grid { grid-template-columns: 1fr; }
-      .facts { grid-template-columns: 1fr; }
+    @media (max-width: 960px) {
+      .shell { width: min(100% - 28px, 720px); }
+      nav { height: auto; padding: 18px 0; align-items: flex-start; }
+      .nav-links { flex-wrap: wrap; justify-content: flex-end; }
+      .hero, .break, .install { grid-template-columns: 1fr; }
+      .hero { padding-top: 36px; }
+      .stage { min-height: 0; padding-bottom: 84px; }
+      .feature-list { margin-top: 64px; }
+      .feature { grid-template-columns: 70px 1fr; }
+      .pill { min-width: 0; width: 100%; }
+      .panda { width: 190px; right: 0; }
     }
   </style>
 </head>
 <body>
-  <header>
-    <div class="wrap">
-      <nav>
-        <div class="brand">
-          <img src="readme-panda.png" alt="Navi Panda">
-          <span>Kaji</span>
-        </div>
-        <div class="links">
-          <a href="https://github.com/MisterBrookT/kaji">GitHub</a>
-          <a href="https://github.com/MisterBrookT/kaji/releases/latest">Download</a>
-          <a href="README.zh.md">中文</a>
-        </div>
-      </nav>
+  <nav class="shell">
+    <a class="brand" href="https://github.com/MisterBrookT/kaji">
+      <img src="readme-panda.png" alt="Navi Panda">
+      <span>Kaji</span>
+    </a>
+    <div class="nav-links">
+      <a href="https://github.com/MisterBrookT/kaji">GitHub</a>
+      <a href="https://github.com/MisterBrookT/kaji/releases/latest">Download</a>
+      <a href="README.zh.md">中文</a>
+    </div>
+  </nav>
 
-      <div class="hero">
-        <div>
-          <h1>Menu bar control for AI coding.</h1>
-          <p class="lead">Track quota, token cost, breaks, goals, and system pressure from one quiet macOS surface.</p>
-          <div class="actions">
-            <a class="btn primary" href="https://github.com/MisterBrookT/kaji/releases/latest">Download</a>
-            <a class="btn" href="https://github.com/MisterBrookT/kaji">View source</a>
-          </div>
-          <div class="facts">
-            <div class="fact"><strong>5h</strong><span>quota window</span></div>
-            <div class="fact"><strong>7d</strong><span>weekly pressure</span></div>
-            <div class="fact"><strong>Navi</strong><span>break guard</span></div>
-          </div>
-        </div>
-        <img class="shot" src="readme-hero-20260708.jpg" alt="Kaji menu bar quota popover with Navi Panda">
+  <header class="shell hero">
+    <div>
+      <h1>Kaji</h1>
+      <p class="subhead">A quiet menu bar for AI coding usage.</p>
+      <p class="copy">Local-first quota, cost, focus, goals, and system pressure in one macOS status surface.</p>
+
+      <div class="pills">
+        <a class="pill primary" href="https://github.com/MisterBrookT/kaji/releases/latest">Download</a>
+        <a class="pill" href="https://github.com/MisterBrookT/kaji">GitHub</a>
       </div>
+
+      <div class="feature-list">
+        <div class="feature"><b>5h</b><span>Live quota window</span></div>
+        <div class="feature"><b>7d</b><span>Weekly reset time</span></div>
+        <div class="feature"><b>Pet</b><span>Navi state bridge</span></div>
+      </div>
+    </div>
+
+    <div class="stage">
+      <img class="hero-shot" src="readme-hero-20260708.jpg" alt="Kaji menu bar quota popover">
+      <img class="panda" src="readme-panda.png" alt="Navi Panda">
     </div>
   </header>
 
   <main>
     <section>
-      <div class="wrap">
-        <h2 class="section-title">One glance before context breaks.</h2>
-        <div class="grid">
-          <div class="card">
-            <h3>Quota and cost</h3>
-            <p>See Claude Code and Codex pressure, token trend, estimated cost, and weekly reset context.</p>
-          </div>
-          <div class="card">
-            <h3>Work rhythm</h3>
-            <p>Run focus and break timers from the same popover. Skip stays visible, not hidden.</p>
-          </div>
-          <div class="card">
-            <h3>System pressure</h3>
-            <p>Keep CPU, memory, disk, top processes, and conservative Auto Reclaim close to the work.</p>
-          </div>
-          <div class="card">
-            <h3>Daily goals</h3>
-            <p>Track editable goals with a heatmap so long runs do not erase what mattered today.</p>
-          </div>
-          <div class="card">
-            <h3>Navi break guard</h3>
-            <p>Navi can nudge from the menu bar or block the screen when a real break is due. Skip stays available and recorded.</p>
-          </div>
-          <div class="card">
-            <h3>Local-first state</h3>
-            <p>Kaji writes local status for PetHatch and keeps quota, goals, and system signals on your Mac.</p>
+      <div class="shell break">
+        <div>
+          <span class="kicker">Vibe coding guard</span>
+          <h2>Navi catches the work you forget.</h2>
+          <p class="section-copy">Long coding runs make posture, breaks, and small daily tasks disappear. Kaji keeps them close without turning into a dashboard.</p>
+
+          <div class="notes">
+            <div class="note"><b>45m</b><span>Navi reminds you to stand up before your back complains.</span></div>
+            <div class="note"><b>2m</b><span>Breaks can become a full-screen pause with Skip still available.</span></div>
+            <div class="note"><b>Goal</b><span>If today’s tasks are unfinished, Navi keeps them visible at the right moment.</span></div>
           </div>
         </div>
+
+        <img class="break-shot" src="break-reminder-20260708.jpg" alt="Kaji work and break timer">
       </div>
     </section>
 
     <section>
-      <div class="wrap">
-        <h2 class="section-title">Install</h2>
+      <div class="shell install">
+        <div>
+          <span class="kicker">Install</span>
+          <h2>One command.</h2>
+        </div>
         <code>curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash</code>
       </div>
     </section>
   </main>
 
-  <footer>
-    <div class="wrap">
-      macOS 13+ · Apple Silicon · MIT · Kaji means 舵 / かじ, rudder.
-    </div>
+  <footer class="shell">
+    macOS 13+ · Apple Silicon · MIT · Kaji means 舵 / かじ, rudder.
   </footer>
 </body>
 </html>
