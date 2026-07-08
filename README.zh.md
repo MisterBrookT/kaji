@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="docs/pet-panda.png" height="48" alt="Navi Panda" />
+  <img src="docs/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -20,7 +20,7 @@
 <br />
 <br />
 
-<img src="docs/hero.png" width="860" alt="Kaji 菜单栏弹窗" />
+<img src="docs/readme-hero.jpg" width="860" alt="Kaji 菜单栏弹窗" />
 
 </div>
 
@@ -29,6 +29,10 @@
 Coding agent 很好用，但额度、上下文、注意力、系统压力都会突然打断工作。Kaji 把这些隐藏限制收进一个安静的菜单栏界面。
 
 没有 dashboard。没有 Dock 图标。看一眼，继续工作。
+
+## 名字
+
+`Kaji` 来自日语 `舵 / かじ`，意思是舵、掌舵。它不是大仪表盘，而是让 AI coding 保持方向和节奏的小舵。
 
 ## 安装
 
@@ -53,12 +57,12 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 <table>
   <tr>
-    <td><img src="docs/menubar-light.png" alt="Kaji 菜单栏浅色" /></td>
-    <td><img src="docs/menubar-dark.png" alt="Kaji 菜单栏深色" /></td>
+    <td><img src="docs/readme-menubar-light.jpg" alt="Kaji 菜单栏浅色" /></td>
+    <td><img src="docs/readme-menubar-dark.jpg" alt="Kaji 菜单栏深色" /></td>
   </tr>
   <tr>
-    <td><img src="docs/gauge-light.png" alt="Kaji 浅色弹窗" /></td>
-    <td><img src="docs/gauge-dark.png" alt="Kaji 深色弹窗" /></td>
+    <td><img src="docs/readme-gauge-light.jpg" alt="Kaji 浅色弹窗" /></td>
+    <td><img src="docs/readme-gauge-dark.jpg" alt="Kaji 深色弹窗" /></td>
   </tr>
 </table>
 

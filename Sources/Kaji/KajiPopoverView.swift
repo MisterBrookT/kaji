@@ -8,7 +8,7 @@ private enum KajiPanel: Int, CaseIterable {
 }
 
 private struct PopoverContentSizeKey: PreferenceKey {
-    static var defaultValue: CGSize = .zero
+    static let defaultValue: CGSize = .zero
 
     static func reduce(value: inout CGSize, nextValue: () -> CGSize) {
         let next = nextValue()

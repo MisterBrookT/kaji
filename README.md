@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="docs/pet-panda.png" height="48" alt="Navi Panda" />
+  <img src="docs/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -20,7 +20,7 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 <br />
 <br />
 
-<img src="docs/hero.png" width="860" alt="Kaji menu bar popover" />
+<img src="docs/readme-hero.jpg" width="860" alt="Kaji menu bar popover" />
 
 </div>
 
@@ -29,6 +29,10 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 AI coding agents are useful until quota, context, focus, or system pressure breaks the run. Kaji turns those hidden limits into one quiet menu bar surface.
 
 No dashboard. No dock icon. One glance, then back to work.
+
+## Name
+
+`Kaji` comes from Japanese `舵 / かじ`: rudder, helm, the thing that keeps a ship on course. This app does the same for AI coding runs.
 
 ## Install
 
@@ -53,12 +57,12 @@ Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer r
 
 <table>
   <tr>
-    <td><img src="docs/menubar-light.png" alt="Kaji menu bar light" /></td>
-    <td><img src="docs/menubar-dark.png" alt="Kaji menu bar dark" /></td>
+    <td><img src="docs/readme-menubar-light.jpg" alt="Kaji menu bar light" /></td>
+    <td><img src="docs/readme-menubar-dark.jpg" alt="Kaji menu bar dark" /></td>
   </tr>
   <tr>
-    <td><img src="docs/gauge-light.png" alt="Kaji quota popover light" /></td>
-    <td><img src="docs/gauge-dark.png" alt="Kaji quota popover dark" /></td>
+    <td><img src="docs/readme-gauge-light.jpg" alt="Kaji quota popover light" /></td>
+    <td><img src="docs/readme-gauge-dark.jpg" alt="Kaji quota popover dark" /></td>
   </tr>
 </table>
 

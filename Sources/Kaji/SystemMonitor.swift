@@ -59,8 +59,8 @@ final class SystemMonitor: ObservableObject {
     @Published private(set) var orphanProcesses: [OrphanProcessSnapshot] = []
     @Published private(set) var lastOrphanCleanedCount = 0
 
-    private var timer: Timer?
-    private var scanTimer: Timer?
+    nonisolated(unsafe) private var timer: Timer?
+    nonisolated(unsafe) private var scanTimer: Timer?
     private var lastAutoMaintenanceAt: Date?
 
     private enum AutoClean {

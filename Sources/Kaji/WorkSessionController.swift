@@ -15,7 +15,7 @@ final class WorkSessionController: ObservableObject {
     @Published private(set) var completedBreaksToday = 0
 
     private let prefs: Prefs
-    private var timer: Timer?
+    nonisolated(unsafe) private var timer: Timer?
     private var lastTickAt = Date()
     private var dayKey = WorkSessionController.todayKey()
 
