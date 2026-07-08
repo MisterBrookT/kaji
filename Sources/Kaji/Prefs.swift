@@ -45,6 +45,9 @@ final class Prefs: ObservableObject {
     @Published var allowBreakSkip: Bool {
         didSet { UserDefaults.standard.set(allowBreakSkip, forKey: Key.allowBreakSkip) }
     }
+    @Published var breakOverlayEnabled: Bool {
+        didSet { UserDefaults.standard.set(breakOverlayEnabled, forKey: Key.breakOverlayEnabled) }
+    }
     @Published var autoCleanEnabled: Bool {
         didSet { UserDefaults.standard.set(autoCleanEnabled, forKey: Key.autoCleanEnabled) }
     }
@@ -62,6 +65,7 @@ final class Prefs: ObservableObject {
         static let focusMinutes = "focusMinutes"
         static let breakMinutes = "breakMinutes"
         static let allowBreakSkip = "allowBreakSkip"
+        static let breakOverlayEnabled = "breakOverlayEnabled"
         static let visibleProvidersV2 = "visibleProvidersV2"
         static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
@@ -113,6 +117,11 @@ final class Prefs: ObservableObject {
             allowBreakSkip = d.bool(forKey: Key.allowBreakSkip)
         } else {
             allowBreakSkip = true
+        }
+        if d.object(forKey: Key.breakOverlayEnabled) != nil {
+            breakOverlayEnabled = d.bool(forKey: Key.breakOverlayEnabled)
+        } else {
+            breakOverlayEnabled = true
         }
         if d.object(forKey: Key.autoCleanEnabled) != nil {
             autoCleanEnabled = d.bool(forKey: Key.autoCleanEnabled)
@@ -203,7 +212,7 @@ enum L10n {
             case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
             case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
             case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
-            case work, focusLength, breakLength, skipBreak
+            case work, focusLength, breakLength, skipBreak, breakOverlay
             case launchAtLogin
     }
 
@@ -248,6 +257,7 @@ enum L10n {
         .focusLength:  ("Focus",               "\u{4E13}\u{6CE8}"),                         // 专注
         .breakLength:  ("Break",               "\u{4F11}\u{606F}"),                         // 休息
         .skipBreak:    ("Allow Skip",          "\u{5141}\u{8BB8}\u{8DF3}\u{8FC7}"),         // 允许跳过
+        .breakOverlay: ("Hard Break",          "\u{5F3A}\u{5236}\u{4F11}\u{606F}"),         // 强制休息
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商

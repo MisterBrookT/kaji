@@ -70,6 +70,11 @@ struct SettingsView: View {
                             prefs.allowBreakSkip.toggle()
                         }
                     }
+                    settingRow(title: L10n.t(.breakOverlay, prefs.language)) {
+                        segment(prefs.breakOverlayEnabled ? "On" : "Off", on: prefs.breakOverlayEnabled) {
+                            prefs.breakOverlayEnabled.toggle()
+                        }
+                    }
                 }
             }
             settingBlock(title: L10n.t(.pet, prefs.language)) {

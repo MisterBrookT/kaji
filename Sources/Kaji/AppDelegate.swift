@@ -110,6 +110,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+        prefs.$breakOverlayEnabled
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                if enabled {
+                    self.handleWorkPhaseChanged(self.workSession.phase)
+                } else {
+                    self.closeBreakOverlay()
+                }
+            }
+            .store(in: &cancellables)
         systemMonitor.$snapshot
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -382,8 +394,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         switch phase {
         case .breakDue:
             workSession.startBreak()
+            guard prefs.breakOverlayEnabled else {
+                closeBreakOverlay()
+                return
+            }
             showBreakOverlay()
         case .breaking:
+            guard prefs.breakOverlayEnabled else {
+                closeBreakOverlay()
+                return
+            }
             showBreakOverlay()
         case .working:
             closeBreakOverlay()

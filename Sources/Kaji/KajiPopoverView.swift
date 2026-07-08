@@ -548,9 +548,9 @@ struct KajiPopoverView: View {
     private var workStatusText: String {
         switch workSession.phase {
         case .working:
-            return "工作中。到点后宠物会弹出拦截。"
+            return prefs.breakOverlayEnabled ? "工作中。到点后宠物会弹出拦截。" : "工作中。强制休息已关闭。"
         case .breakDue:
-            return "该休息了。宠物会挡住工作，Skip 会记录。"
+            return prefs.breakOverlayEnabled ? "该休息了。宠物会挡住工作，Skip 会记录。" : "该休息了。现在只记录倒计时。"
         case .breaking:
             return "休息中。站起来，走两分钟。"
         }
