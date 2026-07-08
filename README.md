@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="docs/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -20,7 +20,7 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 <br />
 <br />
 
-<img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-hero.jpg" width="860" alt="Kaji menu bar popover" />
+<img src="docs/readme-hero-20260708.jpg" width="860" alt="Kaji menu bar popover" />
 
 </div>
 

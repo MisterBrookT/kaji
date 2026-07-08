@@ -35,7 +35,7 @@ README 顶部保持当前结构：
 
 推荐文件：
 
-- 输出：`docs/readme-hero.jpg`
+- 输出：`docs/readme-hero-YYYYMMDD.jpg`
 - 宽度：1600-1800 px 原图，README 中显示 `width="860"`
 - 大小：目标 100-300 KB，最多别超过 600 KB
 - 格式：JPG，用 CleanShot 拼好后压缩
@@ -96,7 +96,7 @@ README 顶部保持当前结构：
 可用命令：
 
 ```sh
-sips -s format jpeg -s formatOptions 82 docs/readme-hero.png --out docs/readme-hero.jpg
+sips -s format jpeg -s formatOptions 82 docs/readme-hero.png --out docs/readme-hero-YYYYMMDD.jpg
 ```
 
 ## 功能展示优先级

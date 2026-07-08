@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaji - macOS menu bar command center for AI coding</title>
+  <meta name="description" content="Track Claude Code and Codex usage, token pressure, focus breaks, goals, and system pressure from one quiet macOS menu bar surface.">
+  <meta property="og:title" content="Kaji">
+  <meta property="og:description" content="A macOS menu bar command center for AI coding.">
+  <meta property="og:image" content="https://raw.githubusercontent.com/MisterBrookT/kaji/main/docs/readme-hero-20260708.jpg">
+  <meta property="og:type" content="website">
+  <meta name="theme-color" content="#e9f4ee">
+  <style>
+    :root {
+      color-scheme: light;
+      --paper: #f7f8f4;
+      --ink: #20221f;
+      --muted: #686e66;
+      --line: #dfe4dc;
+      --mint: #bfead0;
+      --mint-strong: #1c8f58;
+      --panel: rgba(255, 255, 252, 0.82);
+      --shadow: 0 30px 80px rgba(26, 40, 31, 0.16);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(28, 143, 88, 0.26), transparent 30%),
+        radial-gradient(circle at 88% 4%, rgba(190, 234, 208, 0.8), transparent 35%),
+        var(--paper);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.5;
+    }
+
+    a { color: inherit; }
+
+    .wrap {
+      width: min(1120px, calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    header {
+      min-height: 100dvh;
+      padding: 38px 0 56px;
+      display: grid;
+      align-items: center;
+    }
+
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 54px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .brand img { width: 42px; height: auto; }
+
+    .links {
+      display: flex;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    .links a { text-decoration: none; }
+    .links a:hover { color: var(--ink); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 0.82fr 1.18fr;
+      gap: 44px;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(52px, 8vw, 104px);
+      line-height: 0.92;
+      letter-spacing: 0;
+      max-width: 7ch;
+    }
+
+    .lead {
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: clamp(18px, 2.2vw, 24px);
+      max-width: 560px;
+    }
+
+    .actions {
+      margin-top: 34px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 48px;
+      padding: 0 22px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      text-decoration: none;
+      font-weight: 760;
+      white-space: nowrap;
+      background: rgba(255, 255, 255, 0.65);
+    }
+
+    .btn.primary {
+      background: var(--ink);
+      color: #fff;
+      border-color: var(--ink);
+    }
+
+    .shot {
+      display: block;
+      width: 100%;
+      border-radius: 34px;
+      box-shadow: var(--shadow);
+    }
+
+    .facts {
+      margin-top: 32px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .fact {
+      border-top: 1px solid var(--line);
+      padding-top: 14px;
+    }
+
+    .fact strong {
+      display: block;
+      font-size: 28px;
+      line-height: 1;
+    }
+
+    .fact span {
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 650;
+    }
+
+    section { padding: 86px 0; }
+
+    .section-title {
+      margin: 0 0 26px;
+      font-size: clamp(32px, 4vw, 56px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(40, 48, 38, 0.08);
+      border-radius: 26px;
+      padding: 24px;
+      box-shadow: 0 18px 42px rgba(26, 40, 31, 0.08);
+    }
+
+    .card h2, .card h3 {
+      margin: 0 0 10px;
+      font-size: 22px;
+      line-height: 1.1;
+    }
+
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+    }
+
+    code {
+      display: block;
+      overflow-x: auto;
+      background: #20221f;
+      color: #f5f6f1;
+      border-radius: 18px;
+      padding: 18px;
+      font: 700 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    footer {
+      padding: 48px 0 72px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    @media (max-width: 840px) {
+      header { padding-top: 24px; }
+      nav { align-items: flex-start; margin-bottom: 34px; }
+      .links { flex-wrap: wrap; justify-content: flex-end; }
+      .hero { grid-template-columns: 1fr; }
+      h1 { max-width: none; }
+      .grid { grid-template-columns: 1fr; }
+      .facts { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <nav>
+        <div class="brand">
+          <img src="readme-panda.png" alt="Navi Panda">
+          <span>Kaji</span>
+        </div>
+        <div class="links">
+          <a href="https://github.com/MisterBrookT/kaji">GitHub</a>
+          <a href="https://github.com/MisterBrookT/kaji/releases/latest">Download</a>
+          <a href="README.zh.md">中文</a>
+        </div>
+      </nav>
+
+      <div class="hero">
+        <div>
+          <h1>Menu bar control for AI coding.</h1>
+          <p class="lead">Track quota, token cost, breaks, goals, and system pressure from one quiet macOS surface.</p>
+          <div class="actions">
+            <a class="btn primary" href="https://github.com/MisterBrookT/kaji/releases/latest">Download</a>
+            <a class="btn" href="https://github.com/MisterBrookT/kaji">View source</a>
+          </div>
+          <div class="facts">
+            <div class="fact"><strong>5h</strong><span>quota window</span></div>
+            <div class="fact"><strong>7d</strong><span>weekly pressure</span></div>
+            <div class="fact"><strong>Navi</strong><span>break guard</span></div>
+          </div>
+        </div>
+        <img class="shot" src="readme-hero-20260708.jpg" alt="Kaji menu bar quota popover with Navi Panda">
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <div class="wrap">
+        <h2 class="section-title">One glance before context breaks.</h2>
+        <div class="grid">
+          <div class="card">
+            <h3>Quota and cost</h3>
+            <p>See Claude Code and Codex pressure, token trend, estimated cost, and weekly reset context.</p>
+          </div>
+          <div class="card">
+            <h3>Work rhythm</h3>
+            <p>Run focus and break timers from the same popover. Skip stays visible, not hidden.</p>
+          </div>
+          <div class="card">
+            <h3>System pressure</h3>
+            <p>Keep CPU, memory, disk, top processes, and conservative Auto Reclaim close to the work.</p>
+          </div>
+          <div class="card">
+            <h3>Daily goals</h3>
+            <p>Track editable goals with a heatmap so long runs do not erase what mattered today.</p>
+          </div>
+          <div class="card">
+            <h3>Navi break guard</h3>
+            <p>Navi can nudge from the menu bar or block the screen when a real break is due. Skip stays available and recorded.</p>
+          </div>
+          <div class="card">
+            <h3>Local-first state</h3>
+            <p>Kaji writes local status for PetHatch and keeps quota, goals, and system signals on your Mac.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="wrap">
+        <h2 class="section-title">Install</h2>
+        <code>curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash</code>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap">
+      macOS 13+ · Apple Silicon · MIT · Kaji means 舵 / かじ, rudder.
+    </div>
+  </footer>
+</body>
+</html>
