@@ -83,8 +83,12 @@ Kaji 不会杀任意 dev server。
 
 ## Star History
 
-<a href="https://star-history.com/#MisterBrookT/kaji&Date">
-  <img src="https://api.star-history.com/svg?repos=MisterBrookT/kaji&type=Date" alt="Kaji GitHub star history" />
+<a href="https://www.star-history.com/?type=date&repos=MisterBrookT%2Fkaji">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MisterBrookT/kaji&type=date&theme=dark&legend=top-left&sealed_token=ZmO2Jj6FA5ouWNGRqovmRT41QyYoBEKIF2xcWsOdFEoGTcfeRr4E7er0aGH6HQnt6a-zbSvwug2vVgtKvXLYnGkPdcD7k32Frid_Q6bzn-PqGYmrAJMPiQe3iLyi734sYEFPMyUUsx0GUHJ9owHt4s1m3AaiPVg1ZG1oBhwzaWqdS3zFWYcJCxstA7H7" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MisterBrookT/kaji&type=date&legend=top-left&sealed_token=ZmO2Jj6FA5ouWNGRqovmRT41QyYoBEKIF2xcWsOdFEoGTcfeRr4E7er0aGH6HQnt6a-zbSvwug2vVgtKvXLYnGkPdcD7k32Frid_Q6bzn-PqGYmrAJMPiQe3iLyi734sYEFPMyUUsx0GUHJ9owHt4s1m3AaiPVg1ZG1oBhwzaWqdS3zFWYcJCxstA7H7" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MisterBrookT/kaji&type=date&legend=top-left&sealed_token=ZmO2Jj6FA5ouWNGRqovmRT41QyYoBEKIF2xcWsOdFEoGTcfeRr4E7er0aGH6HQnt6a-zbSvwug2vVgtKvXLYnGkPdcD7k32Frid_Q6bzn-PqGYmrAJMPiQe3iLyi734sYEFPMyUUsx0GUHJ9owHt4s1m3AaiPVg1ZG1oBhwzaWqdS3zFWYcJCxstA7H7" />
+ </picture>
 </a>
 
 ## 构建
