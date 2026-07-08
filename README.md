@@ -1,30 +1,110 @@
-# Kaji
-**A beautiful macOS menu bar for AI coding usage.** Kaji reads quota windows from multiple AI coding vendors and puts them in a quiet macOS menu bar signal. Kaji keeps your coding-agent quota visible before a long prompt hits a wall. It is local-first, native, and small enough to live beside Wi-Fi and battery. It currently supports macOS 13+ (Apple Silicon).
+<div align="center">
 
-Kaji 会在长任务撞上额度墙之前提醒你。它本地优先、原生、轻，适合一直待在菜单栏里。 [中文](README.zh.md)
+<h1>
+  <img src="docs/pet-panda.png" height="48" alt="Navi Panda" />
+  <br />
+  Kaji
+</h1>
 
-<p align="center"><img src="docs/hero.png" width="820" alt="Kaji macOS menu bar quota app"></p>
+**A macOS menu bar command center for AI coding.**
+
+Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, manage focus breaks, and let Navi Panda block you when it is time to rest.
+
+[中文](README.zh.md)
+
+<a href="https://github.com/MisterBrookT/kaji/releases/latest"><img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=5C86A3&label=release&labelColor=1A1A1A" alt="latest release"></a>
+<a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=5C86A3" alt="GitHub stars"></a>
+<img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-5C86A3?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=5C86A3&labelColor=1A1A1A" alt="MIT license"></a>
+
+<br />
+<br />
+
+<img src="docs/hero.png" width="860" alt="Kaji menu bar popover" />
+
+</div>
+
+## Why
+
+AI coding agents are useful until quota, context, focus, or system pressure breaks the run. Kaji turns those hidden limits into one quiet menu bar surface.
+
+No dashboard. No dock icon. One glance, then back to work.
 
 ## Install
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-Requires macOS 13+ on Apple Silicon. The installer downloads the latest release, moves Kaji into `/Applications`, stops old copies, and launches the app. Kaji is currently unsigned.
+Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the latest release to `/Applications`.
 
-## What It Shows
-- **Menu bar rings**: compact dual-ring status for selected providers.
-- **Quota popover**: 5h usage, 7d usage, local reset time, provider toggles, refresh, updates, Keep Awake, and PetHatch pet controls.
-- **Settings window**: slower preferences such as visual style, used/remaining mode, S/M size, EN/CN language, curated pet details, and pet selection.
-- **Keep Awake**: optional macOS sleep-disable control for long agent runs and clamshell setups.
-- **Pet launcher**: start/stop the selected PetHatch pet from the popover.
-- **Three visual modes**: Mono is default; Calm adds blue-gray accents; Playful adds warmer accents.
-- Pet runner is started with `--activity-source runtimeEvent` and consumes `pet-state.json` for quota-pressure aware behavior; it falls back to local timing if host state is stale.
-- Kaji supports quick pet behavior modes by consuming generated `runtime.json`; use PetHatch helper profiles (`focus`/`balanced`/`marathon`) to tune rest thresholds and alert cadence.
+## What Kaji Does
 
-## Quick links
-- [pet bridge](docs/pet-bridge.md)
-- [settings](Sources/Kaji/SettingsView.swift)
+| Surface | What you get |
+| --- | --- |
+| **Quota** | 5h / 7d usage, reset timing, token trend, estimated cost, provider toggles |
+| **Work / Break** | Focus timer, break timer, skip count, hard full-screen break overlay |
+| **System** | CPU, memory, disk, top processes, one-click Auto Reclaim |
+| **Goals** | Editable daily goals, reset, completion heatmap |
+| **Pet** | Navi Panda, quota-aware 9-state animation, no message noise |
+| **Keep Awake** | Optional macOS sleep prevention for long agent runs |
+
+## Preview
+
+<table>
+  <tr>
+    <td><img src="docs/menubar-light.png" alt="Kaji menu bar light" /></td>
+    <td><img src="docs/menubar-dark.png" alt="Kaji menu bar dark" /></td>
+  </tr>
+  <tr>
+    <td><img src="docs/gauge-light.png" alt="Kaji quota popover light" /></td>
+    <td><img src="docs/gauge-dark.png" alt="Kaji quota popover dark" /></td>
+  </tr>
+</table>
+
+## Navi Panda
+
+Navi is not a chat widget. It is a small state layer for your coding session:
+
+- `idle`: resting
+- `running`: Codex / Claude usage is moving
+- `waiting`: quota or input needs attention
+- `review`: output is ready
+- `failed`: something broke
+
+Kaji writes local state to:
+
+```text
+~/Library/Application Support/Kaji/pet-state.json
+```
+
+PetHatch consumes this state and renders Navi with a 9-state atlas.
+
+## Auto Reclaim
+
+System cleanup is intentionally conservative:
+
+- reclaim inactive memory when memory pressure is high
+- clean selected Kaji / SwiftPM / developer caches when they are large
+- terminate only safe Kaji-owned orphan processes
+
+Kaji does not kill arbitrary dev servers.
+
+## Build
+
+```sh
+swift run
+./scripts/build-local.sh
+```
+
+Use `scripts/build-local.sh` for release-style local app bundles. It assembles `build/Kaji.app`, copies bundled resources, installs to `/Applications`, and can relaunch the app.
+
+## Links
+
+- [Pet bridge](docs/pet-bridge.md)
+- [Design language](docs/design-language.md)
+- [Latest release](https://github.com/MisterBrookT/kaji/releases/latest)
 
 ## License
+
 MIT. See [LICENSE](LICENSE).
