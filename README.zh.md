@@ -12,7 +12,6 @@
 
 [English](README.md)
 
-<a href="https://github.com/MisterBrookT/kaji/releases/latest"><img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=5C86A3&label=release&labelColor=1A1A1A" alt="latest release"></a>
 <a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=5C86A3" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-5C86A3?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
 <a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=5C86A3&labelColor=1A1A1A" alt="MIT license"></a>
@@ -107,7 +106,6 @@ swift run
 - [桌宠桥接](docs/pet-bridge.md)
 - [设计语言](docs/design-language.md)
 - [分发说明](docs/distribution.md)
-- [最新 Release](https://github.com/MisterBrookT/kaji/releases/latest)
 
 ## License
 

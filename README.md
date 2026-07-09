@@ -12,7 +12,6 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 
 [中文](README.zh.md)
 
-<a href="https://github.com/MisterBrookT/kaji/releases/latest"><img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=5C86A3&label=release&labelColor=1A1A1A" alt="latest release"></a>
 <a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=5C86A3" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-5C86A3?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
 <a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=5C86A3&labelColor=1A1A1A" alt="MIT license"></a>
@@ -40,7 +39,7 @@ No dashboard. No dock icon. One glance, then back to work.
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the latest release to `/Applications`.
+Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the current build to `/Applications`.
 
 If a direct browser download says the app is damaged, use the install command above. See [Distribution](docs/distribution.md).
 
@@ -107,7 +106,6 @@ Use `scripts/build-local.sh` for release-style local app bundles. It assembles `
 - [Pet bridge](docs/pet-bridge.md)
 - [Design language](docs/design-language.md)
 - [Distribution](docs/distribution.md)
-- [Latest release](https://github.com/MisterBrookT/kaji/releases/latest)
 
 ## License
 
