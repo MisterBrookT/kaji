@@ -30,6 +30,8 @@ final class SleepController: ObservableObject {
 
     func setEnabled(_ enabled: Bool) {
         if isBusy { return }
+        refresh()
+        if isEnabled == enabled { return }
         isBusy = true
         targetEnabled = enabled
         lastError = nil

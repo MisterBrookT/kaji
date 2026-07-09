@@ -7,6 +7,7 @@ import SwiftUI
 // focused on quota, system state, and pet controls.
 struct SettingsView: View {
     @ObservedObject var prefs: Prefs
+    @ObservedObject var sleepController: SleepController
     @ObservedObject var petCatalog: PetCatalogStore
 
     @Environment(\.colorScheme) private var scheme
@@ -46,10 +47,20 @@ struct SettingsView: View {
                             prefs.panelSize = .medium
                         }
                     }
+                }
+            }
+            settingBlock(title: L10n.t(.system, prefs.language)) {
+                VStack(alignment: .leading, spacing: 10) {
                     settingRow(title: L10n.t(.launchAtLogin, prefs.language)) {
                         segment(prefs.launchAtLogin ? "On" : "Off", on: prefs.launchAtLogin) {
                             prefs.launchAtLogin.toggle()
                         }
+                    }
+                    settingRow(title: L10n.t(.keepAwake, prefs.language)) {
+                        segment(preventSleepTitle, on: prefs.preventSleep) {
+                            prefs.preventSleep.toggle()
+                        }
+                        .disabled(sleepController.isBusy)
                     }
                 }
             }
@@ -155,6 +166,13 @@ struct SettingsView: View {
 
     private var providerSettingsKeys: [String] {
         Providers.sorted(Array(Providers.available))
+    }
+
+    private var preventSleepTitle: String {
+        if sleepController.isBusy {
+            return prefs.preventSleep ? "On\u{2026}" : "Off\u{2026}"
+        }
+        return prefs.preventSleep ? "On" : "Off"
     }
 
     private func providerRow(_ key: String) -> some View {

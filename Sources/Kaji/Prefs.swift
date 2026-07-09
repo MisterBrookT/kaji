@@ -54,6 +54,9 @@ final class Prefs: ObservableObject {
     @Published var launchAtLogin: Bool {
         didSet { UserDefaults.standard.set(launchAtLogin, forKey: Key.launchAtLogin) }
     }
+    @Published var preventSleep: Bool {
+        didSet { UserDefaults.standard.set(preventSleep, forKey: Key.preventSleep) }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -69,6 +72,7 @@ final class Prefs: ObservableObject {
         static let visibleProvidersV2 = "visibleProvidersV2"
         static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
+        static let preventSleep = "preventSleep"
     }
 
     init() {
@@ -132,6 +136,11 @@ final class Prefs: ObservableObject {
             launchAtLogin = d.bool(forKey: Key.launchAtLogin)
         } else {
             launchAtLogin = LoginItemManager.isEnabled
+        }
+        if d.object(forKey: Key.preventSleep) != nil {
+            preventSleep = d.bool(forKey: Key.preventSleep)
+        } else {
+            preventSleep = false
         }
     }
 
@@ -237,7 +246,7 @@ enum L10n {
         .updateCurrent: ("Up to date",          "\u{5DF2}\u{662F}\u{6700}\u{65B0}"),         // 已是最新
         .updateFailed:  ("Update check failed", "\u{68C0}\u{67E5}\u{5931}\u{8D25}"),         // 检查失败
         .system:       ("System",              "\u{7CFB}\u{7EDF}"),                         // 系统
-        .keepAwake:    ("Keep Awake",          "\u{4E0D}\u{4F11}\u{7720}"),                 // 不休眠
+        .keepAwake:    ("Prevent Sleep",       "\u{7981}\u{6B62}\u{4F11}\u{7720}"),         // 禁止休眠
         .keepAwakeOn:  ("Awake On",             "\u{4E0D}\u{4F11}\u{7720}\u{5DF2}\u{5F00}"), // 不休眠已开
         .keepAwakeOff: ("Awake Off",            "\u{4E0D}\u{4F11}\u{7720}\u{5173}"),         // 不休眠关
         .keepAwakeTurningOn: ("Turning On\u{2026}", "\u{5F00}\u{542F}\u{4E2D}\u{2026}"),     // 开启中…

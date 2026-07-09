@@ -110,6 +110,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+        prefs.$preventSleep
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                self?.sleepController.setEnabled(enabled)
+            }
+            .store(in: &cancellables)
         prefs.$breakOverlayEnabled
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -241,7 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controls = GaugeRowView.Controls(
             onRefresh: { [weak self] in self?.store.refresh() },
             onUpdate: { [weak self] in self?.handleUpdateAction() },
-            onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
+            onToggleKeepAwake: { [weak self] in self?.prefs.preventSleep.toggle() },
             onTogglePet: { [weak self] in
                 guard let self else { return }
                 self.petRunner.toggle(petId: self.prefs.petId)
@@ -337,7 +344,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let controller = KajiHostingController(rootView: SettingsView(prefs: prefs, petCatalog: petCatalog))
+        let controller = KajiHostingController(rootView: SettingsView(prefs: prefs,
+                                                                       sleepController: sleepController,
+                                                                       petCatalog: petCatalog))
         controller.view.configureKajiHost(cornerRadius: 12)
         let window = NSWindow(contentViewController: controller)
         window.title = "Kaji Settings"
