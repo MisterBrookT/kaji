@@ -11,7 +11,9 @@ struct BreakOverlayView: View {
     let onStartBreak: () -> Void
     let onSkip: () -> Void
 
+    @State private var exerciseIndex = Int.random(in: 0..<BreakExercise.allCases.count)
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
 
     var body: some View {
@@ -19,37 +21,36 @@ struct BreakOverlayView: View {
             ZStack {
                 background
                 if isPrimary {
-                    petMark(in: geo.size)
-                    VStack(spacing: 14) {
-                        Spacer()
-                        VStack(spacing: 8) {
-                            Text(title)
-                                .font(.system(size: 42, weight: .bold, design: .rounded))
-                                .foregroundColor(t.cream)
-                            Text(subtitle)
-                                .font(.system(size: 15, weight: .semibold, design: .rounded))
-                                .foregroundColor(t.mute)
-                                .multilineTextAlignment(.center)
+                    let compactHeight = geo.size.height < 1_280
+                    let controlsWidth = min(560, max(0, geo.size.width - 48))
+                    if compactHeight {
+                        VStack(spacing: 10) {
+                            Spacer(minLength: 8)
+                            petMark(in: geo.size, heightScale: 0.42)
+                            breakControls(spacing: 10, showGoals: false)
+                                .frame(width: controlsWidth)
                         }
-                        Text(clock)
-                            .font(.system(size: 64, weight: .bold, design: .rounded))
-                            .foregroundColor(t.cream)
-                            .monospacedDigit()
-                        pendingGoalStrip
-                        HStack(spacing: 12) {
-                            actionButton(workSession.phase == .breaking ? "Breaking" : "Start Break",
-                                         filled: true,
-                                         action: onStartBreak)
-                            if prefs.allowBreakSkip {
-                                actionButton("Skip", filled: false, action: onSkip)
-                            }
+                        .frame(width: min(760, max(0, geo.size.width - 48)))
+                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 24))
+                    } else {
+                        petMark(in: geo.size, heightScale: 0.72)
+                        VStack(spacing: 14) {
+                            Spacer()
+                            breakControls(spacing: 14, showGoals: true)
                         }
-                        Text("Skip today \(workSession.skipCountToday)")
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .foregroundColor(t.ash)
+                        .frame(width: controlsWidth)
+                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 24))
                     }
-                    .frame(width: min(560, geo.size.width - 48))
-                    .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 24))
+                }
+            }
+        }
+        .task {
+            guard isPrimary, !reduceMotion else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(10))
+                guard !Task.isCancelled else { break }
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    exerciseIndex = (exerciseIndex + 1) % BreakExercise.allCases.count
                 }
             }
         }
@@ -83,8 +84,8 @@ struct BreakOverlayView: View {
     }
 
     @ViewBuilder
-    private func petMark(in size: CGSize) -> some View {
-        let width = min(size.width * 0.78, size.height * 0.92, 760)
+    private func petMark(in size: CGSize, heightScale: CGFloat) -> some View {
+        let width = min(size.width * 0.78, size.height * heightScale, 760)
         ZStack {
             Ellipse()
                 .fill(t.panel.opacity(0.36))
@@ -96,6 +97,93 @@ struct BreakOverlayView: View {
                 .shadow(color: t.gold.opacity(0.16), radius: 38, x: 0, y: 24)
         }
         .accessibilityLabel(Text("Navi Panda blocks work"))
+    }
+
+    private func breakControls(spacing: CGFloat, showGoals: Bool) -> some View {
+        VStack(spacing: spacing) {
+            VStack(spacing: 8) {
+                Text(title)
+                    .font(.system(size: 42, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Text(subtitle)
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .multilineTextAlignment(.center)
+            }
+            Text(clock)
+                .font(.system(size: 64, weight: .bold, design: .rounded))
+                .foregroundColor(t.cream)
+                .monospacedDigit()
+            exerciseCard
+            if showGoals {
+                pendingGoalStrip
+            }
+            HStack(spacing: 12) {
+                actionButton(workSession.phase == .breaking ? "Breaking" : "Start Break",
+                             filled: true,
+                             action: onStartBreak)
+                if prefs.allowBreakSkip {
+                    actionButton("Skip", filled: false, action: onSkip)
+                }
+            }
+            Text("Skip today \(workSession.skipCountToday)")
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .foregroundColor(t.ash)
+        }
+    }
+
+    private var selectedExercise: BreakExercise {
+        BreakExercise.allCases[exerciseIndex % BreakExercise.allCases.count]
+    }
+
+    private var exerciseCard: some View {
+        HStack(spacing: 14) {
+            BreakExerciseMotionView(exercise: selectedExercise,
+                                    accent: t.gold,
+                                    ink: t.cream,
+                                    muted: t.mute)
+                .frame(width: 92, height: 82)
+                .padding(.horizontal, 4)
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 7) {
+                    Text("推荐动作")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(t.gold)
+                    Text(selectedExercise.duration)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.mute)
+                }
+                Text(selectedExercise.title)
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
+                    .contentTransition(.opacity)
+                Text(selectedExercise.cue)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 4)
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    exerciseIndex = (exerciseIndex + 1) % BreakExercise.allCases.count
+                }
+            } label: {
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(t.cream)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(t.track.opacity(0.7)))
+            }
+            .buttonStyle(.plain)
+            .help("换一个动作")
+            .accessibilityLabel(Text("换一个动作"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(t.panel.opacity(0.82)))
+        .id(selectedExercise.id)
+        .transition(.opacity)
     }
 
     private var pendingGoalStrip: some View {
