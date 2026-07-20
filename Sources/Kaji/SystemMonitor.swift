@@ -25,6 +25,7 @@ struct CleanableItem: Identifiable, Equatable, Sendable {
     let title: String
     let path: String
     let bytes: Int64
+    let isAutoSafe: Bool
 
     var isEmpty: Bool { bytes <= 0 }
 }
@@ -49,6 +50,7 @@ final class SystemMonitor: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
     @Published private(set) var lastCleanedBytes: Int64 = 0
+    @Published private(set) var isCleaning = false
     @Published private(set) var cleanableItems: [CleanableItem] = []
     @Published private(set) var selectedCleanableIds: Set<String> = []
     @Published private(set) var isScanningCleanables = false
@@ -62,6 +64,7 @@ final class SystemMonitor: ObservableObject {
     nonisolated(unsafe) private var timer: Timer?
     nonisolated(unsafe) private var scanTimer: Timer?
     private var lastAutoMaintenanceAt: Date?
+    private var hasInitializedCleanableSelection = false
 
     private enum AutoClean {
         static let memoryPercent = 75.0
@@ -121,6 +124,12 @@ final class SystemMonitor: ObservableObject {
             .reduce(0) { $0 + $1.bytes }
     }
 
+    private var autoCleanableBytes: Int64 {
+        cleanableItems
+            .filter(\.isAutoSafe)
+            .reduce(0) { $0 + $1.bytes }
+    }
+
     func scanCleanables() {
         if isScanningCleanables { return }
         isScanningCleanables = true
@@ -130,7 +139,13 @@ final class SystemMonitor: ObservableObject {
             }.value
             await MainActor.run {
                 self.cleanableItems = items
-                self.selectedCleanableIds = Set(items.filter { !$0.isEmpty }.map(\.id))
+                let availableIds = Set(items.filter { !$0.isEmpty }.map(\.id))
+                if self.hasInitializedCleanableSelection {
+                    self.selectedCleanableIds.formIntersection(availableIds)
+                } else {
+                    self.selectedCleanableIds = Set(items.filter { $0.isAutoSafe && !$0.isEmpty }.map(\.id))
+                    self.hasInitializedCleanableSelection = true
+                }
                 self.isScanningCleanables = false
             }
         }
@@ -146,13 +161,17 @@ final class SystemMonitor: ObservableObject {
     }
 
     func cleanKajiArtifacts() {
+        if isCleaning { return }
         let selected = selectedCleanableIds
+        guard !selected.isEmpty else { return }
+        isCleaning = true
         Task {
             let bytes = await Task.detached(priority: .utility) {
                 Self.cleanKajiArtifacts(selectedIds: selected)
             }.value
             await MainActor.run {
                 self.lastCleanedBytes = bytes
+                self.isCleaning = false
                 self.scanCleanables()
             }
         }
@@ -190,10 +209,10 @@ final class SystemMonitor: ObservableObject {
             return
         }
         let shouldReclaimMemory = snapshot.memoryPercent >= AutoClean.memoryPercent
-        let shouldCleanDisk = snapshot.diskPercent >= AutoClean.diskPercent || selectedCleanableBytes >= AutoClean.cleanableBytes
+        let shouldCleanDisk = snapshot.diskPercent >= AutoClean.diskPercent || autoCleanableBytes >= AutoClean.cleanableBytes
         let shouldCleanOrphans = !orphanProcesses.isEmpty
         guard shouldReclaimMemory || shouldCleanDisk || shouldCleanOrphans else { return }
-        if shouldCleanDisk && selectedCleanableIds.isEmpty {
+        if shouldCleanDisk && cleanableItems.filter(\.isAutoSafe).allSatisfy(\.isEmpty) {
             if !isScanningCleanables { scanCleanables() }
             if !shouldReclaimMemory { return }
         }
@@ -212,7 +231,7 @@ final class SystemMonitor: ObservableObject {
     }
 
     private func autoCleanDisk() {
-        let selected = selectedCleanableIds
+        let selected = Set(cleanableItems.filter { $0.isAutoSafe && !$0.isEmpty }.map(\.id))
         guard !selected.isEmpty else {
             scanCleanables()
             return
@@ -234,13 +253,17 @@ final class SystemMonitor: ObservableObject {
         if isReclaimingMemory { return }
         isReclaimingMemory = true
         Task {
-            _ = await Task.detached(priority: .utility) {
+            let succeeded = await Task.detached(priority: .utility) {
                 Self.runPurge()
             }.value
             await MainActor.run {
-                self.lastMemoryReclaimAt = Date()
+                if succeeded {
+                    self.lastMemoryReclaimAt = Date()
+                    self.refresh()
+                } else {
+                    self.lastError = "memory_reclaim_failed"
+                }
                 self.isReclaimingMemory = false
-                self.refresh()
             }
         }
     }
@@ -400,11 +423,12 @@ final class SystemMonitor: ObservableObject {
     }
 
     nonisolated private static func scanKajiCleanables() -> [CleanableItem] {
-        cleanableURLs().map { title, url in
+        cleanableURLs().map { title, url, isAutoSafe in
             CleanableItem(id: url.path,
                           title: title,
                           path: url.path,
-                          bytes: sizeOfItem(at: url))
+                          bytes: sizeOfItem(at: url),
+                          isAutoSafe: isAutoSafe)
         }
     }
 
@@ -414,16 +438,15 @@ final class SystemMonitor: ObservableObject {
         }
     }
 
-    nonisolated private static func cleanableURLs() -> [(title: String, url: URL)] {
+    nonisolated private static func cleanableURLs() -> [(title: String, url: URL, isAutoSafe: Bool)] {
         let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
         return [
-            ("Pet log", URL(fileURLWithPath: "/tmp/kaji-pethatch.log")),
-            ("Kaji cache", home.appendingPathComponent("Library/Caches/Kaji", isDirectory: true)),
-            ("Kaji cache", home.appendingPathComponent("Library/Caches/dev.kaji", isDirectory: true)),
-            ("Kaji logs", home.appendingPathComponent("Library/Logs/Kaji", isDirectory: true)),
-            ("Xcode DerivedData", home.appendingPathComponent("Library/Developer/Xcode/DerivedData", isDirectory: true)),
-            ("SwiftPM cache", home.appendingPathComponent("Library/Caches/org.swift.swiftpm", isDirectory: true)),
-            ("SwiftPM security", home.appendingPathComponent("Library/org.swift.swiftpm/security", isDirectory: true)),
+            ("Pet log", URL(fileURLWithPath: "/tmp/kaji-pethatch.log"), true),
+            ("Kaji cache", home.appendingPathComponent("Library/Caches/Kaji", isDirectory: true), true),
+            ("Kaji cache", home.appendingPathComponent("Library/Caches/dev.kaji", isDirectory: true), true),
+            ("Kaji logs", home.appendingPathComponent("Library/Logs/Kaji", isDirectory: true), true),
+            ("Xcode DerivedData", home.appendingPathComponent("Library/Developer/Xcode/DerivedData", isDirectory: true), false),
+            ("SwiftPM cache", home.appendingPathComponent("Library/Caches/org.swift.swiftpm", isDirectory: true), false),
         ]
     }
 
@@ -436,7 +459,7 @@ final class SystemMonitor: ObservableObject {
         }
         guard let enumerator = fm.enumerator(at: url,
                                              includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey],
-                                             options: [.skipsHiddenFiles]) else {
+                                             options: []) else {
             return 0
         }
         var total: Int64 = 0

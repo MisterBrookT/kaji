@@ -24,7 +24,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hostingView: KajiHostingView<StatusItemView>!
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
-    private let petRunner = PetRunner()
     private let petCatalog = PetCatalogStore()
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
@@ -77,12 +76,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.$visibleProviders
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildPopoverContentIfShown() }
-            .store(in: &cancellables)
-        prefs.$petId
-            .receive(on: RunLoop.main)
-            .sink { [weak self] petId in
-                self?.handlePetSelectionChanged(petId)
-            }
             .store(in: &cancellables)
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
             .receive(on: RunLoop.main)
@@ -162,7 +155,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
         breakWatchdogTimer?.invalidate()
         petStateTimer?.invalidate()
-        petRunner.stop(force: true)
         closeBreakOverlay()
     }
 
@@ -249,19 +241,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onRefresh: { [weak self] in self?.store.refresh() },
             onUpdate: { [weak self] in self?.handleUpdateAction() },
             onToggleKeepAwake: { [weak self] in self?.prefs.preventSleep.toggle() },
-            onTogglePet: { [weak self] in
-                guard let self else { return }
-                self.petRunner.toggle(petId: self.prefs.petId)
-            },
+            onTogglePet: {},
             onOpenSettings: { [weak self] in self?.openSettings() },
             onQuit: { NSApp.terminate(nil) }
         )
         let content = KajiPopoverView(store: store,
                                       prefs: prefs,
-                                      updateChecker: updateChecker,
-                                      sleepController: sleepController,
-                                      petRunner: petRunner,
-                                      petCatalog: petCatalog,
                                       workSession: workSession,
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
@@ -365,15 +350,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.petId = resolvedPetId
     }
 
-    private func handlePetSelectionChanged(_ petId: String) {
-        guard petRunner.isRunning,
-              !petRunner.isBusy,
-              petRunner.runningPetId != petId else {
-            return
-        }
-        petRunner.toggle(petId: petId)
-    }
-
     private func publishPetState() {
         PetBridge.write(providers: store.providers,
                         lastError: store.lastError,
@@ -421,11 +397,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showBreakOverlay() {
         if !breakWindows.isEmpty {
-            for window in breakWindows {
-                window.makeKeyAndOrderFront(nil)
-                window.orderFrontRegardless()
-            }
-            NSApp.activate(ignoringOtherApps: true)
+            // The watchdog calls this every second. Only recover windows that
+            // somehow became hidden; repeatedly taking key focus prevents the
+            // system screenshot UI from staying active.
+            breakWindows
+                .filter { !$0.isVisible }
+                .forEach { $0.orderFrontRegardless() }
             return
         }
         let mainScreen = NSScreen.main
@@ -456,12 +433,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window.backgroundColor = NSColor.windowBackgroundColor
             window.hasShadow = false
             window.ignoresMouseEvents = !isPrimary
-            window.level = .screenSaver
+            // Stay above normal/full-screen app windows, but below system UI
+            // such as Screenshot's selection overlay and toolbar.
+            window.level = .statusBar
             window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
             window.isMovableByWindowBackground = false
             window.hidesOnDeactivate = false
-            window.makeKeyAndOrderFront(nil)
-            window.orderFrontRegardless()
+            if isPrimary {
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                window.orderFrontRegardless()
+            }
             return window
         }
         NSApp.activate(ignoringOtherApps: true)

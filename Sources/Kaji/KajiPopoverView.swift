@@ -19,10 +19,6 @@ private struct PopoverContentSizeKey: PreferenceKey {
 struct KajiPopoverView: View {
     @ObservedObject var store: QuotaStore
     @ObservedObject var prefs: Prefs
-    @ObservedObject var updateChecker: UpdateChecker
-    @ObservedObject var sleepController: SleepController
-    @ObservedObject var petRunner: PetRunner
-    @ObservedObject var petCatalog: PetCatalogStore
     @ObservedObject var workSession: WorkSessionController
     @ObservedObject var systemMonitor: SystemMonitor
     @ObservedObject var dailyGoals: DailyGoalStore
@@ -33,6 +29,7 @@ struct KajiPopoverView: View {
 
     @State private var panel: KajiPanel = .quota
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
+    @State private var showCleanConfirmation = false
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
@@ -259,138 +256,302 @@ struct KajiPopoverView: View {
     }
 
     private var systemPanel: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(spacing: 8) {
-                metricCard("CPU", "cpu", systemValue(systemMonitor.snapshot.cpuPercent),
-                           fraction: systemMonitor.snapshot.cpuPercent / 100,
-                           warning: systemMonitor.snapshot.cpuPercent >= 80)
-                metricCard("Mem", "memorychip", systemValue(systemMonitor.snapshot.memoryPercent),
-                           fraction: systemMonitor.snapshot.memoryPercent / 100,
-                           warning: systemMonitor.snapshot.memoryPercent >= 75)
-            }
-            HStack(spacing: 8) {
-                metricCard("Disk", "internaldrive", systemValue(systemMonitor.snapshot.diskPercent),
-                           fraction: systemMonitor.snapshot.diskPercent / 100,
-                           warning: systemMonitor.snapshot.diskPercent >= 85)
-                metricCard("Clean", "sparkles", bytes(systemMonitor.selectedCleanableBytes),
-                           fraction: cleanFraction,
-                           warning: systemMonitor.selectedCleanableBytes >= 512 * 1024 * 1024)
-            }
-            systemRows
-            .frame(maxWidth: .infinity, minHeight: 64, alignment: .topLeading)
-            cleanControls
-            autoCleanStatus
+        VStack(alignment: .leading, spacing: 10) {
+            systemPulse
+            systemMetrics
+            hotProcesses
+            cleanupReview
         }
         .onAppear {
             systemMonitor.refresh()
             systemMonitor.scanCleanables()
         }
-    }
-
-    private var cleanControls: some View {
-        Button {
-            prefs.autoCleanEnabled.toggle()
-            if prefs.autoCleanEnabled {
-                systemMonitor.runAutoMaintenanceIfNeeded()
+        .confirmationDialog("永久删除所选缓存？",
+                            isPresented: $showCleanConfirmation,
+                            titleVisibility: .visible) {
+            Button("删除 \(bytes(systemMonitor.selectedCleanableBytes))", role: .destructive) {
+                systemMonitor.cleanKajiArtifacts()
             }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: prefs.autoCleanEnabled ? "bolt.circle.fill" : "bolt.circle")
-                    .font(.system(size: 11, weight: .bold))
-                Text(prefs.autoCleanEnabled ? "Auto Reclaim On" : "Auto Reclaim")
-                    .font(.system(size: 11, weight: .bold, design: .rounded))
-                Spacer(minLength: 8)
-                Text(prefs.autoCleanEnabled ? "On" : "Off")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-            }
-            .foregroundColor(prefs.autoCleanEnabled ? t.bg : t.mute)
-            .padding(.horizontal, 12)
-            .frame(height: 36)
-            .frame(maxWidth: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(prefs.autoCleanEnabled ? t.gold : Color.clear)
-                    .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(prefs.autoCleanEnabled ? Color.clear : t.track, lineWidth: 1))
-            )
-            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private var autoCleanStatus: some View {
-        HStack(spacing: 6) {
-            Image(systemName: prefs.autoCleanEnabled ? "bolt.circle.fill" : "bolt.circle")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(prefs.autoCleanEnabled ? t.gold : t.ash)
-            Text(autoCleanText)
-                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                .foregroundColor(t.mute)
-                .lineLimit(1)
-            Spacer(minLength: 4)
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("将删除所选缓存和构建产物。开发工具会按需重新生成；操作无法撤销。")
         }
     }
 
-    private var autoCleanText: String {
-        if !prefs.autoCleanEnabled {
-            return "Auto off · no background cleanup"
-        }
-        if systemMonitor.isAutoCleaning {
-            return "Cleaning safe caches"
-        }
-        if systemMonitor.isReclaimingMemory {
-            return "Reclaiming inactive memory"
-        }
-        if systemMonitor.lastAutoCleanedBytes > 0 {
-            return "Cleaned \(bytes(systemMonitor.lastAutoCleanedBytes)) · Mem 75% / Disk 85%"
-        }
-        if systemMonitor.lastMemoryReclaimAt != nil {
-            return "Memory reclaimed · Mem 75% / Disk 85%"
-        }
-        if systemMonitor.lastOrphanCleanedCount > 0 {
-            return "Cleaned \(systemMonitor.lastOrphanCleanedCount) Kaji orphan processes"
-        }
-        return "Auto on · Mem 75% / Disk 85% / Kaji orphans / Cache 512M"
-    }
-
-    private var systemRows: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
-                Text("Processes")
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .lineLimit(1)
-                Spacer(minLength: 6)
-                Text("\(systemMonitor.snapshot.processCount)")
-                    .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                    .foregroundColor(t.gold)
+    private var systemPulse: some View {
+        HStack(spacing: 11) {
+            ZStack {
+                Circle()
+                    .fill(healthColor.opacity(0.13))
+                Circle()
+                    .stroke(healthColor.opacity(0.25), lineWidth: 5)
+                Circle()
+                    .trim(from: 0, to: Double(systemHealthScore) / 100)
+                    .stroke(healthColor,
+                            style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(systemHealthScore)")
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
                     .monospacedDigit()
             }
-            ForEach(systemMonitor.snapshot.topProcesses.prefix(2)) { proc in
-                HStack(spacing: 8) {
-                    Text(proc.command)
+            .frame(width: 54, height: 54)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(systemHealthTitle)
+                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Text(systemHealthDetail)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 5)
+            Button {
+                systemMonitor.refresh()
+                systemMonitor.scanCleanables()
+            } label: {
+                Image(systemName: "arrow.clockwise")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(t.mute)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(t.track.opacity(0.55)))
+                    .rotationEffect(.degrees(systemMonitor.isRefreshing ? 180 : 0))
+                    .animation(systemMonitor.isRefreshing ? .linear(duration: 0.5).repeatForever(autoreverses: false) : .default,
+                               value: systemMonitor.isRefreshing)
+            }
+            .buttonStyle(.plain)
+            .disabled(systemMonitor.isRefreshing)
+            .help("刷新系统状态")
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(t.panel.opacity(0.78)))
+    }
+
+    private var systemMetrics: some View {
+        HStack(spacing: 7) {
+            pulseMetric("CPU", "cpu", systemMonitor.snapshot.cpuPercent, warningAt: 80)
+            pulseMetric("MEM", "memorychip", systemMonitor.snapshot.memoryPercent, warningAt: 75)
+            pulseMetric("DISK", "internaldrive", systemMonitor.snapshot.diskPercent, warningAt: 85)
+        }
+    }
+
+    private func pulseMetric(_ title: String,
+                             _ systemImage: String,
+                             _ value: Double,
+                             warningAt: Double) -> some View {
+        let warning = value >= warningAt
+        let accent = warning ? t.amber : t.gold
+        return VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 9, weight: .bold))
+                Text(title)
+                    .font(.system(size: 8.5, weight: .bold, design: .rounded))
+                Spacer(minLength: 2)
+                if warning {
+                    Circle().fill(accent).frame(width: 5, height: 5)
+                }
+            }
+            .foregroundColor(warning ? accent : t.mute)
+            Text(systemValue(value))
+                .font(.system(size: 17, weight: .bold, design: .rounded))
+                .foregroundColor(t.cream)
+                .monospacedDigit()
+            progressBar(value / 100, color: accent)
+                .frame(height: 5)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(t.panel.opacity(0.68)))
+    }
+
+    private var hotProcesses: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            sectionHeader("Hot Processes", detail: "\(systemMonitor.snapshot.processCount) running", image: "flame")
+            if systemMonitor.snapshot.topProcesses.isEmpty {
+                Text("等待系统采样…")
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, minHeight: 36, alignment: .center)
+            } else {
+                ForEach(systemMonitor.snapshot.topProcesses.prefix(3)) { process in
+                    processRow(process)
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(t.panel.opacity(0.62)))
+    }
+
+    private func processRow(_ process: ProcessSnapshot) -> some View {
+        HStack(spacing: 8) {
+            Text(String(process.command.prefix(1)).uppercased())
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .foregroundColor(t.bg)
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(process.cpu >= 50 ? t.amber : t.gold))
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 5) {
+                    Text(process.command)
                         .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                         .foregroundColor(t.cream)
                         .lineLimit(1)
-                    Spacer(minLength: 6)
-                    Text("\(Int(proc.cpu.rounded()))%")
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                        .foregroundColor(t.gold)
-                        .monospacedDigit()
-                }
-            }
-            if !systemMonitor.orphanProcesses.isEmpty {
-                HStack(spacing: 8) {
-                    Text("Kaji orphans")
-                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    Spacer(minLength: 5)
+                    Text("CPU \(Int(process.cpu.rounded()))%")
+                        .foregroundColor(process.cpu >= 50 ? t.amber : t.gold)
+                    Text("MEM \(String(format: "%.1f", process.memory))%")
                         .foregroundColor(t.mute)
-                    Spacer(minLength: 6)
-                    Text("\(systemMonitor.orphanProcesses.count)")
-                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                        .foregroundColor(t.amber)
-                        .monospacedDigit()
                 }
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                progressBar(min(process.cpu / maxTopProcessCPU, 1),
+                            color: process.cpu >= 50 ? t.amber : t.gold)
+                    .frame(height: 4)
             }
         }
+        .help("PID \(process.pid)")
+    }
+
+    private var cleanupReview: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("Cleanup",
+                          detail: systemMonitor.isScanningCleanables ? "Scanning…" : "Review \(bytes(systemMonitor.selectedCleanableBytes))",
+                          image: "sparkles")
+            let visible = systemMonitor.cleanableItems.filter { !$0.isEmpty }
+            if visible.isEmpty {
+                Text(systemMonitor.isScanningCleanables ? "正在扫描可清理项目…" : "当前没有可清理缓存")
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, minHeight: 32, alignment: .center)
+            } else {
+                ForEach(visible.prefix(4)) { item in
+                    cleanableRow(item)
+                }
+                if visible.count > 4 {
+                    Text("另有 \(visible.count - 4) 项 · 清理时包含已选项目")
+                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.ash)
+                }
+            }
+            HStack(spacing: 7) {
+                Button {
+                    prefs.autoCleanEnabled.toggle()
+                    if prefs.autoCleanEnabled { systemMonitor.runAutoMaintenanceIfNeeded() }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: prefs.autoCleanEnabled ? "bolt.fill" : "bolt")
+                        Text(prefs.autoCleanEnabled ? "Auto On" : "Auto")
+                    }
+                    .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    .foregroundColor(prefs.autoCleanEnabled ? t.bg : t.mute)
+                    .padding(.horizontal, 9)
+                    .frame(height: 30)
+                    .background(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(prefs.autoCleanEnabled ? t.gold : Color.clear)
+                        .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .stroke(prefs.autoCleanEnabled ? Color.clear : t.track, lineWidth: 1)))
+                }
+                .buttonStyle(.plain)
+                Spacer(minLength: 5)
+                Button {
+                    showCleanConfirmation = true
+                } label: {
+                    Text(systemMonitor.isCleaning ? "Cleaning…" : "Clean \(bytes(systemMonitor.selectedCleanableBytes))")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(t.bg)
+                        .padding(.horizontal, 11)
+                        .frame(height: 30)
+                        .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(t.gold))
+                }
+                .buttonStyle(.plain)
+                .disabled(systemMonitor.selectedCleanableBytes <= 0 || systemMonitor.isCleaning)
+                .opacity(systemMonitor.selectedCleanableBytes <= 0 ? 0.45 : 1)
+            }
+            if systemMonitor.lastCleanedBytes > 0 {
+                Text("已清理 \(bytes(systemMonitor.lastCleanedBytes))")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.gold)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(t.panel.opacity(0.62)))
+    }
+
+    private func cleanableRow(_ item: CleanableItem) -> some View {
+        Button {
+            systemMonitor.toggleCleanable(item)
+        } label: {
+            HStack(spacing: 7) {
+                Image(systemName: systemMonitor.selectedCleanableIds.contains(item.id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(systemMonitor.selectedCleanableIds.contains(item.id) ? t.gold : t.ash)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.cream)
+                        .lineLimit(1)
+                    Text(item.isAutoSafe ? "Kaji safe cache" : "Review before cleaning")
+                        .font(.system(size: 8.5, weight: .medium, design: .rounded))
+                        .foregroundColor(item.isAutoSafe ? t.mute : t.amber)
+                }
+                Spacer(minLength: 5)
+                Text(bytes(item.bytes))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .monospacedDigit()
+            }
+        }
+        .buttonStyle(.plain)
+        .help(item.path)
+    }
+
+    private func sectionHeader(_ title: String, detail: String, image: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: image)
+                .font(.system(size: 9.5, weight: .bold))
+                .foregroundColor(t.gold)
+            Text(title)
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(t.cream)
+            Spacer(minLength: 5)
+            Text(detail)
+                .font(.system(size: 9, weight: .semibold, design: .rounded))
+                .foregroundColor(t.ash)
+                .lineLimit(1)
+        }
+    }
+
+    private var maxTopProcessCPU: Double {
+        max(systemMonitor.snapshot.topProcesses.map(\.cpu).max() ?? 1, 1)
+    }
+
+    private var systemHealthScore: Int {
+        guard systemMonitor.snapshot.hasSample else { return 0 }
+        let cpuPenalty = max(0, systemMonitor.snapshot.cpuPercent - 35) * 0.48
+        let memoryPenalty = max(0, systemMonitor.snapshot.memoryPercent - 55) * 0.62
+        let diskPenalty = max(0, systemMonitor.snapshot.diskPercent - 70) * 0.72
+        return max(0, min(100, Int((100 - cpuPenalty - memoryPenalty - diskPenalty).rounded())))
+    }
+
+    private var systemHealthTitle: String {
+        if !systemMonitor.snapshot.hasSample { return "System Pulse" }
+        if systemHealthScore >= 85 { return "运行流畅" }
+        if systemHealthScore >= 65 { return "负载偏高" }
+        return "系统忙碌"
+    }
+
+    private var systemHealthDetail: String {
+        if let error = systemMonitor.lastError { return "采样失败 · \(error)" }
+        if !systemMonitor.snapshot.hasSample { return "正在读取 CPU、内存和磁盘" }
+        if let hottest = systemMonitor.snapshot.topProcesses.first {
+            return "当前最热 \(hottest.command) · CPU \(Int(hottest.cpu.rounded()))%"
+        }
+        return "没有持续高负载进程"
+    }
+
+    private var healthColor: Color {
+        if systemHealthScore >= 85 { return t.gold }
+        if systemHealthScore >= 65 { return t.cream.opacity(0.8) }
+        return t.amber
     }
 
     private var goalsPanel: some View {
@@ -504,14 +665,7 @@ struct KajiPopoverView: View {
 
     private var controlsFooter: some View {
         HStack(spacing: 7) {
-            iconButton("pawprint", title: L10n.t(.pet, prefs.language), action: controls.onTogglePet,
-                       filled: petRunner.isRunning)
-            Spacer(minLength: 4)
-            compactTab("Q", active: panel == .quota) { panel = .quota }
-            compactTab("W", active: panel == .work) { panel = .work }
-            compactTab("S", active: panel == .system) { panel = .system }
-            compactTab("G", active: panel == .goals) { panel = .goals }
-            Spacer(minLength: 4)
+            Spacer()
             iconButton("gearshape", title: L10n.t(.settings, prefs.language), action: controls.onOpenSettings)
             iconButton("power", title: L10n.t(.quit, prefs.language), action: controls.onQuit)
         }
@@ -531,7 +685,7 @@ struct KajiPopoverView: View {
         switch panel {
         case .quota: return "5h + 7d pressure"
         case .work: return "45m work, hard break"
-        case .system: return "CPU + processes + Kaji clean"
+        case .system: return "Health + hot processes + cleanup"
         case .goals: return "Daily completion"
         }
     }
@@ -635,22 +789,6 @@ struct KajiPopoverView: View {
         .help(systemName == "plus" ? "Increase" : "Decrease")
     }
 
-    private func compactTab(_ title: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                .foregroundColor(active ? t.bg : t.mute)
-                .frame(width: 30, height: 28)
-                .background(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(active ? t.gold : Color.clear)
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(active ? Color.clear : t.track, lineWidth: 1))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-
     private func chip(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
@@ -668,48 +806,6 @@ struct KajiPopoverView: View {
                 .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
         }
         .buttonStyle(.plain)
-    }
-
-    private func metricCard(_ title: String,
-                            _ systemImage: String,
-                            _ value: String,
-                            fraction: Double? = nil,
-                            warning: Bool = false) -> some View {
-        let safeFraction = fraction.map { min(max($0, 0), 1) }
-        let accent = warning ? t.amber : t.gold
-        return HStack(spacing: 8) {
-            ZStack {
-                GaugeDot(fraction: safeFraction ?? 0, color: accent, track: t.track)
-                Image(systemName: systemImage)
-                    .font(.system(size: 10.5, weight: .bold))
-                    .foregroundColor(accent)
-            }
-            .frame(width: 34, height: 34)
-            VStack(alignment: .leading, spacing: 3) {
-                HStack(spacing: 4) {
-                    Text(title)
-                    if warning {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .font(.system(size: 7.5, weight: .bold))
-                    }
-                }
-                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                .foregroundColor(warning ? accent : t.mute)
-                Text(value)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .monospacedDigit()
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                if let safeFraction {
-                    progressBar(safeFraction, color: accent)
-                        .frame(height: 4)
-                }
-            }
-        }
-        .padding(8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
     }
 
     private func miniStat(_ title: String, _ value: String, _ caption: String) -> some View {
@@ -797,30 +893,6 @@ struct KajiPopoverView: View {
         return String(format: "$%.2f", value)
     }
 
-    private var cleanFraction: Double {
-        guard systemMonitor.cleanableBytes > 0 else { return 0 }
-        return Double(systemMonitor.selectedCleanableBytes) / Double(systemMonitor.cleanableBytes)
-    }
-}
-
-private struct GaugeDot: View {
-    let fraction: Double
-    let color: Color
-    let track: Color
-
-    var body: some View {
-        ZStack {
-            Circle()
-                .stroke(track.opacity(0.75), lineWidth: 5)
-            Circle()
-                .trim(from: 0, to: min(max(fraction, 0), 1))
-                .stroke(color, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-            Circle()
-                .fill(color.opacity(0.18))
-                .frame(width: 12, height: 12)
-        }
-    }
 }
 
 private struct SparklineView: View {
