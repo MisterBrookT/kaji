@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Kaji — one-line installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
 #
 # Downloads the latest released .app, drops it in /Applications, clears the
 # Gatekeeper quarantine (the app is unsigned for now), and launches it. The app
 # is a menu-bar agent — no dock icon; look for the rings in your menu bar.
 set -euo pipefail
 
-REPO="MisterBrookT/kaji"
+REPO="blackblue-labs/kaji"
 DEST="/Applications"
 
 say() { printf '\033[1;38;5;208m==>\033[0m %s\n' "$1"; }

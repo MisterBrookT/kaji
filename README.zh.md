@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="https://cdn.jsdelivr.net/gh/MisterBrookT/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="https://cdn.jsdelivr.net/gh/blackblue-labs/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -12,9 +12,9 @@
 
 [English](README.md)
 
-<a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=5C86A3" alt="GitHub stars"></a>
+<a href="https://github.com/blackblue-labs/kaji/stargazers"><img src="https://img.shields.io/github/stars/blackblue-labs/kaji?style=flat&label=stars&labelColor=1A1A1A&color=5C86A3" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-5C86A3?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=5C86A3&labelColor=1A1A1A" alt="MIT license"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/blackblue-labs/kaji?color=5C86A3&labelColor=1A1A1A" alt="MIT license"></a>
 
 <br />
 <br />
@@ -36,7 +36,7 @@ Coding agent 很好用，但额度、上下文、注意力、系统压力都会�
 ## 安装
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
 ```
 
 需要 macOS 13+ 和 Apple Silicon。Kaji 目前未签名；安装脚本会清除 quarantine，并把最新版安装到 `/Applications`。
@@ -86,9 +86,9 @@ Kaji 不会杀任意 dev server。
 
 <a href="https://www.star-history.com/?type=date&repos=MisterBrookT%2Fkaji">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=MisterBrookT/kaji&type=date&theme=dark&legend=top-left&sealed_token=ZmO2Jj6FA5ouWNGRqovmRT41QyYoBEKIF2xcWsOdFEoGTcfeRr4E7er0aGH6HQnt6a-zbSvwug2vVgtKvXLYnGkPdcD7k32Frid_Q6bzn-PqGYmrAJMPiQe3iLyi734sYEFPMyUUsx0GUHJ9owHt4s1m3AaiPVg1ZG1oBhwzaWqdS3zFWYcJCxstA7H7" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=MisterBrookT/kaji&type=date&legend=top-left&sealed_token=ZmO2Jj6FA5ouWNGRqovmRT41QyYoBEKIF2xcWsOdFEoGTcfeRr4E7er0aGH6HQnt6a-zbSvwug2vVgtKvXLYnGkPdcD7k32Frid_Q6bzn-PqGYmrAJMPiQe3iLyi734sYEFPMyUUsx0GUHJ9owHt4s1m3AaiPVg1ZG1oBhwzaWqdS3zFWYcJCxstA7H7" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=MisterBrookT/kaji&type=date&legend=top-left&sealed_token=ZmO2Jj6FA5ouWNGRqovmRT41QyYoBEKIF2xcWsOdFEoGTcfeRr4E7er0aGH6HQnt6a-zbSvwug2vVgtKvXLYnGkPdcD7k32Frid_Q6bzn-PqGYmrAJMPiQe3iLyi734sYEFPMyUUsx0GUHJ9owHt4s1m3AaiPVg1ZG1oBhwzaWqdS3zFWYcJCxstA7H7" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=blackblue-labs/kaji&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=blackblue-labs/kaji&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=blackblue-labs/kaji&type=date&legend=top-left" />
  </picture>
 </a>
 

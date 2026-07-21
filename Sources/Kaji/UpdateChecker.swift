@@ -17,7 +17,7 @@ import Combine
 // the public GitHub API — no telemetry, no account, no payload sent.
 @MainActor
 final class UpdateChecker: ObservableObject {
-    static let repo = "MisterBrookT/kaji"
+    static let repo = "blackblue-labs/kaji"
 
     struct Release: Equatable {
         let version: String   // normalized, e.g. "0.4.6"

@@ -6,7 +6,7 @@ Kaji release builds are unsigned and not notarized.
 
 Expected behavior:
 
-- `curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash` works because the installer clears the quarantine xattr after copying the app.
+- `curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash` works because the installer clears the quarantine xattr after copying the app.
 - Direct browser download may show: `Kaji is damaged and can't be opened. You should move it to the Trash.`
 
 This is Gatekeeper. Chrome/Safari attach `com.apple.quarantine` to downloaded apps. macOS then checks whether the app is signed with Developer ID and notarized by Apple. Kaji is not yet signed/notarized, so Gatekeeper blocks it.
