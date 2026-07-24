@@ -19,6 +19,7 @@
 | **Approved** | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) — 已落地 |
 | **Approved** | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) — focus/break 剩余数字；无 BREAK 文案 |
 | **Approved** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — 方案 B；已落地 |
+| **Approved** | [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) — Cursor 月度外 API / 内 Auto；v0.6.1 |
 | Parked | [../docs/index.html](../docs/index.html) — GitHub Pages landing only |
 | Optional | [design/palette.html](design/palette.html) |
 
@@ -59,6 +60,7 @@
 | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) | 已通过并落地 |
 | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) | 已通过：focus/break 剩余 `MM:SS`，无 BREAK |
 | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) | 已落地：方案 B，只留黑白灰 |
+| [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) | 已通过：外 API / 内 Auto；limits-only；默认可见 → v0.6.1 |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
 ### Assets

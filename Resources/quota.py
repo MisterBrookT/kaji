@@ -188,6 +188,111 @@ def claude_limits():
     return _limits_cached("claude-limits-cache.json", _fetch_claude_limits)
 
 
+# ── Cursor account period usage (unofficial DashboardService) ───────────────
+# No local 5h/7d files. Token from Cursor's state.vscdb; percentages are a
+# monthly billing pool (api / auto), mapped onto Kaji's five_hour / seven_day
+# slots: outer=API, inner=Auto. Spec: 2026-07-24-cursor-quota.md.
+
+
+def _cursor_token():
+    """Read cursorAuth/accessToken from Cursor's globalStorage sqlite DB."""
+    path = (HOME / "Library" / "Application Support" / "Cursor"
+            / "User" / "globalStorage" / "state.vscdb")
+    if not path.is_file():
+        return None
+    try:
+        import sqlite3
+        conn = sqlite3.connect(path.as_uri() + "?mode=ro", uri=True, timeout=2)
+        try:
+            row = conn.execute(
+                "SELECT value FROM ItemTable WHERE key = ?",
+                ("cursorAuth/accessToken",),
+            ).fetchone()
+        finally:
+            conn.close()
+        if row and row[0]:
+            return str(row[0])
+    except Exception:
+        return None
+    return None
+
+
+def _clamp_pct(value):
+    try:
+        x = float(value)
+    except (TypeError, ValueError):
+        return None
+    if x != x:  # NaN
+        return None
+    return max(0.0, min(100.0, x))
+
+
+def _ms_to_iso(ms):
+    """Cursor billingCycleEnd is epoch milliseconds (number or digit string) → ISO-8601 UTC."""
+    if isinstance(ms, str):
+        ms = ms.strip()
+        if not ms:
+            return None
+    try:
+        ms = float(ms)
+    except (TypeError, ValueError):
+        return None
+    if ms <= 0:
+        return None
+    from datetime import datetime, timezone
+    dt = datetime.fromtimestamp(ms / 1000.0, tz=timezone.utc)
+    return dt.strftime("%Y-%m-%dT%H:%M:%S.") + f"{int(dt.microsecond / 1000):03d}Z"
+
+
+def _map_cursor_payload(d):
+    """Outer five_hour←apiPercentUsed; inner seven_day←autoPercentUsed.
+
+    Observed shapes:
+    - flat: apiPercentUsed / autoPercentUsed on the root
+    - nested (2026-07): planUsage.{api,auto}PercentUsed; billingCycleEnd as string ms
+    """
+    if not isinstance(d, dict):
+        return None
+    plan = d.get("planUsage") if isinstance(d.get("planUsage"), dict) else {}
+    out = {}
+    reset = _ms_to_iso(d.get("billingCycleEnd"))
+    api = _clamp_pct(plan.get("apiPercentUsed", d.get("apiPercentUsed")))
+    auto = _clamp_pct(plan.get("autoPercentUsed", d.get("autoPercentUsed")))
+    if api is not None:
+        out["five_hour_used_percent"] = api
+        if reset:
+            out["five_hour_resets_at"] = reset
+    if auto is not None:
+        out["seven_day_used_percent"] = auto
+        if reset:
+            out["seven_day_resets_at"] = reset
+    return out or None
+
+
+def _fetch_cursor_limits():
+    token = _cursor_token()
+    if not token:
+        return None
+    import urllib.request
+    req = urllib.request.Request(
+        "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage",
+        data=b"{}",
+        method="POST",
+        headers={
+            "Authorization": "Bearer " + token,
+            "Connect-Protocol-Version": "1",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        d = json.loads(r.read().decode("utf-8"))
+    return _map_cursor_payload(d)
+
+
+def cursor_limits():
+    return _limits_cached("cursor-limits-cache.json", _fetch_cursor_limits)
+
+
 def _fetch_codex_limits():
     """codex app-server JSON-RPC account/rateLimits/read (official path)."""
     import queue as _queue
@@ -896,8 +1001,8 @@ def collect():
 
     Limits: live account windows (five_hour/seven_day used_percent) — claude
     via the oauth usage endpoint, codex via app-server (or freshest session
-    file fallback), minimax via the `mmx` CLI; all cached on disk with the
-    same TTL.
+    file fallback), cursor via DashboardService period usage, minimax via the
+    `mmx` CLI; all cached on disk with the same TTL.
     """
     c_sess, c_tok, c_last, c_proj, c_ctx = claude_code()
     x_sess, x_tok, x_last, x_file_limits, x_proj, x_ctx = codex()
@@ -915,6 +1020,11 @@ def collect():
          x_proj, x_ctx),
         ("minimax", m_sess, m_tok, m_last, minimax_limits(), {}, {}),
     ]
+    # Cursor is limits-only (no local today-token scan). Emit only when we have
+    # a usable limits dict (live or cached). tokens/sessions stay unset in JSON.
+    c_lim = cursor_limits()
+    if c_lim:
+        rows.append(("cursor", None, None, None, c_lim, {}, {}))
     if _configured_key(ARK_AGENT_KEY):
         rows.append(("ark-agent", *ark_agent(), _with_plan("Agent Plan", ark_agent_limits()), {}, {}))
     return rows
@@ -927,6 +1037,13 @@ def emit_json():
         # Drop windows whose reset already passed — the cached % is pre-reset
         # stale and would otherwise show a high number for a quiet provider.
         limits = _scrub_expired(limits)
+        if name == "cursor":
+            # Spec §5.6: limits-only — omit tokens_today / sessions_today so the
+            # app does not treat missing usage as zero.
+            out[name] = {}
+            if limits:
+                out[name]["limits"] = limits
+            continue
         out[name] = {
             "tokens_today": tok if tok is not None else 0,
             "sessions_today": sess,
@@ -965,17 +1082,22 @@ def emit_table():
             sd = limits.get("seven_day_used_percent")
             bits = []
             if fh is not None:
-                bits.append(f"5h {fh:.0f}%")
+                label5 = "API" if name == "cursor" else "5h"
+                bits.append(f"{label5} {fh:.0f}%")
             if sd is not None:
-                bits.append(f"wk {sd:.0f}%")
+                label7 = "Auto" if name == "cursor" else "wk"
+                bits.append(f"{label7} {sd:.0f}%")
             if bits:
                 extra = "  used " + " · ".join(bits) + (f" ({limits['plan']})" if limits.get("plan") else "")
-        print(f"{label.get(name, name):<14} {str(sess):<16} {fmt_tokens(tok):<13} {fmt_last(last)}{extra}")
+        sess_s = "—" if sess is None else str(sess)
+        tok_s = "—" if tok is None else fmt_tokens(tok)
+        print(f"{label.get(name, name):<14} {sess_s:<16} {tok_s:<13} {fmt_last(last)}{extra}")
     print()
     print("Note: claude-code tokens summed from message.usage (today only).")
     print("      opencode tokens summed from storage/message/*.json (today).")
     print("      codex tokens = last token_count per session (cumulative), today's UTC dir;")
     print("            quota %% from rate_limits in the freshest session.")
+    print("      cursor limits from DashboardService period usage (API/Auto); no today tokens.")
     print("      kiro session files store no token counts (sessions only).")
 
 

@@ -125,14 +125,18 @@ struct KajiPopoverView: View {
 
     private var quotaSummary: some View {
         HStack(spacing: 8) {
-            miniStat("Today", tokenText(totalTokensToday), "tokens")
+            miniStat("Today", totalTokensToday.map(tokenText) ?? "\u{2014}", "tokens")
             miniStat("Cost", usdText(totalCostToday), totalCostIsEstimated ? "est today" : "today")
             miniStat("Pressure", percent(totalPressure), "5h max")
         }
     }
 
     private func quotaRow(_ provider: ProviderView) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let windows = CursorLimitsLogic.windowLabels(for: provider.id)
+        let secondary = provider.id == "cursor"
+            ? windows.secondary
+            : "7d"
+        return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 7) {
                 ProviderLogo(key: provider.id, color: provider.isNearLimit ? t.amber : t.gold, size: 12)
                 Text(provider.displayName)
@@ -147,28 +151,33 @@ struct KajiPopoverView: View {
             }
             progressBar(provider.usedFraction, color: provider.isNearLimit ? t.amber : t.gold)
             HStack(spacing: 6) {
-                Text("5h")
+                Text(windows.primary)
                 Text(ResetFormat.short(provider.resetDate))
                     .foregroundColor(t.gold.opacity(0.9))
                 Spacer(minLength: 6)
-                if let tokens = provider.tokensToday {
-                    Text(tokenText(tokens))
-                        .foregroundColor(t.gold.opacity(0.9))
-                }
-                if let cost = provider.costTodayUSD {
+                // Cursor is limits-only: omit today token/cost (spec §5.6).
+                if provider.id != "cursor" {
+                    if let tokens = provider.tokensToday {
+                        Text(tokenText(tokens))
+                            .foregroundColor(t.gold.opacity(0.9))
+                    }
+                    if let cost = provider.costTodayUSD {
+                        Text("·")
+                        Text(usdText(cost) + (provider.costIsEstimated ? " est" : ""))
+                            .foregroundColor(t.gold.opacity(0.9))
+                    }
                     Text("·")
-                    Text(usdText(cost) + (provider.costIsEstimated ? " est" : ""))
-                        .foregroundColor(t.gold.opacity(0.9))
                 }
-                Text("·")
-                Text("7d")
+                Text(secondary)
                 Text(percent(provider.weekPercent))
                     .foregroundColor(provider.weekNearLimit ? t.amber : t.gold.opacity(0.9))
             }
             .font(.system(size: 9.5, weight: .medium, design: .rounded))
             .foregroundColor(t.mute)
-            SparklineView(values: provider.tokenHistory, color: provider.isNearLimit ? t.amber : t.gold, track: t.track)
-                .frame(height: 18)
+            if provider.id != "cursor", !provider.tokenHistory.isEmpty {
+                SparklineView(values: provider.tokenHistory, color: provider.isNearLimit ? t.amber : t.gold, track: t.track)
+                    .frame(height: 18)
+            }
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
@@ -882,8 +891,10 @@ struct KajiPopoverView: View {
         systemMonitor.snapshot.hasSample ? "\(Int(value.rounded()))%" : "..."
     }
 
-    private var totalTokensToday: Int {
-        shown.compactMap(\.tokensToday).reduce(0, +)
+    private var totalTokensToday: Int? {
+        let vals = shown.compactMap(\.tokensToday)
+        guard !vals.isEmpty else { return nil }
+        return vals.reduce(0, +)
     }
 
     private var totalPressure: Double? {

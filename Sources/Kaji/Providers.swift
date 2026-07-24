@@ -10,6 +10,7 @@ enum Providers {
     /// via `ProviderLogo`; these marks are used when no vector mark exists.
     static let marks: [String: String] = [
         "claude":  "\u{2733}",   // ✳
+        "cursor":  "\u{25C6}",   // ◆
         "codex":   "\u{273B}",   // ✻
         "minimax": "\u{272A}",   // ✪
         "gemini":  "\u{2726}",   // ✦
@@ -23,6 +24,7 @@ enum Providers {
     /// recognize.
     static let displayNames: [String: String] = [
         "claude":  "Claude Code",
+        "cursor":  "Cursor",
         "codex":   "Codex",
         "minimax": "MiniMax",
         "ark-agent": "Ark Agent",
@@ -34,20 +36,20 @@ enum Providers {
     /// Preferred left-to-right display order. Providers not listed here are
     /// appended afterward in alphabetical order.
     static let order: [String] = [
-        "claude", "codex", "ark-agent",
+        "claude", "cursor", "codex", "ark-agent",
         "minimax", "gemini", "kiro", "opencode"
     ]
 
     /// Providers surfaced by default on a fresh install. Optional providers are
     /// available in the toggle list when configured, but stay opt-in until the
     /// quota source is trustworthy.
-    static let visible: Set<String> = ["claude", "codex"]
+    static let visible: Set<String> = ["claude", "cursor", "codex"]
     static func isVisible(_ key: String) -> Bool { visible.contains(key) }
 
     /// Providers allowed into UI controls when quota.py emits them. This is
     /// intentionally broader than the default-visible set, but narrower than
     /// every diagnostic row quota.py can output.
-    static let available: Set<String> = ["claude", "codex", "minimax", "ark-agent"]
+    static let available: Set<String> = ["claude", "cursor", "codex", "minimax", "ark-agent"]
     static func isAvailable(_ key: String) -> Bool { available.contains(key) }
 
     static func mark(for key: String) -> String {

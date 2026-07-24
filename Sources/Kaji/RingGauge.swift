@@ -1,4 +1,5 @@
 import SwiftUI
+import KajiCore
 
 // MARK: - RingGauge
 //
@@ -9,6 +10,7 @@ import SwiftUI
 //   - Below: the provider NAME, then two captions — the 5h reset countdown and
 //     "7d {week}% · {reset}" — so "how long until reset" is answered for BOTH
 //     windows right here in the popover. Localized EN / 中文.
+//     Cursor uses API / Auto captions instead (cursor-quota spec).
 //
 // `showRemaining` flips BOTH the ring trim direction (1-usedFraction) and the
 // center % text (100-used) — "0% means full" instead of "100% means full".
@@ -27,6 +29,16 @@ struct RingGauge: View {
 
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
+
+    private var primaryWindowLabel: String {
+        CursorLimitsLogic.windowLabels(for: provider.id).primary
+    }
+    private var secondaryWindowLabel: String {
+        if provider.id == "cursor" {
+            return CursorLimitsLogic.cursorLabels.secondary
+        }
+        return L10n.t(.week, lang)
+    }
 
     // All ring geometry is derived from ringSize so the gauge scales as a unit.
     private var baseLineWidth: CGFloat { ringSize * (10.0 / 84.0) }
@@ -94,8 +106,8 @@ struct RingGauge: View {
 
                 VStack(spacing: ringSize < 60 ? 0 : 1) {
                     ProviderLogo(key: provider.id, color: arcColor, size: logoSize)
-                    metric("5h", fivePercentText, color: numberColor)
-                    metric(L10n.t(.week, lang), weekPercentText,
+                    metric(primaryWindowLabel, fivePercentText, color: numberColor)
+                    metric(secondaryWindowLabel, weekPercentText,
                            color: provider.weekNearLimit ? t.amber : t.gold)
                 }
             }
@@ -141,13 +153,13 @@ struct RingGauge: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
             // Reset countdowns only. Percentages live in the center.
-            (Text("5h ").foregroundColor(t.mute)
+            (Text("\(primaryWindowLabel) ").foregroundColor(t.mute)
                 + Text(fiveReset).foregroundColor(t.gold))
                 .font(.system(size: capFont, weight: .medium))
                 .lineLimit(1)
                 .truncationMode(.tail)
                 .minimumScaleFactor(0.55)
-            (Text("\(L10n.t(.week, lang)) ").foregroundColor(t.mute)
+            (Text("\(secondaryWindowLabel) ").foregroundColor(t.mute)
                 + Text(weekReset).foregroundColor(t.gold.opacity(0.85)))
                 .font(.system(size: capFont, weight: .medium))
                 .lineLimit(1)

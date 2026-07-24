@@ -34,7 +34,7 @@ So:
 
 ## Current branch policy
 
-- Lean-modules v1 shipped on `main` (v0.6.0). New slices: side branch / worktree → approve spec → land.
+- Lean-modules v1 shipped on `main` (v0.6.0); Cursor quota rings on `v0.6.1`. New slices: side branch / worktree → approve spec → land.
 - WIP feature experiments (heavy break art, etc.) stay parked until they fit an opt-in module.
 
 ## Internal docs (`dev_docs/`)

@@ -80,6 +80,8 @@ final class Prefs: ObservableObject {
         static let allowBreakSkip = "allowBreakSkip"
         static let breakOverlayEnabled = "breakOverlayEnabled"
         static let visibleProvidersV2 = "visibleProvidersV2"
+        /// One-shot: insert `cursor` into saved visible set on upgrade to 0.6.1.
+        static let visibleProvidersCursor = "visibleProvidersCursor"
         static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
@@ -87,17 +89,25 @@ final class Prefs: ObservableObject {
 
     init() {
         let d = UserDefaults.standard
+        var visible: Set<String>
         if let arr = d.array(forKey: Key.visibleProviders) as? [String], !arr.isEmpty {
             let saved = Set(arr)
             if !d.bool(forKey: Key.visibleProvidersV2),
                saved == Set(["claude", "codex", "minimax"]) {
-                visibleProviders = Providers.visible
+                visible = Providers.visible
             } else {
-                visibleProviders = saved
+                visible = saved
             }
         } else {
-            visibleProviders = Providers.visible   // default: claude + codex
+            visible = Providers.visible   // default: claude + cursor + codex
         }
+        // cursor-quota: once, add Cursor alongside Claude/Codex for upgraders.
+        // After this flag is set, toggling Cursor off is respected.
+        if !d.bool(forKey: Key.visibleProvidersCursor) {
+            visible.insert("cursor")
+            d.set(true, forKey: Key.visibleProvidersCursor)
+        }
+        visibleProviders = visible
         d.set(true, forKey: Key.visibleProvidersV2)
 
         // lean-modules-v1: first time key is missing → slim default (quota only).

@@ -27,7 +27,7 @@ See quota pressure at a glance — then back to the agent.
 
 ## What it is
 
-A macOS menu-bar app for **AI coding quota** (Claude Code / Codex and friends). Rings in the bar show 5h / 7d usage and reset timing so you notice pressure before a run dies mid-flight.
+A macOS menu-bar app for **AI coding quota** (Claude Code / Cursor / Codex and friends). Rings in the bar show usage pressure and reset timing so you notice before a run dies mid-flight.
 
 No dashboard. No dock icon. Optional modules for focus breaks, system load, and daily goals — off until you turn them on in Settings.
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import KajiCore
 
 // MARK: - GaugeRowView
 //
@@ -507,6 +508,16 @@ private struct CompactRingRow: View {
     private var weekPercentText: String { displayPercent(provider.weekPercent) }
     private var numberColor: Color { provider.isNearLimit ? t.amber : t.cream }
 
+    private var primaryWindowLabel: String {
+        CursorLimitsLogic.windowLabels(for: provider.id).primary
+    }
+    private var secondaryWindowLabel: String {
+        if provider.id == "cursor" {
+            return CursorLimitsLogic.cursorLabels.secondary
+        }
+        return L10n.t(.week, lang)
+    }
+
     var body: some View {
         HStack(alignment: .center, spacing: 14) {
             // Ring face on the left — same concentric ring + logo + % as
@@ -534,8 +545,8 @@ private struct CompactRingRow: View {
 
                 VStack(spacing: 0) {
                     ProviderLogo(key: provider.id, color: arcColor, size: logoSize)
-                    metric("5h", fivePercentText, color: numberColor)
-                    metric(L10n.t(.week, lang), weekPercentText,
+                    metric(primaryWindowLabel, fivePercentText, color: numberColor)
+                    metric(secondaryWindowLabel, weekPercentText,
                            color: provider.weekNearLimit ? t.amber : t.gold)
                 }
             }
@@ -573,7 +584,7 @@ private struct CompactRingRow: View {
                 .lineLimit(1)
             // Secondary: reset timing. Percentages live in the ring.
             HStack(spacing: 4) {
-                Text("5h \(fivePercentText)")
+                Text("\(primaryWindowLabel) \(fivePercentText)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(t.mute)
                 Text(fiveReset)
@@ -582,7 +593,7 @@ private struct CompactRingRow: View {
             }
             .lineLimit(1)
             HStack(spacing: 4) {
-                Text("\(L10n.t(.week, lang)) \(weekPercentText)")
+                Text("\(secondaryWindowLabel) \(weekPercentText)")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(t.mute)
                 Text(weekReset)
