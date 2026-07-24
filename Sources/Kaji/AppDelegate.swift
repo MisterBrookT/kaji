@@ -59,10 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
-        prefs.$menubarStyle
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.updateStatusItem() }
-            .store(in: &cancellables)
         prefs.$showRemaining
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
@@ -198,7 +194,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
 
         let view = StatusItemView(providers: visibleProviders,
-                                  style: .blackWhite,
                                   showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil)
         hostingView = KajiHostingView(rootView: view)
@@ -219,7 +214,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
-                                               style: .blackWhite,
                                                showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil)
         statusItem.length = statusItemLength

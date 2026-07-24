@@ -17,7 +17,6 @@ import SwiftUI
 struct RingGauge: View {
     let provider: ProviderView
     var lang: Lang = .en
-    var style: MenubarStyle = .mono
     /// When true, the ring + % read as REMAINING (100% used → empty ring + 0%).
     var showRemaining: Bool = false
 
@@ -27,7 +26,7 @@ struct RingGauge: View {
     var ringSize: CGFloat = 84
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme, style) }
+    private var t: KajiTheme { .resolve(scheme) }
 
     // All ring geometry is derived from ringSize so the gauge scales as a unit.
     private var baseLineWidth: CGFloat { ringSize * (10.0 / 84.0) }

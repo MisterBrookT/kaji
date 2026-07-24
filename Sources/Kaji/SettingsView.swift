@@ -12,7 +12,7 @@ struct SettingsView: View {
     @ObservedObject var petCatalog: PetCatalogStore
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
+    private var t: KajiTheme { .resolve(scheme) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -34,14 +34,6 @@ struct SettingsView: View {
                     settingRow(title: L10n.t(.language, prefs.language)) {
                         segment(prefs.language.label, on: true) {
                             prefs.language = prefs.language.toggled
-                        }
-                    }
-                    settingRow(title: L10n.t(.menubar, prefs.language)) {
-                        segment(L10n.t(.styleBlackWhite, prefs.language), on: prefs.menubarStyle == .blackWhite) {
-                            prefs.menubarStyle = .blackWhite
-                        }
-                        segment(L10n.t(.styleColor, prefs.language), on: prefs.menubarStyle == .color) {
-                            prefs.menubarStyle = .color
                         }
                     }
                     settingRow(title: L10n.t(.usage, prefs.language)) {

@@ -14,8 +14,8 @@ import KajiCore
 //     Quota is always forced on. First migration writes slim default (quota).
 //   - language: EN / 中文. Drives all captions + menu text. First run follows
 //     the macOS locale.
-//   - menubarStyle: the visual language. `.blackWhite` is the default strict
-//     mono mode. `.color` is the green accent mode. `.mono` is legacy only.
+//   - menubarStyle: kept for prefs migration (option B). Always `.blackWhite`;
+//     legacy `"color"` / `"mono"` are normalized and written back on load.
 @MainActor
 final class Prefs: ObservableObject {
     @Published var visibleProviders: Set<String> {
@@ -114,10 +114,12 @@ final class Prefs: ObservableObject {
         } else {
             language = Lang.system                  // follow macOS locale on first run
         }
-        if let raw = d.string(forKey: Key.menubarStyle), let s = MenubarStyle(rawValue: raw) {
-            menubarStyle = s == .mono ? .blackWhite : s
-        } else {
-            menubarStyle = .blackWhite              // strict mono by default
+        // Mono-only: collapse legacy color/mono/unknown → blackWhite and write back.
+        let storedStyle = d.string(forKey: Key.menubarStyle)
+        let normalizedStyle = ThemePrefsLogic.normalizeMenubarStyle(storedStyle)
+        menubarStyle = MenubarStyle(rawValue: normalizedStyle) ?? .blackWhite
+        if ThemePrefsLogic.shouldRewriteMenubarStyle(storedStyle) {
+            d.set(normalizedStyle, forKey: Key.menubarStyle)
         }
         // Default to showing USED — matches what the rings always did and
         // avoids surprising existing users on first launch after upgrade.
@@ -217,20 +219,11 @@ enum Lang: String {
     var label: String { self == .en ? "EN" : "\u{4E2D}\u{6587}" }   // 中文
 }
 
-// MARK: - Menu-bar style
+// MARK: - Menu-bar style (option B: single meaningful case)
 
 enum MenubarStyle: String {
-    case mono     // Legacy stored value; migrated to .blackWhite on load.
-    case color    // Green accent mode.
-    case blackWhite // Mono: black/white popover, default
-
-    var toggled: MenubarStyle {
-        switch self {
-        case .mono: return .blackWhite
-        case .color: return .blackWhite
-        case .blackWhite: return .color
-        }
-    }
+    /// Strict mono — the only product style after mono-only.
+    case blackWhite
 }
 
 enum PanelSize: String, CaseIterable {
@@ -260,7 +253,6 @@ enum L10n {
     enum K {
         case fiveHQuota, week, quit, stale, waiting, needPython
         case refreshNow, quitApp, settings, advancedSettings, appearance, language, providers, show
-        case menubar, styleMono, styleColor, styleBlackWhite
             case usage, showUsed, showRemaining
             case panelSize, sizeSmall, sizeMedium
             case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
@@ -325,10 +317,6 @@ enum L10n {
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
         .show:         ("Show",                "\u{663E}\u{793A}"),                         // 显示
-        .menubar:      ("Style",              "\u{98CE}\u{683C}"),                         // 风格
-        .styleMono:    ("Legacy",             "\u{65E7}\u{7248}"),                         // 旧版
-        .styleColor:   ("Green",              "\u{7EFF}\u{8272}"),                         // 绿色
-        .styleBlackWhite: ("Mono",            "\u{9ED1}\u{767D}"),                         // 黑白
         .usage:        ("Usage",              "\u{7528}\u{91CF}"),                         // 用量
         .showUsed:     ("Used",               "\u{5DF2}\u{7528}"),                         // 已用
         .showRemaining:("Remaining",          "\u{5269}\u{4F59}"),                         // 剩余
