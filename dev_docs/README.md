@@ -18,7 +18,7 @@
 | Done | [ship/distribution.md](ship/distribution.md) |
 | **Approved** | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) — 已落地 |
 | **Review** | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) — Work 菜单栏倒计时槽（待审） |
-| **Review** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — Mono-only；删 Color / Calm / Playful |
+| **Approved** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — 方案 B；待实现 |
 | Parked | [index.html](index.html) |
 | Optional | [design/palette.html](design/palette.html) |
 
