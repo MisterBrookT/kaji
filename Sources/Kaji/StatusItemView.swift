@@ -39,7 +39,7 @@ struct StatusItemView: View {
                 }
             }
             if let workSlotLabel {
-                WorkStatusSlot(label: workSlotLabel, style: style)
+                WorkStatusSlot(label: workSlotLabel)
             }
         }
         .padding(.horizontal, 3)
@@ -58,21 +58,15 @@ struct StatusItemView: View {
 
 // MARK: - WorkStatusSlot
 //
-// Compact remaining-time label beside the quota rings. Mono / blackWhite only;
+// Compact remaining-time label beside the quota rings. Mono only;
 // never shows the string "BREAK" (spec §4).
 private struct WorkStatusSlot: View {
     let label: String
-    let style: MenubarStyle
 
     @Environment(\.colorScheme) private var scheme
 
     private var color: Color {
-        switch style {
-        case .blackWhite:
-            return scheme == .dark ? .white : .black
-        case .mono, .color:
-            return KajiTheme.resolve(scheme, style).cream
-        }
+        scheme == .dark ? .white : .black
     }
 
     var body: some View {
