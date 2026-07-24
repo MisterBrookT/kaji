@@ -90,12 +90,12 @@ private struct DualRing: View {
     @Environment(\.colorScheme) private var scheme
 
     private let dim: CGFloat = 21
-    private let outerLW: CGFloat = 2.3
+    private let outerLW: CGFloat = 2.0
     private let innerLW: CGFloat = 1.7
     private let gap: CGFloat = 1.3
 
     private var base: Color { scheme == .dark ? .white : .black }
-    private var innerColor: Color { base.opacity(0.5) }
+    private var innerColor: Color { base.opacity(0.65) }
     private var trackColor: Color { base.opacity(0.22) }
 
     private var fiveFraction: Double {
