@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import KajiCore
 
 // MARK: - SettingsView
 //
@@ -16,6 +17,18 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
+            settingBlock(title: L10n.t(.modules, prefs.language)) {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(L10n.t(.modulesHint, prefs.language))
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundColor(t.mute)
+                        .fixedSize(horizontal: false, vertical: true)
+                    moduleRow(.quota, title: L10n.t(.moduleQuota, prefs.language), lockedOn: true)
+                    moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
+                    moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
+                    moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
+                }
+            }
             settingBlock(title: L10n.t(.appearance, prefs.language)) {
                 VStack(alignment: .leading, spacing: 10) {
                     settingRow(title: L10n.t(.language, prefs.language)) {
@@ -64,26 +77,28 @@ struct SettingsView: View {
                     }
                 }
             }
-            settingBlock(title: L10n.t(.work, prefs.language)) {
-                VStack(alignment: .leading, spacing: 10) {
-                    settingRow(title: L10n.t(.focusLength, prefs.language)) {
-                        segment("25m", on: prefs.focusMinutes == 25) { prefs.focusMinutes = 25 }
-                        segment("45m", on: prefs.focusMinutes == 45) { prefs.focusMinutes = 45 }
-                        segment("60m", on: prefs.focusMinutes == 60) { prefs.focusMinutes = 60 }
-                    }
-                    settingRow(title: L10n.t(.breakLength, prefs.language)) {
-                        segment("2m", on: prefs.breakMinutes == 2) { prefs.breakMinutes = 2 }
-                        segment("5m", on: prefs.breakMinutes == 5) { prefs.breakMinutes = 5 }
-                        segment("10m", on: prefs.breakMinutes == 10) { prefs.breakMinutes = 10 }
-                    }
-                    settingRow(title: L10n.t(.skipBreak, prefs.language)) {
-                        segment(prefs.allowBreakSkip ? "On" : "Off", on: prefs.allowBreakSkip) {
-                            prefs.allowBreakSkip.toggle()
+            if prefs.isModuleEnabled(.work) {
+                settingBlock(title: L10n.t(.work, prefs.language)) {
+                    VStack(alignment: .leading, spacing: 10) {
+                        settingRow(title: L10n.t(.focusLength, prefs.language)) {
+                            segment("25m", on: prefs.focusMinutes == 25) { prefs.focusMinutes = 25 }
+                            segment("45m", on: prefs.focusMinutes == 45) { prefs.focusMinutes = 45 }
+                            segment("60m", on: prefs.focusMinutes == 60) { prefs.focusMinutes = 60 }
                         }
-                    }
-                    settingRow(title: L10n.t(.breakOverlay, prefs.language)) {
-                        segment(prefs.breakOverlayEnabled ? "On" : "Off", on: prefs.breakOverlayEnabled) {
-                            prefs.breakOverlayEnabled.toggle()
+                        settingRow(title: L10n.t(.breakLength, prefs.language)) {
+                            segment("2m", on: prefs.breakMinutes == 2) { prefs.breakMinutes = 2 }
+                            segment("5m", on: prefs.breakMinutes == 5) { prefs.breakMinutes = 5 }
+                            segment("10m", on: prefs.breakMinutes == 10) { prefs.breakMinutes = 10 }
+                        }
+                        settingRow(title: L10n.t(.skipBreak, prefs.language)) {
+                            segment(prefs.allowBreakSkip ? "On" : "Off", on: prefs.allowBreakSkip) {
+                                prefs.allowBreakSkip.toggle()
+                            }
+                        }
+                        settingRow(title: L10n.t(.breakOverlay, prefs.language)) {
+                            segment(prefs.breakOverlayEnabled ? "On" : "Off", on: prefs.breakOverlayEnabled) {
+                                prefs.breakOverlayEnabled.toggle()
+                            }
                         }
                     }
                 }
@@ -106,6 +121,20 @@ struct SettingsView: View {
         .background(t.bg)
         .onAppear {
             refreshPetCatalogSelection()
+        }
+    }
+
+    private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {
+        let on = prefs.isModuleEnabled(id)
+        return settingRow(title: title) {
+            segment("On", on: on) {
+                if !lockedOn { prefs.setModule(id, enabled: true) }
+            }
+            .disabled(lockedOn && on)
+            segment("Off", on: !on) {
+                if !lockedOn { prefs.setModule(id, enabled: false) }
+            }
+            .disabled(lockedOn)
         }
     }
 

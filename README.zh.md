@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="https://cdn.jsdelivr.net/gh/blackblue-labs/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="dev_docs/assets/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -19,7 +19,7 @@
 <br />
 <br />
 
-<img src="docs/readme-hero-20260708.jpg" width="860" alt="Kaji 菜单栏弹窗" />
+<img src="dev_docs/assets/readme-hero-20260708.jpg" width="860" alt="Kaji 菜单栏弹窗" />
 
 </div>
 
@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 需要 macOS 13+ 和 Apple Silicon。Kaji 目前未签名；安装脚本会清除 quarantine，并把最新版安装到 `/Applications`。
 
-如果浏览器直接下载后提示“已损坏”，请用上面的安装命令。见 [分发说明](docs/distribution.md)。
+如果浏览器直接下载后提示“已损坏”，请用上面的安装命令。见 [分发说明](dev_docs/ship/distribution.md)。
 
 ## Kaji 能做什么
 
@@ -103,9 +103,8 @@ swift run
 
 ## 链接
 
-- [桌宠桥接](docs/pet-bridge.md)
-- [设计语言](docs/design-language.md)
-- [分发说明](docs/distribution.md)
+- [AGENTS.md](AGENTS.md) — 贡献者 / agent 方向
+- 内部笔记：[dev_docs/README.md](dev_docs/README.md)
 
 ## License
 

@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kaji Mono palette</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --ink: #20201D;
+      --paper: #F8F8F6;
+      --line: #E5E5E1;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 24px 64px;
+      font: 14px/1.45 ui-sans-serif, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      color: var(--ink);
+      background: var(--paper);
+    }
+    h1 { font-size: 22px; margin: 0 0 6px; letter-spacing: -0.02em; }
+    .sub { color: #70706A; margin: 0 0 28px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      max-width: 920px;
+    }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } }
+    .board {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .board.dark {
+      background: #121212;
+      border-color: #333330;
+      color: #F0F0EC;
+    }
+    .board h2 {
+      margin: 0;
+      padding: 14px 16px;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--line);
+    }
+    .board.dark h2 { border-bottom-color: #333330; color: #A0A09A; }
+    .swatch {
+      display: grid;
+      grid-template-columns: 72px 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .board.dark .swatch { border-bottom-color: #333330; }
+    .swatch:last-child { border-bottom: 0; }
+    .chip {
+      width: 72px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid rgba(0,0,0,0.08);
+    }
+    .board.dark .chip { border-color: rgba(255,255,255,0.12); }
+    .name { font-weight: 600; }
+    .role { color: #70706A; font-size: 12px; }
+    .board.dark .role { color: #A0A09A; }
+    code {
+      font: 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      opacity: 0.85;
+    }
+    .note {
+      max-width: 920px;
+      margin-top: 24px;
+      color: #70706A;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Kaji Mono</h1>
+  <p class="sub">Single product palette. Light / Dark only — no Calm / Playful themes.</p>
+
+  <div class="grid">
+    <section class="board" id="light"></section>
+    <section class="board dark" id="dark"></section>
+  </div>
+
+  <p class="note">Source tokens live in <code>dev_docs/design/design-language.md</code> and
+    <code>Sources/Kaji/Palette.swift</code> (<code>monoLight</code> / <code>monoDark</code>).</p>
+
+  <script>
+    const light = [
+      ["Background", "#F8F8F6", "App / popover ground"],
+      ["Background top", "#FFFFFF", "Soft gradient top"],
+      ["Surface", "#FFFFFF", "Cards / controls"],
+      ["Text", "#20201D", "Primary labels"],
+      ["Secondary", "#70706A", "Captions"],
+      ["Faint", "#B2B2AC", "Disabled"],
+      ["Track", "#E5E5E1", "Ring track"],
+      ["Value / Accent", "#666660", "Normal arc"],
+      ["Warning", "#3D3D39", "Near-limit"],
+    ];
+    const dark = [
+      ["Background", "#121212", "App / popover ground"],
+      ["Background top", "#191919", "Soft gradient top"],
+      ["Surface", "#202020", "Cards / controls"],
+      ["Text", "#F0F0EC", "Primary labels"],
+      ["Secondary", "#A0A09A", "Captions"],
+      ["Faint", "#62625D", "Disabled"],
+      ["Track", "#333330", "Ring track"],
+      ["Value / Accent", "#D2D2CC", "Normal arc"],
+      ["Warning", "#F0F0EC", "Near-limit"],
+    ];
+
+    function fill(id, title, rows, darkMode) {
+      const root = document.getElementById(id);
+      root.innerHTML = `<h2>${title}</h2>` + rows.map(([name, hex, role]) => `
+        <div class="swatch">
+          <div class="chip" style="background:${hex}"></div>
+          <div>
+            <div class="name">${name}</div>
+            <div class="role">${role}</div>
+          </div>
+          <code>${hex}</code>
+        </div>`).join("");
+    }
+
+    fill("light", "Light", light, false);
+    fill("dark", "Dark", dark, true);
+  </script>
+</body>
+</html>

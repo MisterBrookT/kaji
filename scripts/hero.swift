@@ -100,21 +100,21 @@ struct HeroView: View {
     }
 
     private var statusCard: some View {
-        PNGImage(path: "docs/menubar-light.png")
+        PNGImage(path: "dev_docs/assets/menubar-light.png")
             .frame(width: 520, height: 39)
             .frame(width: 600, height: 82)
             .background(card)
     }
 
     private var productCard: some View {
-        PNGImage(path: "docs/gauge-light.png")
+        PNGImage(path: "dev_docs/assets/gauge-light.png")
             .frame(width: 500, height: 440)
             .frame(width: 600, height: 480)
             .background(card)
     }
 
     private var petSticker: some View {
-        PNGImage(path: "docs/pet-panda.png")
+        PNGImage(path: "dev_docs/assets/pet-panda.png")
             .frame(width: 285, height: 164)
             .frame(width: 600, height: 164, alignment: .trailing)
             .padding(.top, -2)
@@ -150,7 +150,7 @@ func renderHero(to path: String) {
 struct HeroMain {
     static func main() {
         MainActor.assumeIsolated {
-            let out = CommandLine.arguments.dropFirst().first ?? "docs/hero.png"
+            let out = CommandLine.arguments.dropFirst().first ?? "dev_docs/assets/hero.png"
             renderHero(to: out)
         }
     }

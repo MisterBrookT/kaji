@@ -1,7 +1,7 @@
 <div align="center">
 
 <h1>
-  <img src="https://cdn.jsdelivr.net/gh/blackblue-labs/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="dev_docs/assets/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
@@ -19,7 +19,7 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 <br />
 <br />
 
-<img src="docs/readme-hero-20260708.jpg" width="860" alt="Kaji menu bar popover" />
+<img src="dev_docs/assets/readme-hero-20260708.jpg" width="860" alt="Kaji menu bar popover" />
 
 </div>
 
@@ -41,7 +41,7 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the current build to `/Applications`.
 
-If a direct browser download says the app is damaged, use the install command above. See [Distribution](docs/distribution.md).
+If a direct browser download says the app is damaged, use the install command above. See [Distribution](dev_docs/ship/distribution.md).
 
 ## What Kaji Does
 
@@ -103,9 +103,8 @@ Use `scripts/build-local.sh` for release-style local app bundles. It assembles `
 
 ## Links
 
-- [Pet bridge](docs/pet-bridge.md)
-- [Design language](docs/design-language.md)
-- [Distribution](docs/distribution.md)
+- [AGENTS.md](AGENTS.md) — contributor / agent direction
+- Internal notes: [dev_docs/README.md](dev_docs/README.md)
 
 ## License
 

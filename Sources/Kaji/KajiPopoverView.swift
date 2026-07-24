@@ -1,11 +1,5 @@
 import SwiftUI
-
-private enum KajiPanel: Int, CaseIterable {
-    case quota
-    case work
-    case system
-    case goals
-}
+import KajiCore
 
 private struct PopoverContentSizeKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
@@ -27,7 +21,7 @@ struct KajiPopoverView: View {
     let maxContentHeight: CGFloat
     let onContentSizeChange: ((CGSize) -> Void)?
 
-    @State private var panel: KajiPanel = .quota
+    @State private var panel: KajiModuleID = .quota
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
     @State private var showCleanConfirmation = false
     @Environment(\.colorScheme) private var scheme
@@ -35,6 +29,10 @@ struct KajiPopoverView: View {
     private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
     private var shown: [ProviderView] { store.providers.filter { prefs.isVisible($0.id) } }
     private var panelScrollMaxHeight: CGFloat { max(180, maxContentHeight - 104) }
+    private var pages: [KajiModuleID] { prefs.popoverModulePages }
+    private var pageIndex: Int {
+        pages.firstIndex(of: panel) ?? 0
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -59,11 +57,17 @@ struct KajiPopoverView: View {
         .onPreferenceChange(PopoverContentSizeKey.self) { size in
             onContentSizeChange?(size)
         }
+        .onAppear { clampPanelToEnabledPages() }
+        .onChange(of: prefs.enabledModules) { _ in
+            clampPanelToEnabledPages()
+        }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            arrow("chevron.left") { move(-1) }
+            if pages.count > 1 {
+                arrow("chevron.left") { move(-1) }
+            }
             VStack(alignment: .leading, spacing: 2) {
                 Text(panelTitle)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
@@ -75,10 +79,12 @@ struct KajiPopoverView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            Text("\(panel.rawValue + 1)/\(KajiPanel.allCases.count)")
+            Text("\(pageIndex + 1)/\(max(pages.count, 1))")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .foregroundColor(t.ash)
-            arrow("chevron.right") { move(1) }
+            if pages.count > 1 {
+                arrow("chevron.right") { move(1) }
+            }
         }
     }
 
@@ -717,9 +723,21 @@ struct KajiPopoverView: View {
     }
 
     private func move(_ delta: Int) {
-        let count = KajiPanel.allCases.count
-        let next = (panel.rawValue + delta + count) % count
-        panel = KajiPanel(rawValue: next) ?? .quota
+        let list = pages
+        guard list.count > 1 else { return }
+        let next = (pageIndex + delta + list.count) % list.count
+        panel = list[next]
+    }
+
+    private func clampPanelToEnabledPages() {
+        let list = pages
+        if list.isEmpty {
+            panel = .quota
+            return
+        }
+        if !list.contains(panel) {
+            panel = list[0]
+        }
     }
 
     private func arrow(_ systemName: String, action: @escaping () -> Void) -> some View {

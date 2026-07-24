@@ -1,6 +1,7 @@
 import Foundation
 import Combine
 import CoreGraphics
+import KajiCore
 
 // MARK: - Prefs
 //
@@ -9,6 +10,8 @@ import CoreGraphics
 //
 //   - visibleProviders: which provider rings to show. Toggleable from the
 //     popover footer or the popover. Never empties to zero.
+//   - enabledModules: which first-party panels are on (lean-modules-v1).
+//     Quota is always forced on. First migration writes slim default (quota).
 //   - language: EN / 中文. Drives all captions + menu text. First run follows
 //     the macOS locale.
 //   - menubarStyle: the visual language. `.blackWhite` is the default strict
@@ -17,6 +20,12 @@ import CoreGraphics
 final class Prefs: ObservableObject {
     @Published var visibleProviders: Set<String> {
         didSet { UserDefaults.standard.set(Array(visibleProviders), forKey: Key.visibleProviders) }
+    }
+    @Published var enabledModules: Set<KajiModuleID> {
+        didSet {
+            let raw = enabledModules.map(\.rawValue).sorted()
+            UserDefaults.standard.set(raw, forKey: Key.enabledModules)
+        }
     }
     @Published var language: Lang {
         didSet { UserDefaults.standard.set(language.rawValue, forKey: Key.language) }
@@ -60,6 +69,7 @@ final class Prefs: ObservableObject {
 
     enum Key {
         static let visibleProviders = "visibleProviders"
+        static let enabledModules = "enabledModules"
         static let language = "language"
         static let menubarStyle = "menubarStyle"
         static let showRemaining = "showRemaining"
@@ -89,6 +99,16 @@ final class Prefs: ObservableObject {
             visibleProviders = Providers.visible   // default: claude + codex
         }
         d.set(true, forKey: Key.visibleProvidersV2)
+
+        // lean-modules-v1: first time key is missing → slim default (quota only).
+        if d.object(forKey: Key.enabledModules) == nil {
+            enabledModules = ModulePrefsLogic.slimDefault
+            d.set(Array(ModulePrefsLogic.slimDefault.map(\.rawValue)), forKey: Key.enabledModules)
+        } else {
+            let raw = d.array(forKey: Key.enabledModules) as? [String]
+            enabledModules = ModulePrefsLogic.normalizeEnabledModules(raw)
+        }
+
         if let raw = d.string(forKey: Key.language), let l = Lang(rawValue: raw) {
             language = l
         } else {
@@ -155,6 +175,31 @@ final class Prefs: ObservableObject {
     }
 
     func isVisible(_ key: String) -> Bool { visibleProviders.contains(key) }
+
+    func isModuleEnabled(_ id: KajiModuleID) -> Bool {
+        enabledModules.contains(id)
+    }
+
+    /// Enable/disable a module. Quota cannot be turned off.
+    func setModule(_ id: KajiModuleID, enabled: Bool) {
+        guard id != .quota else {
+            enabledModules = ModulePrefsLogic.normalizeEnabledModules(
+                Array(enabledModules.map(\.rawValue))
+            )
+            return
+        }
+        var next = enabledModules
+        if enabled {
+            next.insert(id)
+        } else {
+            next.remove(id)
+        }
+        enabledModules = ModulePrefsLogic.normalizeEnabledModules(Array(next.map(\.rawValue)))
+    }
+
+    var popoverModulePages: [KajiModuleID] {
+        ModulePrefsLogic.popoverPages(enabled: enabledModules)
+    }
 }
 
 // MARK: - Language
@@ -223,6 +268,8 @@ enum L10n {
             case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
             case work, focusLength, breakLength, skipBreak, breakOverlay
             case launchAtLogin
+            case modules, modulesHint
+            case moduleQuota, moduleWork, moduleSystem, moduleGoals
     }
 
     private static let table: [K: (en: String, zh: String)] = [
@@ -267,6 +314,13 @@ enum L10n {
         .breakLength:  ("Break",               "\u{4F11}\u{606F}"),                         // 休息
         .skipBreak:    ("Allow Skip",          "\u{5141}\u{8BB8}\u{8DF3}\u{8FC7}"),         // 允许跳过
         .breakOverlay: ("Hard Break",          "\u{5F3A}\u{5236}\u{4F11}\u{606F}"),         // 强制休息
+        .modules:      ("Modules",             "\u{6A21}\u{5757}"),                         // 模块
+        .modulesHint:  ("Default is Quota only. Turn on what you need.",
+                        "\u{9ED8}\u{8BA4}\u{53EA}\u{5F00} Quota\u{3002}\u{6309}\u{9700}\u{6253}\u{5F00}\u{5176}\u{4F59}\u{3002}"), // 默认只开 Quota。按需打开其余。
+        .moduleQuota:  ("Quota",               "Quota"),
+        .moduleWork:   ("Work / Break",        "Work / Break"),
+        .moduleSystem: ("System",              "System"),
+        .moduleGoals:  ("Goals",               "Goals"),
         .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
         .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
         .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
