@@ -23,6 +23,9 @@ struct StatusItemView: View {
     /// corner of the glyph as a passive "update available" cue (open popover ->
     /// "Update to vX" to act on it). No notification permission needed.
     var updateAvailable: Bool = false
+    /// Optional work countdown (`MM:SS`) to the right of the rings.
+    /// `nil` when the work module is disabled — no slot rendered.
+    var workSlotLabel: String? = nil
 
     @Environment(\.colorScheme) private var scheme
 
@@ -39,6 +42,9 @@ struct StatusItemView: View {
                     DualRing(provider: p, style: style, showRemaining: showRemaining)
                 }
             }
+            if let workSlotLabel {
+                WorkStatusSlot(label: workSlotLabel, style: style)
+            }
         }
         .padding(.horizontal, 3)
         .frame(height: 22)
@@ -51,6 +57,35 @@ struct StatusItemView: View {
                     .offset(x: 1, y: 1)
             }
         }
+    }
+}
+
+// MARK: - WorkStatusSlot
+//
+// Compact remaining-time label beside the quota rings. Mono / blackWhite only;
+// never shows the string "BREAK" (spec §4).
+private struct WorkStatusSlot: View {
+    let label: String
+    let style: MenubarStyle
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var color: Color {
+        switch style {
+        case .blackWhite:
+            return scheme == .dark ? .white : .black
+        case .mono, .color:
+            return KajiTheme.resolve(scheme, style).cream
+        }
+    }
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .foregroundStyle(color)
+            .monospacedDigit()
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 

@@ -82,6 +82,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] modules in
                 self?.applyModuleLifecycle(modules)
+                self?.updateStatusItem()
                 self?.rebuildPopoverContentIfShown()
             }
             .store(in: &cancellables)
@@ -93,7 +94,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] phase in
                 self?.handleWorkPhaseChanged(phase)
+                self?.updateStatusItem()
             }
+            .store(in: &cancellables)
+        // Second-level work clocks drive the menu-bar countdown when work is on.
+        workSession.$workElapsed
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        workSession.$breakRemaining
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
         prefs.$autoCleanEnabled
             .receive(on: RunLoop.main)
@@ -200,7 +211,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = StatusItemView(providers: visibleProviders,
                                   style: .blackWhite,
                                   showRemaining: prefs.showRemaining,
-                                  updateAvailable: updateChecker.available != nil)
+                                  updateAvailable: updateChecker.available != nil,
+                                  workSlotLabel: workStatusSlotLabel)
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -221,13 +233,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
                                                style: .blackWhite,
                                                showRemaining: prefs.showRemaining,
-                                               updateAvailable: updateChecker.available != nil)
+                                               updateAvailable: updateChecker.available != nil,
+                                               workSlotLabel: workStatusSlotLabel)
         statusItem.length = statusItemLength
+    }
+
+    /// Menu-bar work countdown from `WorkStatusSlotModel` (nil when work off).
+    private var workStatusSlotLabel: String? {
+        let phase: WorkStatusSlotPhase
+        switch workSession.phase {
+        case .working: phase = .working
+        case .breakDue: phase = .breakDue
+        case .breaking: phase = .breaking
+        }
+        let focusRemaining = max(0, workSession.focusTarget - workSession.workElapsed)
+        return WorkStatusSlotModel.label(
+            workEnabled: prefs.isModuleEnabled(.work),
+            phase: phase,
+            focusRemaining: focusRemaining,
+            breakRemaining: workSession.breakRemaining
+        )
     }
 
     private var statusItemLength: CGFloat {
         let count = max(1, min(4, visibleProviders.count))
-        return CGFloat(count) * 26 + 6
+        var length = CGFloat(count) * 26 + 6
+        // Compact monospaced `MM:SS` to the right of the rings (~40pt).
+        if workStatusSlotLabel != nil {
+            length += 40
+        }
+        return length
     }
 
     @objc private func statusButtonClicked(_ sender: NSStatusBarButton) {

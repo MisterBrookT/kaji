@@ -17,7 +17,7 @@
 | Done | [integrate/pet-bridge.md](integrate/pet-bridge.md) |
 | Done | [ship/distribution.md](ship/distribution.md) |
 | **Approved** | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) — 已落地 |
-| **Review** | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) — Work 菜单栏倒计时槽（待审） |
+| **Approved** | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) — focus/break 剩余数字；无 BREAK 文案 |
 | **Approved** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — 方案 B；待实现 |
 | Parked | [index.html](index.html) |
 | Optional | [design/palette.html](design/palette.html) |
@@ -56,7 +56,7 @@
 | Doc | Notes |
 | --- | --- |
 | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) | 已通过并落地 |
-| [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) | draft 待审：work 状态栏槽 |
+| [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) | 已通过：focus/break 剩余 `MM:SS`，无 BREAK |
 | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) | **Review**；只留黑白灰 Mono light/dark |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
