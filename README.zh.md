@@ -39,9 +39,11 @@ Coding agent 很好用，但额度、上下文、注意力、系统压力都会�
 curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
 ```
 
-需要 macOS 13+ 和 Apple Silicon。Kaji 目前未签名；安装脚本会清除 quarantine，并把最新版安装到 `/Applications`。
+需要 macOS 13+、Apple Silicon，以及 `git` 与 `swift`。安装脚本会拉取最新 release tag、本机构建、清除 quarantine，并装到 `/Applications`。
 
-如果浏览器直接下载后提示“已损坏”，请用上面的安装命令。见 [分发说明](dev_docs/ship/distribution.md)。
+我们**不**再提供可下载的 `.app.zip`（未签名 zip 容易被 Gatekeeper 拦）。Release 页上的 source archive 只适合阅读源码；要跑起来请用上面的安装命令，或 `./scripts/build-local.sh`。
+
+见 [分发说明](dev_docs/ship/distribution.md)。
 
 ## Kaji 能做什么
 

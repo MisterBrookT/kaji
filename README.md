@@ -39,9 +39,11 @@ No dashboard. No dock icon. One glance, then back to work.
 curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
 ```
 
-Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the current build to `/Applications`.
+Requires macOS 13+ on Apple Silicon, plus `git` and `swift`. The installer clones the latest release tag, builds locally, clears quarantine, and installs to `/Applications`.
 
-If a direct browser download says the app is damaged, use the install command above. See [Distribution](dev_docs/ship/distribution.md).
+We do **not** ship a downloadable `.app.zip` (unsigned zip downloads trip Gatekeeper). GitHub’s source archives on the Release page are fine for reading; use the install command or `./scripts/build-local.sh` to run the app.
+
+See [Distribution](dev_docs/ship/distribution.md).
 
 ## What Kaji Does
 

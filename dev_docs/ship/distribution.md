@@ -2,14 +2,19 @@
 
 ## Current State
 
-Kaji release builds are unsigned and not notarized.
+Kaji is **unsigned and not notarized**. Releases publish **source + written notes** only — no `.app.zip` asset.
 
-Expected behavior:
+Install path:
 
-- `curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash` works because the installer clears the quarantine xattr after copying the app.
-- Direct browser download may show: `Kaji is damaged and can't be opened. You should move it to the Trash.`
+```sh
+curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
+```
 
-This is Gatekeeper. Chrome/Safari attach `com.apple.quarantine` to downloaded apps. macOS then checks whether the app is signed with Developer ID and notarized by Apple. Kaji is not yet signed/notarized, so Gatekeeper blocks it.
+`install.sh` clones the latest release tag, builds with `scripts/build-app.sh`, copies to `/Applications`, and clears the quarantine xattr.
+
+Browser `.app.zip` downloads used to show: `Kaji is damaged and can't be opened…` — Gatekeeper + unsigned binary. That asset is intentionally gone.
+
+Authored release notes live in `dev_docs/ship/releases/vX.Y.Z.md` and are attached by `.github/workflows/release.yml` when you push that tag.
 
 ## Temporary Internal Fix
 

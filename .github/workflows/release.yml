@@ -1,8 +1,8 @@
 name: Release
 
-# Tag a version (e.g. `git tag v0.1.0 && git push --tags`) to build the .app
-# bundle on a clean macOS runner and attach it to a GitHub Release. The curl
-# installer (install.sh) pulls the asset from the latest release.
+# Tag a version (e.g. `git tag v0.6.1 && git push --tags`) to publish a
+# GitHub Release. Notes come from `dev_docs/ship/releases/<tag>.md` when
+# present. No .app.zip — install builds from source (see install.sh).
 on:
   push:
     tags: ['v*']
@@ -12,20 +12,31 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build app bundle
-        run: ./scripts/build-app.sh
-
-      - name: Zip the .app
+      - name: Resolve release notes
+        id: notes
         run: |
-          cd dist
-          zip -r -y Kaji.app.zip Kaji.app
+          TAG="${GITHUB_REF_NAME}"
+          NOTES="dev_docs/ship/releases/${TAG}.md"
+          if [[ -f "$NOTES" ]]; then
+            echo "path=$NOTES" >> "$GITHUB_OUTPUT"
+            echo "Using $NOTES"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+            echo "No $NOTES — falling back to generated notes"
+          fi
 
-      - name: Publish release
+      - name: Publish release (authored notes)
+        if: steps.notes.outputs.path != ''
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/Kaji.app.zip
+          body_path: ${{ steps.notes.outputs.path }}
+
+      - name: Publish release (generated notes)
+        if: steps.notes.outputs.path == ''
+        uses: softprops/action-gh-release@v2
+        with:
           generate_release_notes: true
