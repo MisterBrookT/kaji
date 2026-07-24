@@ -10,10 +10,11 @@ Kaji is a **truncatable macOS menu-bar module host**.
 - Extra capabilities (work/break, system, goals, heavy break theater) are **opt-in modules**, not a forced bundle.
 - “All-in-one” means **one shell, assemble what you want** — not install-once-get-everything.
 
-Canonical product drafts (not shipped yet):
+Product drafts + shipped lean-modules specs:
 
 - [dev_docs/product/lean-module-host.md](dev_docs/product/lean-module-host.md)
 - [dev_docs/product/architecture-modules.md](dev_docs/product/architecture-modules.md)
+- [dev_docs/specs/](dev_docs/specs/)
 
 ## North star (read this first)
 
@@ -27,13 +28,11 @@ So:
 2. **Modules exist so the product can get small again**, not so it can grow forever.
 3. Do **not** chase Ice/Bartender (hiding other apps’ menu-bar icons) in this phase.
 4. Do **not** build a remote plugin marketplace yet. First-party toggles first.
-5. Do **not** bump version / cut a GitHub Release until lean-default is validated on a side branch.
 
 ## Current branch policy
 
-- Direction work lives on side trees such as `docs/lean-module-host` / later `feat/*`.
-- Do not merge straight into a marketed release on `main` until internal docs + slim defaults feel right.
-- WIP feature experiments (heavy break art, etc.) should stay parked (stash/branch) until they fit an opt-in module.
+- Lean-modules v1 shipped on `main` (v0.6.0). New slices: side branch / worktree → approve spec → land.
+- WIP feature experiments (heavy break art, etc.) stay parked until they fit an opt-in module.
 
 ## Internal docs (`dev_docs/`)
 

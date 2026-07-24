@@ -6,9 +6,9 @@
   Kaji
 </h1>
 
-**给 AI Coding 用的 macOS 菜单栏状态管理器。**
+**可裁剪的 macOS 菜单栏：给 AI Coding 用。**
 
-看 Claude Code / Codex 用量，看 token 压力，看系统状态，管理工作节奏；该休息时，让 Navi 熊猫拦住你。
+默认只有额度环。Work/Break、System、Goals 是可选模块——自己组装，保持安静。
 
 [English](README.md)
 
@@ -45,14 +45,16 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 ## Kaji 能做什么
 
-| 模块 | 能力 |
-| --- | --- |
-| **Quota** | 5h / 7d 用量、重置时间、token 趋势、估算成本、provider 显隐 |
-| **Work / Break** | 专注计时、休息计时、跳过记录、强制全屏休息 |
-| **System** | CPU、内存、磁盘、顶部进程、一个 Auto Reclaim 按钮 |
-| **Goals** | 可编辑每日目标、重置、完成热力图 |
-| **Pet** | Navi 熊猫、quota-aware 九态动画、默认无消息打扰 |
-| **Keep Awake** | 长时间 agent 任务时阻止 macOS 休眠 |
+默认安装只有 **Quota**。在 Settings 里打开其它模块。
+
+| 模块 | 默认 | 能力 |
+| --- | --- | --- |
+| **Quota** | 开 | 5h / 7d 用量、重置时间、token 趋势、估算成本、provider 显隐 |
+| **Work / Break** | 关 | 专注计时、菜单栏倒计时、休息遮罩 |
+| **System** | 关 | CPU、内存、磁盘、顶部进程、Auto Reclaim |
+| **Goals** | 关 | 可编辑每日目标、重置、完成热力图 |
+| **Pet** | 桥接 | 经 `pet-state.json` 的 Navi 熊猫（不做第五个菜单栏主角） |
+| **Keep Awake** | 设置项 | 长时间 agent 任务时阻止 macOS 休眠 |
 
 ## Navi 熊猫
 

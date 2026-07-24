@@ -6,9 +6,9 @@
   Kaji
 </h1>
 
-**A macOS menu bar command center for AI coding.**
+**A truncatable macOS menu bar for AI coding.**
 
-Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, manage focus breaks, and let Navi Panda block you when it is time to rest.
+Quota rings by default. Work/break, system, and goals are opt-in modules — assemble what you want, keep the bar quiet.
 
 [中文](README.zh.md)
 
@@ -45,14 +45,16 @@ If a direct browser download says the app is damaged, use the install command ab
 
 ## What Kaji Does
 
-| Surface | What you get |
-| --- | --- |
-| **Quota** | 5h / 7d usage, reset timing, token trend, estimated cost, provider toggles |
-| **Work / Break** | Focus timer, break timer, skip count, hard full-screen break overlay |
-| **System** | CPU, memory, disk, top processes, one-click Auto Reclaim |
-| **Goals** | Editable daily goals, reset, completion heatmap |
-| **Pet** | Navi Panda, quota-aware 9-state animation, no message noise |
-| **Keep Awake** | Optional macOS sleep prevention for long agent runs |
+Default install is **Quota only**. Turn modules on in Settings.
+
+| Surface | Default | What you get |
+| --- | --- | --- |
+| **Quota** | on | 5h / 7d usage, reset timing, token trend, estimated cost, provider toggles |
+| **Work / Break** | off | Focus timer, menu-bar countdown, break overlay |
+| **System** | off | CPU, memory, disk, top processes, Auto Reclaim |
+| **Goals** | off | Editable daily goals, reset, completion heatmap |
+| **Pet** | bridge | Navi Panda via `pet-state.json` (no fifth menu-bar hero) |
+| **Keep Awake** | setting | Optional macOS sleep prevention for long agent runs |
 
 ## Navi Panda
 
