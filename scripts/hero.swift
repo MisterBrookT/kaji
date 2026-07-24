@@ -24,117 +24,121 @@ private struct PNGImage: View {
     }
 }
 
+/// README / landing hero — Mono, compact, website feel.
 struct HeroView: View {
     var body: some View {
         ZStack {
-            LinearGradient(colors: [hex(0xFFFFFF), hex(0xF8F8F6)],
-                           startPoint: .topLeading,
-                           endPoint: .bottomTrailing)
+            LinearGradient(
+                colors: [hex(0xFFFFFF), hex(0xF7F7F4)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
 
-            HStack(alignment: .center, spacing: 50) {
+            HStack(alignment: .center, spacing: 48) {
                 copy
-                    .frame(width: 545, alignment: .leading)
+                    .frame(width: 480, alignment: .leading)
 
-                VStack(alignment: .center, spacing: 24) {
-                    statusCard
-                    productCard
-                    petSticker
-                }
-                .frame(width: 650)
+                productStage
+                    .frame(width: 520)
             }
-            .padding(.horizontal, 70)
+            .padding(.horizontal, 64)
+            .padding(.vertical, 56)
         }
-        .frame(width: 1400, height: 800)
+        .frame(width: 1280, height: 760)
     }
 
     private var copy: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Kaji")
-                .font(.system(size: 86, weight: .bold, design: .rounded))
-                .foregroundColor(hex(0x20201D))
-                .padding(.bottom, 16)
+            // Wordmark: Koina-style cat-K fused into "Kaji"
+            HStack(alignment: .center, spacing: 2) {
+                PNGImage(path: "dev_docs/assets/kaji-cat-k.png")
+                    .frame(width: 78, height: 78)
+                    .offset(y: -2)
 
-            Text("A quiet menu bar for AI coding usage.")
-                .font(.system(size: 34, weight: .semibold, design: .rounded))
-                .foregroundColor(hex(0x20201D))
-                .padding(.bottom, 18)
-
-            Text("Local-first quota rings across AI coding vendors.")
-                .font(.system(size: 24, weight: .medium, design: .rounded))
-                .foregroundColor(hex(0x70706A))
-                .padding(.bottom, 30)
-
-            HStack(spacing: 22) {
-                pill("Mono default", filled: true)
-                pill("Status layer", filled: false)
+                Text("aji")
+                    .font(.system(size: 78, weight: .bold, design: .rounded))
+                    .foregroundColor(hex(0x20201D))
+                    .padding(.leading, -4)
             }
-            .padding(.bottom, 108)
+            .padding(.bottom, 18)
 
-            metric("5h", "Live quota window")
-            metric("7d", "Weekly reset time")
-            metric("Pet", "State bridge")
+            Text("The menu bar worth keeping\nfor AI coding.")
+                .font(.system(size: 30, weight: .semibold, design: .rounded))
+                .foregroundColor(hex(0x20201D))
+                .lineSpacing(3)
+                .padding(.bottom, 14)
+
+            Text("Quota rings at a glance. Assemble the rest only when you need it.")
+                .font(.system(size: 20, weight: .medium, design: .rounded))
+                .foregroundColor(hex(0x70706A))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 26)
+
+            HStack(spacing: 12) {
+                pill("quiet", filled: true)
+                pill("scalable", filled: false)
+                pill("beautiful", filled: false)
+            }
+            .padding(.bottom, 56)
+
+            metric("5h", "Session window")
+            metric("7d", "Weekly reset")
+            metric("More", "Breaker · system monitor · and more…")
         }
     }
 
     private func metric(_ label: String, _ title: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 20) {
+        HStack(alignment: .firstTextBaseline, spacing: 16) {
             Text(label)
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .font(.system(size: 26, weight: .bold, design: .rounded))
                 .foregroundColor(hex(0x666660))
-                .frame(width: 58, alignment: .leading)
+                .frame(width: 72, alignment: .leading)
             Text(title)
-                .font(.system(size: 24, weight: .semibold, design: .rounded))
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .foregroundColor(hex(0x20201D))
         }
-        .padding(.bottom, 30)
+        .padding(.bottom, 20)
     }
 
     private func pill(_ text: String, filled: Bool) -> some View {
         Text(text)
-            .font(.system(size: 22, weight: .bold, design: .rounded))
+            .font(.system(size: 18, weight: .bold, design: .rounded))
             .foregroundColor(filled ? .white : hex(0x20201D))
-            .frame(width: filled ? 235 : 245, height: 54)
-            .background(filled ? hex(0x666660) : hex(0xF8F8F6))
+            .padding(.horizontal, 22)
+            .frame(height: 44)
+            .background(filled ? hex(0x666660) : Color.white.opacity(0.9))
             .clipShape(Capsule())
-            .overlay(Capsule().stroke(hex(0xDADAD6), lineWidth: filled ? 0 : 1.5))
+            .overlay(Capsule().stroke(hex(0xDADAD6), lineWidth: filled ? 0 : 1.25))
     }
 
-    private var statusCard: some View {
-        PNGImage(path: "dev_docs/assets/menubar-light.png")
-            .frame(width: 520, height: 39)
-            .frame(width: 600, height: 82)
-            .background(card)
-    }
+    private var productStage: some View {
+        VStack(alignment: .center, spacing: 16) {
+            PNGImage(path: "dev_docs/assets/menubar-light.png")
+                .frame(width: 460, height: 34)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(Color.white.opacity(0.72))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .stroke(hex(0xE4E4DE), lineWidth: 1)
+                        )
+                        .shadow(color: .black.opacity(0.04), radius: 12, x: 0, y: 6)
+                )
 
-    private var productCard: some View {
-        PNGImage(path: "dev_docs/assets/gauge-light.png")
-            .frame(width: 500, height: 440)
-            .frame(width: 600, height: 480)
-            .background(card)
-    }
-
-    private var petSticker: some View {
-        PNGImage(path: "dev_docs/assets/pet-panda.png")
-            .frame(width: 285, height: 164)
-            .frame(width: 600, height: 164, alignment: .trailing)
-            .padding(.top, -2)
-    }
-
-    private var card: some View {
-        RoundedRectangle(cornerRadius: 32, style: .continuous)
-            .fill(hex(0xFFFFFF).opacity(0.72))
-            .overlay(
-                RoundedRectangle(cornerRadius: 32, style: .continuous)
-                    .stroke(hex(0xDADAD6), lineWidth: 2)
-            )
-            .shadow(color: .black.opacity(0.045), radius: 28, x: 0, y: 20)
+            PNGImage(path: "dev_docs/assets/gauge-light.png")
+                .frame(width: 360)
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .shadow(color: .black.opacity(0.16), radius: 26, x: 0, y: 14)
+        }
     }
 }
 
 @MainActor
 func renderHero(to path: String) {
     let renderer = ImageRenderer(content: HeroView())
-    renderer.scale = 1
+    renderer.scale = 2
     guard let image = renderer.nsImage,
           let tiff = image.tiffRepresentation,
           let rep = NSBitmapImageRep(data: tiff),

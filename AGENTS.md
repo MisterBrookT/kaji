@@ -6,9 +6,12 @@ Guidance for humans and coding agents working on Kaji.
 
 Kaji is a **truncatable macOS menu-bar module host**.
 
+**Long-term goal:** the menu bar **worth keeping** in the AI era — quiet enough to stay, not “the only bar that does everything.”
+
 - Default should feel **small and quiet** (quota rings first).
 - Extra capabilities (work/break, system, goals, heavy break theater) are **opt-in modules**, not a forced bundle.
 - “All-in-one” means **one shell, assemble what you want** — not install-once-get-everything.
+- **Worth keeping ≠ kitchen sink.** Do not chase exclusivity by piling surfaces.
 
 Product drafts + shipped lean-modules specs:
 
@@ -36,7 +39,7 @@ So:
 
 ## Internal docs (`dev_docs/`)
 
-All working notes live under **`dev_docs/`** — product, design, integrate, ship, assets, old landing `index.html`.
+All working notes live under **`dev_docs/`** — product, design, integrate, ship, assets.
 
 Browse from [dev_docs/README.md](dev_docs/README.md).
 
@@ -48,14 +51,16 @@ dev_docs/
   design/            # visual language & shot guides
   integrate/         # external contracts (pet bridge, …)
   ship/              # distribution / release ops
-  index.html         # old marketing page (parked; not a public docs site)
+  specs/             # acceptable feature specs
 ```
+
+`docs/` is **only** the GitHub Pages publish root (`index.html` + assets + `.nojekyll`). Not a documentation wiki.
 
 Rules:
 
-- **Do not use `docs/` as a public documentation site right now.** Public docs are deferred; write them later only if needed.
+- **Internal prose → `dev_docs/`.** Do not grow `docs/` into a docs site.
 - **One language per doc** — no EN/ZH duplicate pairs.
-- **Assets stay in `dev_docs/assets/`.**
+- **Canonical image sources stay in `dev_docs/assets/`**; copy into `docs/assets/` when the Pages landing needs them.
 - New internal prose goes in the matching category folder; update the catalog.
 - After product direction is reviewed: write an **acceptable feature spec** under `dev_docs/specs/`.
 - **Plan docs are optional.** Use them when the work spans many files/sessions or another agent has zero context. If the spec already has clear acceptance cases and a small file touch list, go **tests → implement** and skip a separate plan.

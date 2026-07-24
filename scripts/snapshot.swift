@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import KajiCore
 
 @MainActor
 func render(_ view: some View, appearance name: NSAppearance.Name,
@@ -26,42 +27,53 @@ func render(_ view: some View, appearance name: NSAppearance.Name,
 struct Snap {
     @MainActor
     static func makeMocks() -> [ProviderView] {
-        [
+        func tokHist(_ seed: [Double]) -> [Double] { seed }
+        return [
             ProviderView(id: "claude", mark: "", displayName: "Claude Code",
                          fiveHourPercent: 56, weekPercent: 36, tokensToday: 120_000,
                          resetDate: Date(timeIntervalSinceNow: 72 * 60),
                          weekResetDate: Date(timeIntervalSinceNow: 38 * 3600),
                          plan: "plan",
-                         history: [20, 28, 22, 40, 55, 48, 60, 52, 68, 56]),
+                         costTodayUSD: 12.4, costIsEstimated: true,
+                         history: [20, 28, 22, 40, 55, 48, 60, 52, 68, 56],
+                         tokenHistory: tokHist([80, 90, 95, 100, 110, 115, 118, 120, 119, 120])),
             ProviderView(id: "codex", mark: "", displayName: "Codex",
                          fiveHourPercent: 82, weekPercent: 64, tokensToday: 90_000,
                          resetDate: Date(timeIntervalSinceNow: 47 * 60),
                          weekResetDate: Date(timeIntervalSinceNow: 5 * 24 * 3600),
                          plan: "plus",
-                         history: [30, 45, 50, 62, 70, 75, 80, 78, 85, 82]),
+                         costTodayUSD: 41.2, costIsEstimated: false,
+                         history: [30, 45, 50, 62, 70, 75, 80, 78, 85, 82],
+                         tokenHistory: tokHist([40, 50, 55, 60, 70, 75, 80, 85, 88, 90])),
             ProviderView(id: "ark-agent", mark: "", displayName: "Ark Agent",
                          fiveHourPercent: 0, weekPercent: 87, tokensToday: 12_000,
                          resetDate: nil,
                          weekResetDate: Date(timeIntervalSinceNow: 13 * 3600),
                          plan: "team",
-                         history: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                         costTodayUSD: 2.1, costIsEstimated: true,
+                         history: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                         tokenHistory: tokHist([12, 12, 12, 12, 12, 12, 12, 12, 12, 12])),
             ProviderView(id: "minimax", mark: "", displayName: "MiniMax",
                          fiveHourPercent: 69, weekPercent: 17, tokensToday: 42_000,
                          resetDate: Date(timeIntervalSinceNow: 22 * 60),
                          weekResetDate: Date(timeIntervalSinceNow: 14 * 3600),
                          plan: "plan",
-                         history: [10, 15, 20, 28, 38, 46, 54, 61, 66, 69]),
+                         costTodayUSD: 6.8, costIsEstimated: true,
+                         history: [10, 15, 20, 28, 38, 46, 54, 61, 66, 69],
+                         tokenHistory: tokHist([20, 24, 28, 30, 34, 36, 38, 40, 41, 42])),
         ]
     }
 
     @MainActor
-    static func makePrefs(_ lang: Lang, style: MenubarStyle, showRemaining: Bool) -> Prefs {
+    static func makePrefs(_ lang: Lang) -> Prefs {
         let p = Prefs()
         p.language = lang
         p.visibleProviders = ["claude", "codex", "ark-agent", "minimax"]
-        p.menubarStyle = style
-        p.showRemaining = showRemaining
+        p.menubarStyle = .blackWhite
+        p.showRemaining = false
         p.panelSize = .medium
+        // Slim default — quota only (matches shipped lean modules).
+        p.enabledModules = [.quota]
         return p
     }
 
@@ -71,38 +83,37 @@ struct Snap {
             let args = Array(CommandLine.arguments.dropFirst())
             let lang: Lang = args.contains("zh") ? .zh : .en
             let showRemaining = args.contains("remaining")
-            let style: MenubarStyle
-            if args.contains("playful") || args.contains("color") {
-                style = .color
-            } else if args.contains("calm") || args.contains("blue") || args.contains("mono") {
-                style = .mono
-            } else {
-                style = .blackWhite
-            }
-            let prefs = makePrefs(lang, style: style, showRemaining: showRemaining)
-            let petCatalog = PetCatalogStore()
+            let prefs = makePrefs(lang)
+            prefs.showRemaining = showRemaining
 
-            let panel = GaugeRowView(store: QuotaStore(previewProviders: mocks, updated: Date()),
-                                     prefs: prefs,
-                                     updateChecker: UpdateChecker(),
-                                     sleepController: SleepController(previewEnabled: false),
-                                     petRunner: PetRunner(),
-                                     petCatalog: petCatalog,
-                                     panelSize: prefs.panelSize)
-            let popover = GaugeRowView(
-                store: QuotaStore(previewProviders: mocks, updated: Date()),
-                prefs: prefs,
-                updateChecker: UpdateChecker(),
-                sleepController: SleepController(previewEnabled: false),
-                petRunner: PetRunner(),
-                petCatalog: petCatalog,
-                controls: .init(onRefresh: {}, onUpdate: {}, onToggleKeepAwake: {}, onTogglePet: {}, onOpenSettings: {}, onQuit: {}),
-                panelSize: prefs.panelSize
+            let store = QuotaStore(previewProviders: mocks, updated: Date())
+            let workSession = WorkSessionController(prefs: prefs)
+            let systemMonitor = SystemMonitor()
+            let dailyGoals = DailyGoalStore()
+            let controls = GaugeRowView.Controls(
+                onRefresh: {},
+                onUpdate: {},
+                onToggleKeepAwake: {},
+                onTogglePet: {},
+                onOpenSettings: {},
+                onQuit: {}
             )
-            // Menu-bar right cluster mock: the Kaji dual-rings sitting among the
-            // real system status items (control center, wifi, battery, clock) so
-            // the README shows the app *in the menu bar*, not floating on grey.
-            func statusStrip(_ scheme: ColorScheme, _ mbStyle: MenubarStyle = .blackWhite) -> some View {
+
+            let popover = KajiPopoverView(
+                store: store,
+                prefs: prefs,
+                workSession: workSession,
+                systemMonitor: systemMonitor,
+                dailyGoals: dailyGoals,
+                controls: controls,
+                maxContentHeight: 720,
+                onContentSizeChange: nil,
+                scrollsContent: false
+            )
+            .frame(width: prefs.panelSize.frameSize.width)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+            func statusStrip(_ scheme: ColorScheme) -> some View {
                 let glyph: Color = scheme == .dark
                     ? Color.white.opacity(0.82) : Color.black.opacity(0.78)
                 func sys(_ name: String, _ size: CGFloat = 14) -> some View {
@@ -111,18 +122,17 @@ struct Snap {
                         .foregroundColor(glyph)
                 }
                 return HStack(spacing: 13) {
-                    StatusItemView(providers: mocks, style: mbStyle, showRemaining: showRemaining)
+                    StatusItemView(providers: mocks, showRemaining: showRemaining)
                     sys("switch.2", 13)
                     sys("wifi", 13)
                     sys("battery.75", 16)
-                    Text("Thu 13 Jun  9:41")
+                    Text("Thu 24 Jul  9:41")
                         .font(.system(size: 13.5))
                         .foregroundColor(glyph)
                 }
                 .padding(.leading, 16).padding(.trailing, 14)
                 .frame(height: 26)
                 .background(
-                    // A subtle translucent menu-bar slab over a hint of wallpaper.
                     ZStack {
                         (scheme == .dark
                             ? LinearGradient(colors: [Color(hex: 0x2C2C2A), Color(hex: 0x1E1E1C)],
@@ -135,15 +145,11 @@ struct Snap {
 
             let arg = args.first ?? "both"
             if arg == "dark" || arg == "both" {
-                render(panel, appearance: .darkAqua, scheme: .dark, to: "/tmp/gauge-dark.png")
                 render(statusStrip(.dark), appearance: .darkAqua, scheme: .dark, to: "/tmp/status-dark.png")
-                render(statusStrip(.dark, .color), appearance: .darkAqua, scheme: .dark, to: "/tmp/status-color-dark.png")
                 render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/popover-dark.png")
             }
             if arg == "light" || arg == "both" {
-                render(panel, appearance: .aqua, scheme: .light, to: "/tmp/gauge-light.png")
                 render(statusStrip(.light), appearance: .aqua, scheme: .light, to: "/tmp/status-light.png")
-                render(statusStrip(.light, .color), appearance: .aqua, scheme: .light, to: "/tmp/status-color-light.png")
                 render(popover, appearance: .aqua, scheme: .light, to: "/tmp/popover-light.png")
             }
         }

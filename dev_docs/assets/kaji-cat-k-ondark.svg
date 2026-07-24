@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 620" role="img" aria-labelledby="title desc">
+  <title id="title">Koina AI 小猫 K 图标</title>
+  <desc id="desc">由黑色字母 K 与小猫头、耳朵、卷尾融合而成的品牌图标</desc>
+  <g transform="translate(0 10)">
+    <rect x="82" y="144" width="126" height="390" rx="63" fill="#F0F0EC"/>
+    <path d="M170 310C230 300 256 252 304 220" fill="none" stroke="#F0F0EC" stroke-linecap="round" stroke-width="108"/>
+    <rect x="270" y="92" width="238" height="216" rx="92" fill="#F0F0EC"/>
+    <path d="M292 118L326 24L374 112Z" fill="#F0F0EC"/>
+    <path d="M404 108L464 22L486 132Z" fill="#F0F0EC"/>
+    <path d="M174 350C288 356 324 484 438 486C520 488 544 420 502 388" fill="none" stroke="#F0F0EC" stroke-linecap="round" stroke-width="100"/>
+    <ellipse cx="346" cy="190" rx="13" ry="24" fill="#121212"/>
+    <ellipse cx="432" cy="190" rx="13" ry="24" fill="#121212"/>
+    <path d="M384 224L402 224L393 237Z" fill="#121212"/>
+  </g>
+</svg>

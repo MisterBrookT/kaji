@@ -34,8 +34,6 @@ swiftc -O $FILES scripts/snapshot.swift \
 echo "==> rendering (light + dark${LANG_ARG:+, $LANG_ARG})"
 /tmp/kaji-snap both $LANG_ARG
 
-# Hero pair = the full popover (dual rings + countdowns + toggles).
-# Light LEFT, dark RIGHT in the README — day before night.
 cp /tmp/popover-light.png dev_docs/assets/gauge-light.png
 cp /tmp/popover-dark.png  dev_docs/assets/gauge-dark.png
 cp /tmp/status-light.png  dev_docs/assets/menubar-light.png

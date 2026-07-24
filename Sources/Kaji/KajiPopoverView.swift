@@ -20,6 +20,9 @@ struct KajiPopoverView: View {
     let controls: GaugeRowView.Controls
     let maxContentHeight: CGFloat
     let onContentSizeChange: ((CGSize) -> Void)?
+    /// Offscreen snapshots (ImageRenderer) often paint ScrollView as empty —
+    /// pass `false` for screenshot harnesses.
+    var scrollsContent: Bool = true
 
     @State private var panel: KajiModuleID = .quota
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
@@ -38,10 +41,14 @@ struct KajiPopoverView: View {
         VStack(alignment: .leading, spacing: 10) {
             header
             Divider().overlay(t.track.opacity(0.8))
-            ScrollView(.vertical, showsIndicators: false) {
+            if scrollsContent {
+                ScrollView(.vertical, showsIndicators: false) {
+                    panelBody
+                }
+                .frame(maxHeight: panelScrollMaxHeight)
+            } else {
                 panelBody
             }
-            .frame(maxHeight: panelScrollMaxHeight)
             Divider().overlay(t.track.opacity(0.8))
             controlsFooter
         }
