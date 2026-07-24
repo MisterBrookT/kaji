@@ -14,7 +14,7 @@ struct BreakOverlayView: View {
     @State private var exerciseIndex = Int.random(in: 0..<BreakExercise.allCases.count)
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
+    private var t: KajiTheme { .resolve(scheme) }
 
     var body: some View {
         GeometryReader { geo in

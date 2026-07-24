@@ -26,7 +26,7 @@ struct KajiPopoverView: View {
     @State private var showCleanConfirmation = false
     @Environment(\.colorScheme) private var scheme
 
-    private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
+    private var t: KajiTheme { .resolve(scheme) }
     private var shown: [ProviderView] { store.providers.filter { prefs.isVisible($0.id) } }
     private var panelScrollMaxHeight: CGFloat { max(180, maxContentHeight - 104) }
     private var pages: [KajiModuleID] { prefs.popoverModulePages }

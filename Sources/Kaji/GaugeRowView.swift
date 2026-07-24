@@ -32,7 +32,7 @@ struct GaugeRowView: View {
     }
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme, prefs.menubarStyle) }
+    private var t: KajiTheme { .resolve(scheme) }
 
     // All providers that have data (for the toggle pills), and the subset the
     // user has chosen to show (for the rings).
@@ -73,7 +73,6 @@ struct GaugeRowView: View {
             HStack(alignment: .top, spacing: 16) {
                 ForEach(shown) { provider in
                     RingGauge(provider: provider, lang: prefs.language,
-                              style: prefs.menubarStyle,
                               showRemaining: prefs.showRemaining,
                               ringSize: defaultRing)
                 }
@@ -92,7 +91,6 @@ struct GaugeRowView: View {
                     ForEach(shown) { provider in
                         CompactRingRow(provider: provider,
                                        lang: prefs.language,
-                                       style: prefs.menubarStyle,
                                        showRemaining: prefs.showRemaining,
                                        ringSize: size.ringSize)
                     }
@@ -106,7 +104,6 @@ struct GaugeRowView: View {
                 HStack(alignment: .top, spacing: 18) {
                     ForEach(shown) { provider in
                         RingGauge(provider: provider, lang: prefs.language,
-                                  style: prefs.menubarStyle,
                                   showRemaining: prefs.showRemaining,
                                   ringSize: size.ringSize)
                             .frame(maxWidth: .infinity)
@@ -125,7 +122,6 @@ struct GaugeRowView: View {
                 ForEach(shown) { provider in
                     CompactRingRow(provider: provider,
                                    lang: prefs.language,
-                                   style: prefs.menubarStyle,
                                    showRemaining: prefs.showRemaining,
                                    ringSize: 52)
                 }
@@ -140,7 +136,6 @@ struct GaugeRowView: View {
                 ForEach(shown) { provider in
                     CompactRingRow(provider: provider,
                                    lang: prefs.language,
-                                   style: prefs.menubarStyle,
                                    showRemaining: prefs.showRemaining,
                                    ringSize: size.ringSize)
                 }
@@ -150,7 +145,6 @@ struct GaugeRowView: View {
             HStack(alignment: .top, spacing: size == .medium ? 14 : 18) {
                 ForEach(shown) { provider in
                     RingGauge(provider: provider, lang: prefs.language,
-                              style: prefs.menubarStyle,
                               showRemaining: prefs.showRemaining,
                               ringSize: size.ringSize)
                 }
@@ -479,12 +473,11 @@ struct GaugeRowView: View {
 private struct CompactRingRow: View {
     let provider: ProviderView
     var lang: Lang = .en
-    var style: MenubarStyle = .mono
     var showRemaining: Bool = false
     var ringSize: CGFloat = 56
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme, style) }
+    private var t: KajiTheme { .resolve(scheme) }
 
     // Same ring math as RingGauge, scaled by ringSize.
     private var baseLineWidth: CGFloat { ringSize * (10.0 / 84.0) }

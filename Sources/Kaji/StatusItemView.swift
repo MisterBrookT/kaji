@@ -11,13 +11,9 @@ import SwiftUI
 // The exact % lives in the popover (click the item); the arc length already
 // shows roughly how full each window is.
 //
-// Style (Prefs.menubarStyle):
-//   - .mono  = legacy calm glyphs.
-//   - .color = green accent glyphs.
-//   - .blackWhite = monochrome popover, adaptive menu-bar glyphs.
+// Glyphs are always adaptive mono (system Light / Dark) — no Color product path.
 struct StatusItemView: View {
     let providers: [ProviderView]
-    var style: MenubarStyle = .mono
     var showRemaining: Bool = false
     /// When a newer release exists, a small accent dot rides the top-trailing
     /// corner of the glyph as a passive "update available" cue (open popover ->
@@ -32,14 +28,14 @@ struct StatusItemView: View {
     var body: some View {
         HStack(spacing: 5) {
             if providers.isEmpty {
-                DualRing(provider: nil, style: style, showRemaining: showRemaining)
+                DualRing(provider: nil, showRemaining: showRemaining)
             } else {
                 // Show every visible provider — capping at 4 keeps the glyph
                 // compact (5+ would crowd the menubar and fight other icons).
                 // 4 also matches the max in `Providers.visible` minus hidden
                 // ones, so this is a future-proof ceiling, not a guess.
                 ForEach(providers.prefix(4)) { p in
-                    DualRing(provider: p, style: style, showRemaining: showRemaining)
+                    DualRing(provider: p, showRemaining: showRemaining)
                 }
             }
             if let workSlotLabel {
@@ -51,7 +47,7 @@ struct StatusItemView: View {
         .overlay(alignment: .topTrailing) {
             if updateAvailable {
                 Circle()
-                    .fill(KajiTheme.resolve(scheme, style).sun)
+                    .fill(KajiTheme.resolve(scheme).sun)
                     .frame(width: 5, height: 5)
                     .overlay(Circle().stroke(.background, lineWidth: 1))
                     .offset(x: 1, y: 1)
@@ -95,32 +91,18 @@ private struct WorkStatusSlot: View {
 // Sized for the menubar (~21pt).
 private struct DualRing: View {
     let provider: ProviderView?
-    let style: MenubarStyle
     let showRemaining: Bool
 
     @Environment(\.colorScheme) private var scheme
-    private var t: KajiTheme { .resolve(scheme, style) }
 
     private let dim: CGFloat = 21
     private let outerLW: CGFloat = 2.3
     private let innerLW: CGFloat = 1.7
     private let gap: CGFloat = 1.3
 
-    private var base: Color {
-        switch style {
-        case .mono, .color:
-            return t.sun
-        case .blackWhite:
-            return scheme == .dark ? .white : .black
-        }
-    }
+    private var base: Color { scheme == .dark ? .white : .black }
     private var innerColor: Color { base.opacity(0.5) }
-    private var trackColor: Color {
-        switch style {
-        case .blackWhite: return base.opacity(0.22)
-        case .mono, .color: return t.track.opacity(0.7)
-        }
-    }
+    private var trackColor: Color { base.opacity(0.22) }
 
     private var fiveFraction: Double {
         guard let provider else { return 0 }
