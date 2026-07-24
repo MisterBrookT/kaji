@@ -79,6 +79,10 @@ final class SystemMonitor: ObservableObject {
     }
 
     func start() {
+        guard timer == nil else {
+            refresh()
+            return
+        }
         refresh()
         scanCleanables()
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -91,6 +95,13 @@ final class SystemMonitor: ObservableObject {
                 self?.scanCleanables()
             }
         }
+    }
+
+    func stop() {
+        timer?.invalidate()
+        timer = nil
+        scanTimer?.invalidate()
+        scanTimer = nil
     }
 
     func refresh() {

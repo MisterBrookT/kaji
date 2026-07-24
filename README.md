@@ -1,14 +1,14 @@
 <div align="center">
 
 <h1>
-  <img src="https://cdn.jsdelivr.net/gh/blackblue-labs/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="dev_docs/assets/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
 
-**A macOS menu bar command center for AI coding.**
+**A truncatable macOS menu bar for AI coding.**
 
-Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, manage focus breaks, and let Navi Panda block you when it is time to rest.
+Quota rings by default. Work/break, system, and goals are opt-in modules — assemble what you want, keep the bar quiet.
 
 [中文](README.zh.md)
 
@@ -19,7 +19,7 @@ Track Claude Code / Codex usage, watch token pressure, keep your Mac awake, mana
 <br />
 <br />
 
-<img src="docs/readme-hero-20260708.jpg" width="860" alt="Kaji menu bar popover" />
+<img src="dev_docs/assets/readme-hero-20260708.jpg" width="860" alt="Kaji menu bar popover" />
 
 </div>
 
@@ -41,18 +41,20 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 Requires macOS 13+ on Apple Silicon. Kaji is currently unsigned; the installer removes quarantine and installs the current build to `/Applications`.
 
-If a direct browser download says the app is damaged, use the install command above. See [Distribution](docs/distribution.md).
+If a direct browser download says the app is damaged, use the install command above. See [Distribution](dev_docs/ship/distribution.md).
 
 ## What Kaji Does
 
-| Surface | What you get |
-| --- | --- |
-| **Quota** | 5h / 7d usage, reset timing, token trend, estimated cost, provider toggles |
-| **Work / Break** | Focus timer, break timer, skip count, hard full-screen break overlay |
-| **System** | CPU, memory, disk, top processes, one-click Auto Reclaim |
-| **Goals** | Editable daily goals, reset, completion heatmap |
-| **Pet** | Navi Panda, quota-aware 9-state animation, no message noise |
-| **Keep Awake** | Optional macOS sleep prevention for long agent runs |
+Default install is **Quota only**. Turn modules on in Settings.
+
+| Surface | Default | What you get |
+| --- | --- | --- |
+| **Quota** | on | 5h / 7d usage, reset timing, token trend, estimated cost, provider toggles |
+| **Work / Break** | off | Focus timer, menu-bar countdown, break overlay |
+| **System** | off | CPU, memory, disk, top processes, Auto Reclaim |
+| **Goals** | off | Editable daily goals, reset, completion heatmap |
+| **Pet** | bridge | Navi Panda via `pet-state.json` (no fifth menu-bar hero) |
+| **Keep Awake** | setting | Optional macOS sleep prevention for long agent runs |
 
 ## Navi Panda
 
@@ -103,9 +105,8 @@ Use `scripts/build-local.sh` for release-style local app bundles. It assembles `
 
 ## Links
 
-- [Pet bridge](docs/pet-bridge.md)
-- [Design language](docs/design-language.md)
-- [Distribution](docs/distribution.md)
+- [AGENTS.md](AGENTS.md) — contributor / agent direction
+- Internal notes: [dev_docs/README.md](dev_docs/README.md)
 
 ## License
 

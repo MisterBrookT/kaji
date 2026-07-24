@@ -22,12 +22,13 @@ final class WorkSessionController: ObservableObject {
     init(prefs: Prefs) {
         self.prefs = prefs
         self.breakRemaining = TimeInterval(max(1, prefs.breakMinutes) * 60)
-        startTimer()
     }
 
     deinit {
         timer?.invalidate()
     }
+
+    var isRunning: Bool { timer != nil }
 
     var focusTarget: TimeInterval {
         TimeInterval(max(1, prefs.focusMinutes) * 60)
@@ -53,6 +54,19 @@ final class WorkSessionController: ObservableObject {
 
     var breakClock: String {
         Self.clock(max(0, breakRemaining))
+    }
+
+    func start() {
+        guard timer == nil else { return }
+        lastTickAt = Date()
+        startTimer()
+    }
+
+    /// Stop ticking and clear break/working state (module disabled).
+    func stopAndReset() {
+        timer?.invalidate()
+        timer = nil
+        resetWork()
     }
 
     func resetWork() {

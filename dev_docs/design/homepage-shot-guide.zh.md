@@ -35,10 +35,12 @@ README 顶部保持当前结构：
 
 推荐文件：
 
-- 输出：`docs/readme-hero-YYYYMMDD.jpg`
+- 输出：`dev_docs/assets/readme-hero-YYYYMMDD.jpg`
 - 宽度：1600-1800 px 原图，README 中显示 `width="860"`
 - 大小：目标 100-300 KB，最多别超过 600 KB
 - 格式：JPG，用 CleanShot 拼好后压缩
+
+
 
 ## Hero 构图
 
@@ -57,6 +59,8 @@ README 顶部保持当前结构：
 - Codex / Claude Code 至少两行有数据。
 - 趋势线要向上，避免看起来像没在用。
 
+
+
 ### 2. 侧面小卡
 
 右侧或下方放一张小的 Work / Break 或 Goals 截图：
@@ -74,6 +78,8 @@ README 顶部保持当前结构：
 - 不要加消息框。
 - 不要让熊猫遮挡数据。
 - 如果展示强制休息，可以单独做第二张宣传图，不放 README 首图。
+
+
 
 ## CleanShot 截图建议
 
@@ -96,8 +102,10 @@ README 顶部保持当前结构：
 可用命令：
 
 ```sh
-sips -s format jpeg -s formatOptions 82 docs/readme-hero.png --out docs/readme-hero-YYYYMMDD.jpg
+sips -s format jpeg -s formatOptions 82 dev_docs/assets/readme-hero.png --out dev_docs/assets/readme-hero-YYYYMMDD.jpg
 ```
+
+
 
 ## 功能展示优先级
 
@@ -124,6 +132,8 @@ sips -s format jpeg -s formatOptions 82 docs/readme-hero.png --out docs/readme-h
 - 复杂设置页。
 - 四个 panel 全铺开。
 
+
+
 ## 可参考项目
 
 来自已沉淀的 Kaji 调研：
@@ -140,7 +150,9 @@ sips -s format jpeg -s formatOptions 82 docs/readme-hero.png --out docs/readme-h
 - `01 Sources/kaji/2026-07-06-Kaji-Mole-状态栏参考.md`
 - `03 Synthesis/kaji-gauge-competitor-scan-2026-06-27.md`
 - `03 Synthesis/desktop pet market scan 2026.md`
-- `docs/design-language.md`
+- `dev_docs/design/design-language.md`
+
+
 
 ## 避坑
 
@@ -151,6 +163,8 @@ sips -s format jpeg -s formatOptions 82 docs/readme-hero.png --out docs/readme-h
 - 不要为了填满高度制造空白。
 - 不要让截图里出现无意义 `0`。
 - 不要让按钮和底部导航抢主视觉。
+
+
 
 ## 第二张宣传图
 

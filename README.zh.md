@@ -1,14 +1,14 @@
 <div align="center">
 
 <h1>
-  <img src="https://cdn.jsdelivr.net/gh/blackblue-labs/kaji@main/docs/readme-panda.png" height="56" alt="Navi Panda" />
+  <img src="dev_docs/assets/readme-panda.png" height="56" alt="Navi Panda" />
   <br />
   Kaji
 </h1>
 
-**给 AI Coding 用的 macOS 菜单栏状态管理器。**
+**可裁剪的 macOS 菜单栏：给 AI Coding 用。**
 
-看 Claude Code / Codex 用量，看 token 压力，看系统状态，管理工作节奏；该休息时，让 Navi 熊猫拦住你。
+默认只有额度环。Work/Break、System、Goals 是可选模块——自己组装，保持安静。
 
 [English](README.md)
 
@@ -19,7 +19,7 @@
 <br />
 <br />
 
-<img src="docs/readme-hero-20260708.jpg" width="860" alt="Kaji 菜单栏弹窗" />
+<img src="dev_docs/assets/readme-hero-20260708.jpg" width="860" alt="Kaji 菜单栏弹窗" />
 
 </div>
 
@@ -41,18 +41,20 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 需要 macOS 13+ 和 Apple Silicon。Kaji 目前未签名；安装脚本会清除 quarantine，并把最新版安装到 `/Applications`。
 
-如果浏览器直接下载后提示“已损坏”，请用上面的安装命令。见 [分发说明](docs/distribution.md)。
+如果浏览器直接下载后提示“已损坏”，请用上面的安装命令。见 [分发说明](dev_docs/ship/distribution.md)。
 
 ## Kaji 能做什么
 
-| 模块 | 能力 |
-| --- | --- |
-| **Quota** | 5h / 7d 用量、重置时间、token 趋势、估算成本、provider 显隐 |
-| **Work / Break** | 专注计时、休息计时、跳过记录、强制全屏休息 |
-| **System** | CPU、内存、磁盘、顶部进程、一个 Auto Reclaim 按钮 |
-| **Goals** | 可编辑每日目标、重置、完成热力图 |
-| **Pet** | Navi 熊猫、quota-aware 九态动画、默认无消息打扰 |
-| **Keep Awake** | 长时间 agent 任务时阻止 macOS 休眠 |
+默认安装只有 **Quota**。在 Settings 里打开其它模块。
+
+| 模块 | 默认 | 能力 |
+| --- | --- | --- |
+| **Quota** | 开 | 5h / 7d 用量、重置时间、token 趋势、估算成本、provider 显隐 |
+| **Work / Break** | 关 | 专注计时、菜单栏倒计时、休息遮罩 |
+| **System** | 关 | CPU、内存、磁盘、顶部进程、Auto Reclaim |
+| **Goals** | 关 | 可编辑每日目标、重置、完成热力图 |
+| **Pet** | 桥接 | 经 `pet-state.json` 的 Navi 熊猫（不做第五个菜单栏主角） |
+| **Keep Awake** | 设置项 | 长时间 agent 任务时阻止 macOS 休眠 |
 
 ## Navi 熊猫
 
@@ -103,9 +105,8 @@ swift run
 
 ## 链接
 
-- [桌宠桥接](docs/pet-bridge.md)
-- [设计语言](docs/design-language.md)
-- [分发说明](docs/distribution.md)
+- [AGENTS.md](AGENTS.md) — 贡献者 / agent 方向
+- 内部笔记：[dev_docs/README.md](dev_docs/README.md)
 
 ## License
 
