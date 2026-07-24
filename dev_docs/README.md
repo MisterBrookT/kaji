@@ -49,7 +49,8 @@
 
 | Doc | Notes |
 | --- | --- |
-| [ship/distribution.md](ship/distribution.md) | Unsigned / Gatekeeper / notarization |
+| [ship/distribution.md](ship/distribution.md) | Unsigned / Gatekeeper / notarization; source-only releases |
+| [ship/releases/](ship/releases/) | Authored GitHub Release notes per tag (`vX.Y.Z.md`) |
 
 ### Specs & plans
 
