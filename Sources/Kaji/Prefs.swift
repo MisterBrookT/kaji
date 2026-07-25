@@ -12,8 +12,8 @@ import KajiCore
 //     popover footer or the popover. Never empties to zero.
 //   - enabledModules: which first-party panels are on (lean-modules-v1).
 //     Quota is always forced on. First migration writes slim default (quota).
-//   - language: EN / 中文. Drives all captions + menu text. First run follows
-//     the macOS locale.
+//   - language: EN / 中文 / PT-BR / ES. Drives all captions + menu text.
+//     Fresh installs default to English; existing selections are preserved.
 //   - menubarStyle: kept for prefs migration (option B). Always `.blackWhite`;
 //     legacy `"color"` / `"mono"` are normalized and written back on load.
 @MainActor
@@ -85,10 +85,21 @@ final class Prefs: ObservableObject {
         static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
+        static let preferencesInitialized = "preferencesInitialized"
+
+        static let existingPreferenceKeys = [
+            visibleProviders, enabledModules, language, menubarStyle,
+            showRemaining, panelSize, petId, focusMinutes, breakMinutes,
+            allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
+            visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep
+        ]
     }
 
     init() {
         let d = UserDefaults.standard
+        let hadExistingPreferences = Key.existingPreferenceKeys.contains {
+            d.object(forKey: $0) != nil
+        }
         var visible: Set<String>
         if let arr = d.array(forKey: Key.visibleProviders) as? [String], !arr.isEmpty {
             let saved = Set(arr)
@@ -119,10 +130,14 @@ final class Prefs: ObservableObject {
             enabledModules = ModulePrefsLogic.normalizeEnabledModules(raw)
         }
 
-        if let raw = d.string(forKey: Key.language), let l = Lang(rawValue: raw) {
-            language = l
-        } else {
-            language = Lang.system                  // follow macOS locale on first run
+        let languageResolution = LanguagePrefsLogic.resolve(
+            storedRawValue: d.string(forKey: Key.language),
+            hadExistingPreferences: hadExistingPreferences,
+            preferredLanguages: Locale.preferredLanguages
+        )
+        language = languageResolution.language
+        if languageResolution.shouldPersist {
+            d.set(languageResolution.language.rawValue, forKey: Key.language)
         }
         // Mono-only: collapse legacy color/mono/unknown → blackWhite and write back.
         let storedStyle = d.string(forKey: Key.menubarStyle)
@@ -174,6 +189,7 @@ final class Prefs: ObservableObject {
         } else {
             preventSleep = false
         }
+        d.set(true, forKey: Key.preferencesInitialized)
     }
 
     /// Toggle a provider, but never let the set empty out — at least one ring
@@ -214,21 +230,6 @@ final class Prefs: ObservableObject {
     }
 }
 
-// MARK: - Language
-
-enum Lang: String {
-    case en, zh
-
-    /// Pick from the macOS preferred-language list on first run.
-    static var system: Lang {
-        let pref = Locale.preferredLanguages.first ?? "en"
-        return pref.hasPrefix("zh") ? .zh : .en
-    }
-
-    var toggled: Lang { self == .en ? .zh : .en }
-    var label: String { self == .en ? "EN" : "\u{4E2D}\u{6587}" }   // 中文
-}
-
 // MARK: - Menu-bar style (option B: single meaningful case)
 
 enum MenubarStyle: String {
@@ -251,92 +252,5 @@ enum PanelSize: String, CaseIterable {
         case .small:  return 50
         case .medium: return 76
         }
-    }
-}
-
-// MARK: - L10n
-//
-// Minimal two-language string table, keyed by an enum so callers can't typo a
-// key. Product and metric words (Kaji, 5h, 7d) stay untranslated. Word-order-
-// sensitive phrases (reset countdowns) are composed in the views, not here.
-enum L10n {
-    enum K {
-        case fiveHQuota, week, quit, stale, waiting, needPython
-        case refreshNow, quitApp, settings, advancedSettings, appearance, language, providers, show
-            case usage, showUsed, showRemaining
-            case panelSize, sizeSmall, sizeMedium
-            case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
-            case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
-            case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
-            case work, focusLength, breakLength, skipBreak, breakOverlay
-            case launchAtLogin
-            case modules, modulesHint
-            case moduleQuota, moduleWork, moduleSystem, moduleGoals
-    }
-
-    private static let table: [K: (en: String, zh: String)] = [
-        .fiveHQuota:   ("5h quota",            "5\u{5C0F}\u{65F6}\u{989D}\u{5EA6}"),       // 5小时额度
-        .week:         ("7d",                  "7\u{5929}"),                                // 7天
-        .quit:         ("Quit",                "\u{9000}\u{51FA}"),                         // 退出
-        .stale:        ("stale",               "\u{5DF2}\u{8FC7}\u{671F}"),                 // 已过期
-        .waiting:      ("waiting for quota\u{2026}", "\u{7B49}\u{5F85}\u{989D}\u{5EA6}\u{2026}"), // 等待额度…
-        // Shown when no working python3 is found. Kaji reads local CLI
-        // usage via a bundled python script; macOS ships no python3 by default.
-        .needPython:   ("Needs Python 3 \u{00B7} run  xcode-select --install",
-                        "\u{9700}\u{8981} Python 3 \u{00B7} \u{8FD0}\u{884C}  xcode-select --install"), // 需要 Python 3 · 运行
-
-        .refreshNow:   ("Refresh Now",         "\u{7ACB}\u{5373}\u{5237}\u{65B0}"),         // 立即刷新
-        .settings:     ("Settings",            "\u{8BBE}\u{7F6E}"),                         // 设置
-        .advancedSettings: ("Advanced",         "\u{9AD8}\u{7EA7}\u{8BBE}\u{7F6E}"),         // 高级设置
-        .appearance:   ("Appearance",          "\u{5916}\u{89C2}"),                         // 外观
-        .updateTo:     ("Update to",           "\u{66F4}\u{65B0}\u{5230}"),                 // 更新到
-        .checkUpdates: ("Check for Updates\u{2026}", "\u{68C0}\u{67E5}\u{66F4}\u{65B0}\u{2026}"), // 检查更新…
-        .updateChecking: ("Checking\u{2026}",   "\u{68C0}\u{67E5}\u{4E2D}\u{2026}"),         // 检查中…
-        .updateCurrent: ("Up to date",          "\u{5DF2}\u{662F}\u{6700}\u{65B0}"),         // 已是最新
-        .updateFailed:  ("Update check failed", "\u{68C0}\u{67E5}\u{5931}\u{8D25}"),         // 检查失败
-        .system:       ("System",              "\u{7CFB}\u{7EDF}"),                         // 系统
-        .keepAwake:    ("Prevent Sleep",       "\u{7981}\u{6B62}\u{4F11}\u{7720}"),         // 禁止休眠
-        .keepAwakeOn:  ("Awake On",             "\u{4E0D}\u{4F11}\u{7720}\u{5DF2}\u{5F00}"), // 不休眠已开
-        .keepAwakeOff: ("Awake Off",            "\u{4E0D}\u{4F11}\u{7720}\u{5173}"),         // 不休眠关
-        .keepAwakeTurningOn: ("Turning On\u{2026}", "\u{5F00}\u{542F}\u{4E2D}\u{2026}"),     // 开启中…
-        .keepAwakeTurningOff: ("Turning Off\u{2026}", "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),   // 关闭中…
-        .keepAwakeFailed: ("Awake Failed",      "\u{8BBE}\u{7F6E}\u{5931}\u{8D25}"),         // 设置失败
-        .pet:          ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
-        .petOn:        ("Pet On",              "\u{5BA0}\u{7269}\u{5DF2}\u{5F00}"),         // 宠物已开
-        .petOff:       ("Pet Off",             "\u{5BA0}\u{7269}\u{5173}"),                 // 宠物关
-        .petTurningOn: ("Opening\u{2026}",       "\u{5F00}\u{542F}\u{4E2D}\u{2026}"),         // 开启中…
-        .petTurningOff: ("Closing\u{2026}",      "\u{5173}\u{95ED}\u{4E2D}\u{2026}"),         // 关闭中…
-        .petFailed:    ("Pet Failed",           "\u{5BA0}\u{7269}\u{542F}\u{52A8}\u{5931}\u{8D25}"), // 宠物启动失败
-        .petChoice:    ("Pet",                 "\u{5BA0}\u{7269}"),                         // 宠物
-        .petGallery:   ("Pet Details",         "\u{5BA0}\u{7269}\u{8BE6}\u{60C5}"),         // 宠物详情
-        .source:       ("Source",              "\u{6765}\u{6E90}"),                         // 来源
-        .launchAtLogin: ("Launch",             "\u{5F00}\u{673A}\u{542F}\u{52A8}"),         // 开机启动
-        .work:         ("Work",                "\u{5DE5}\u{4F5C}"),                         // 工作
-        .focusLength:  ("Focus",               "\u{4E13}\u{6CE8}"),                         // 专注
-        .breakLength:  ("Break",               "\u{4F11}\u{606F}"),                         // 休息
-        .skipBreak:    ("Allow Skip",          "\u{5141}\u{8BB8}\u{8DF3}\u{8FC7}"),         // 允许跳过
-        .breakOverlay: ("Hard Break",          "\u{5F3A}\u{5236}\u{4F11}\u{606F}"),         // 强制休息
-        .modules:      ("Modules",             "\u{6A21}\u{5757}"),                         // 模块
-        .modulesHint:  ("Default is Quota only. Turn on what you need.",
-                        "\u{9ED8}\u{8BA4}\u{53EA}\u{5F00} Quota\u{3002}\u{6309}\u{9700}\u{6253}\u{5F00}\u{5176}\u{4F59}\u{3002}"), // 默认只开 Quota。按需打开其余。
-        .moduleQuota:  ("Quota",               "Quota"),
-        .moduleWork:   ("Work / Break",        "Work / Break"),
-        .moduleSystem: ("System",              "System"),
-        .moduleGoals:  ("Goals",               "Goals"),
-        .quitApp:      ("Quit Kaji",           "\u{9000}\u{51FA} Kaji"),                    // 退出 Kaji
-        .language:     ("Language",            "\u{8BED}\u{8A00}"),                         // 语言
-        .providers:    ("Providers",           "\u{63D0}\u{4F9B}\u{5546}"),                 // 提供商
-        .show:         ("Show",                "\u{663E}\u{793A}"),                         // 显示
-        .usage:        ("Usage",              "\u{7528}\u{91CF}"),                         // 用量
-        .showUsed:     ("Used",               "\u{5DF2}\u{7528}"),                         // 已用
-        .showRemaining:("Remaining",          "\u{5269}\u{4F59}"),                         // 剩余
-        .panelSize:    ("Size",               "\u{5927}\u{5C0F}"),                         // 大小
-        .sizeSmall:    ("S",                  "\u{5C0F}"),                                 // 小
-        .sizeMedium:   ("M",                  "\u{4E2D}"),                                 // 中
-    ]
-
-    static func t(_ k: K, _ lang: Lang) -> String {
-        guard let pair = table[k] else { return "" }
-        return lang == .en ? pair.en : pair.zh
     }
 }

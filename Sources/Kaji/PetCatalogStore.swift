@@ -1,4 +1,5 @@
 import Foundation
+import KajiCore
 
 // MARK: - Pet catalog
 
@@ -45,10 +46,7 @@ final class PetCatalogStore: ObservableObject {
     }
 
     func summary(language: Lang) -> String {
-        if language == .zh {
-            return "\u{9ED8}\u{8BA4}\u{5BA0}\u{7269}\u{FF1A}navi"
-        }
-        return "Default pet: navi"
+        "\(L10n.t(.defaultPet, language)) navi"
     }
 
     func selectedPet(for petId: String) -> PetOption? {

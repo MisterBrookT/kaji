@@ -11,7 +11,7 @@
 
 See quota pressure at a glance — then back to the agent.
 
-[中文](README.zh.md)
+[中文](README.zh.md) · [Português](README.pt-BR.md) · [Español](README.es.md)
 
 <a href="https://github.com/blackblue-labs/kaji/stargazers"><img src="https://img.shields.io/github/stars/blackblue-labs/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
