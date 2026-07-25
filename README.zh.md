@@ -11,7 +11,7 @@
 
 一眼看清额度压力，然后继续跑 agent。
 
-[English](README.md)
+[English](README.md) · [Português](README.pt-BR.md) · [Español](README.es.md)
 
 <a href="https://github.com/blackblue-labs/kaji/stargazers"><img src="https://img.shields.io/github/stars/blackblue-labs/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
@@ -54,14 +54,6 @@ Release **不**附 `.app.zip`（未签名浏览器下载易被 Gatekeeper 拦）
 | **Pet** | 桥接 | 可选 Navi：`~/Library/Application Support/Kaji/pet-state.json` |
 
 主题只有 **Mono**（黑白灰，浅色 / 深色）。
-
-## 语言
-
-Kaji 支持 **English、简体中文、巴西葡萄牙语、西班牙语**。全新安装默认
-English；升级不会修改老用户已经保存的语言。
-
-可在 Settings 中通过 `EN / 中文 / PT-BR / ES` 随时切换。今后新增用户可见文案
-必须四语同时交付。
 
 ## 构建
 

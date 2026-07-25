@@ -11,7 +11,7 @@
 
 See quota pressure at a glance — then back to the agent.
 
-[中文](README.zh.md)
+[中文](README.zh.md) · [Português](README.pt-BR.md) · [Español](README.es.md)
 
 <a href="https://github.com/blackblue-labs/kaji/stargazers"><img src="https://img.shields.io/github/stars/blackblue-labs/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
@@ -54,15 +54,6 @@ No `.app.zip` on Releases (unsigned browser downloads trip Gatekeeper). Or run `
 | **Pet** | bridge | Optional Navi via `~/Library/Application Support/Kaji/pet-state.json` |
 
 Theme: **Mono** only (black / white / gray, light & dark).
-
-## Languages
-
-Kaji supports **English, Simplified Chinese, Brazilian Portuguese, and Spanish**.
-New installs start in English. Existing installs keep their saved language when
-upgrading.
-
-Switch anytime in Settings with `EN / 中文 / PT-BR / ES`. New user-facing copy
-must ship in all four languages.
 
 ## Build
 
