@@ -25,6 +25,10 @@ sleep 1
 rm -rf /Applications/Kaji.app
 rm -rf /Applications/KajiGauge.app
 cp -R "$APP" /Applications/
+xattr -cr /Applications/Kaji.app
+codesign --force --sign - --identifier dev.kaji.sleep-helper \
+  /Applications/Kaji.app/Contents/Library/HelperTools/KajiSleepHelper
+codesign --force --sign - --identifier dev.kaji /Applications/Kaji.app
 
 if [[ "${1:-}" != "--no-open" ]]; then
   echo "==> launch"
