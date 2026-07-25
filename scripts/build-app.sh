@@ -26,9 +26,17 @@ echo "==> assembling ${BUNDLE}"
 rm -rf "$BUNDLE"
 mkdir -p "${BUNDLE}/Contents/MacOS"
 mkdir -p "${BUNDLE}/Contents/Resources"
+mkdir -p "${BUNDLE}/Contents/Library/HelperTools"
+mkdir -p "${BUNDLE}/Contents/Library/LaunchDaemons"
 
 cp "$BIN_PATH" "${BUNDLE}/Contents/MacOS/${EXEC_NAME}"
 chmod +x "${BUNDLE}/Contents/MacOS/${EXEC_NAME}"
+
+HELPER_PATH="$(swift build -c release --show-bin-path)/KajiSleepHelper"
+cp "$HELPER_PATH" "${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
+chmod +x "${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
+cp "Resources/dev.kaji.sleep-helper.plist" \
+    "${BUNDLE}/Contents/Library/LaunchDaemons/dev.kaji.sleep-helper.plist"
 
 # Prefer the tracked Info.plist; fall back to generating one if absent.
 if [[ -f "Info.plist" ]]; then
@@ -75,6 +83,13 @@ fi
 
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
+
+# SMAppService requires a sealed app bundle. Local source builds use ad-hoc
+# signing; release pipelines can replace "-" with an Apple Developer identity.
+xattr -cr "${BUNDLE}"
+codesign --force --sign - --identifier dev.kaji.sleep-helper \
+	"${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
+codesign --force --sign - --identifier dev.kaji "${BUNDLE}"
 
 echo "==> done: ${BUNDLE}"
 echo "    run with: open ${BUNDLE}"

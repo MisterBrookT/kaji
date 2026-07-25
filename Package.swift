@@ -8,6 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "Kaji", targets: ["Kaji"]),
+        .executable(name: "KajiSleepHelper", targets: ["KajiSleepHelper"]),
         .library(name: "KajiCore", targets: ["KajiCore"])
     ],
     targets: [
@@ -18,8 +19,17 @@ let package = Package(
         ),
         .executableTarget(
             name: "Kaji",
-            dependencies: ["KajiCore"],
+            dependencies: ["KajiCore", "KajiSleepSupport"],
             path: "Sources/Kaji"
+        ),
+        .target(
+            name: "KajiSleepSupport",
+            path: "Sources/KajiSleepSupport"
+        ),
+        .executableTarget(
+            name: "KajiSleepHelper",
+            dependencies: ["KajiSleepSupport"],
+            path: "Sources/KajiSleepHelper"
         ),
         .testTarget(
             name: "KajiTests",

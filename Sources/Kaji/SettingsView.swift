@@ -62,8 +62,8 @@ struct SettingsView: View {
                         }
                     }
                     settingRow(title: L10n.t(.keepAwake, prefs.language)) {
-                        segment(preventSleepTitle, on: prefs.preventSleep) {
-                            prefs.preventSleep.toggle()
+                        segment(preventSleepTitle, on: sleepController.isEnabled) {
+                            sleepController.toggle()
                         }
                         .disabled(sleepController.isBusy)
                     }
@@ -191,9 +191,9 @@ struct SettingsView: View {
 
     private var preventSleepTitle: String {
         if sleepController.isBusy {
-            return prefs.preventSleep ? "On\u{2026}" : "Off\u{2026}"
+            return sleepController.targetEnabled == true ? "On\u{2026}" : "Off\u{2026}"
         }
-        return prefs.preventSleep ? "On" : "Off"
+        return sleepController.isEnabled ? "On" : "Off"
     }
 
     private func providerRow(_ key: String) -> some View {
