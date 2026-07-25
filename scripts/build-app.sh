@@ -89,6 +89,7 @@ printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
 xattr -cr "${BUNDLE}"
 codesign --force --sign - --identifier dev.kaji.sleep-helper \
 	"${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
+xattr -cr "${BUNDLE}"
 codesign --force --sign - --identifier dev.kaji "${BUNDLE}"
 
 echo "==> done: ${BUNDLE}"
