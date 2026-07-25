@@ -15,6 +15,7 @@
 | Done | [product/lean-module-host.md](product/lean-module-host.md) |
 | Done | [product/architecture-modules.md](product/architecture-modules.md) |
 | Done | [integrate/pet-bridge.md](integrate/pet-bridge.md) |
+| Done | [integrate/sleep-helper.md](integrate/sleep-helper.md) |
 | Done | [ship/distribution.md](ship/distribution.md) |
 | **Approved** | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) — 已落地 |
 | **Approved** | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) — focus/break 剩余数字；无 BREAK 文案 |

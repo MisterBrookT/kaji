@@ -1,16 +1,20 @@
 import Foundation
+import KajiCore
+import KajiSleepSupport
+import ServiceManagement
 
-// MARK: - SleepController
-//
-// Manages macOS SleepDisabled via pmset. This is intentionally explicit: closed
-// lid / hardware sleep prevention requires a privileged system setting, unlike
-// a plain IOPMAssertion/caffeinate idle assertion.
 @MainActor
 final class SleepController: ObservableObject {
     @Published private(set) var isEnabled = false
     @Published private(set) var isBusy = false
     @Published private(set) var targetEnabled: Bool?
     @Published private(set) var lastError: String?
+
+    var onStateChanged: ((Bool) -> Void)?
+
+    private static let daemon = SMAppService.daemon(
+        plistName: "dev.kaji.sleep-helper.plist"
+    )
 
     init(previewEnabled: Bool? = nil) {
         if let previewEnabled {
@@ -21,7 +25,9 @@ final class SleepController: ObservableObject {
     }
 
     func refresh() {
-        isEnabled = Self.readSleepDisabled()
+        let observed = Self.readSleepDisabled()
+        isEnabled = observed
+        onStateChanged?(observed)
     }
 
     func toggle() {
@@ -29,22 +35,87 @@ final class SleepController: ObservableObject {
     }
 
     func setEnabled(_ enabled: Bool) {
-        if isBusy { return }
+        guard !isBusy else { return }
         refresh()
-        if isEnabled == enabled { return }
+        guard isEnabled != enabled else { return }
+
         isBusy = true
         targetEnabled = enabled
         lastError = nil
+
         Task {
-            let ok = await Self.runPrivilegedPmset(disabled: enabled)
-            await MainActor.run {
-                self.isBusy = false
-                self.targetEnabled = nil
-                self.refresh()
-                if !ok {
-                    self.lastError = "pmset_failed"
-                }
+            let commandSucceeded: Bool
+            do {
+                try Self.registerHelperIfNeeded()
+                commandSucceeded = await Self.requestSleepDisabled(enabled)
+            } catch {
+                commandSucceeded = false
             }
+
+            let observed = Self.readSleepDisabled()
+            isBusy = false
+            targetEnabled = nil
+            isEnabled = observed
+            onStateChanged?(observed)
+
+            if case .failure = SleepControlLogic.resolvedState(
+                requested: enabled,
+                commandSucceeded: commandSucceeded,
+                observed: observed
+            ) {
+                lastError = "pmset_failed"
+            }
+        }
+    }
+
+    func restoreAndRemoveHelper() async throws {
+        guard await Self.requestSleepDisabled(false) else {
+            throw SleepControllerError.restoreFailed
+        }
+        try await Self.daemon.unregister()
+        refresh()
+    }
+
+    private static func registerHelperIfNeeded() throws {
+        switch daemon.status {
+        case .enabled:
+            return
+        case .notRegistered, .notFound:
+            try daemon.register()
+        case .requiresApproval:
+            throw SleepControllerError.approvalRequired
+        @unknown default:
+            throw SleepControllerError.registrationFailed
+        }
+    }
+
+    private static func requestSleepDisabled(_ disabled: Bool) async -> Bool {
+        await withCheckedContinuation { continuation in
+            let connection = NSXPCConnection(machServiceName: kajiSleepHelperMachService)
+            connection.remoteObjectInterface = NSXPCInterface(with: SleepHelperProtocol.self)
+
+            let lock = NSLock()
+            var resumed = false
+            let finish: (Bool) -> Void = { value in
+                lock.lock()
+                defer { lock.unlock() }
+                guard !resumed else { return }
+                resumed = true
+                connection.invalidate()
+                continuation.resume(returning: value)
+            }
+
+            connection.interruptionHandler = { finish(false) }
+            connection.invalidationHandler = { finish(false) }
+            connection.resume()
+
+            guard let helper = connection.remoteObjectProxyWithErrorHandler({ _ in
+                finish(false)
+            }) as? SleepHelperProtocol else {
+                finish(false)
+                return
+            }
+            helper.setSleepDisabled(disabled) { ok, _ in finish(ok) }
         }
     }
 
@@ -62,38 +133,17 @@ final class SleepController: ObservableObject {
             return false
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let out = String(data: data, encoding: .utf8) else { return false }
-        return parseSleepDisabled(out)
+        guard let output = String(data: data, encoding: .utf8) else { return false }
+        return SleepControlLogic.parseSleepDisabled(output)
     }
 
     static func parseSleepDisabled(_ output: String) -> Bool {
-        output
-            .split(whereSeparator: \.isNewline)
-            .contains { line in
-                let parts = line.split(whereSeparator: \.isWhitespace)
-                return parts.count >= 2 && parts[0] == "SleepDisabled" && parts[1] == "1"
-            }
+        SleepControlLogic.parseSleepDisabled(output)
     }
+}
 
-    private static func runPrivilegedPmset(disabled: Bool) async -> Bool {
-        await Task.detached(priority: .userInitiated) {
-            let value = disabled ? "1" : "0"
-            let command = "/usr/bin/pmset -a disablesleep \(value)"
-            let escaped = command.replacingOccurrences(of: "\"", with: "\\\"")
-            let script = "do shell script \"\(escaped)\" with administrator privileges"
-
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-            process.arguments = ["-e", script]
-            process.standardOutput = Pipe()
-            process.standardError = Pipe()
-            do {
-                try process.run()
-                process.waitUntilExit()
-                return process.terminationStatus == 0
-            } catch {
-                return false
-            }
-        }.value
-    }
+private enum SleepControllerError: Error {
+    case approvalRequired
+    case registrationFailed
+    case restoreFailed
 }

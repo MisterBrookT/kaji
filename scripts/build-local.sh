@@ -12,33 +12,8 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-APP="build/Kaji.app"
-EXEC_NAME="Kaji"
-
-echo "==> swift build -c release"
-swift build -c release
-BIN_PATH="$(swift build -c release --show-bin-path)/${EXEC_NAME}"
-if [[ ! -x "$BIN_PATH" ]]; then
-  echo "error: built executable not found at $BIN_PATH" >&2
-  exit 1
-fi
-
-echo "==> assemble $APP"
-rm -rf build/Kaji.app
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
-cp "$BIN_PATH" "$APP/Contents/MacOS/Kaji"
-cp Info.plist "$APP/Contents/Info.plist"
-# Resources/quota.py is the single source of truth for the bundled reader.
-# Always copy it so the .app never drifts from the repo (see the bundle-drift
-# pitfall that hid one provider in v0.4.4).
-cp Resources/quota.py "$APP/Contents/Resources/quota.py"
-[ -f Resources/AppIcon.icns ] && cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-[ -f Resources/navi-panda.png ] && cp Resources/navi-panda.png "$APP/Contents/Resources/navi-panda.png"
-# Break intensity art (optional; ignore if not present on this branch).
-for img in break-forest.png break-ocean.png break-alpine.png; do
-  [ -f "Resources/$img" ] && cp "Resources/$img" "$APP/Contents/Resources/$img"
-done
-printf 'APPL????' > "$APP/Contents/PkgInfo"
+./scripts/build-app.sh
+APP="dist/Kaji.app"
 
 echo "==> md5 quota.py (source vs bundle — must match)"
 md5 -q Resources/quota.py "$APP/Contents/Resources/quota.py"

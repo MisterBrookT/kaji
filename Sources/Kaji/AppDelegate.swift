@@ -35,6 +35,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        sleepController.onStateChanged = { [weak self] enabled in
+            self?.prefs.preventSleep = enabled
+        }
+        sleepController.refresh()
         store.start()
         applyModuleLifecycle(prefs.enabledModules)
         refreshPetCatalogSelection()
@@ -118,13 +122,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 if !LoginItemManager.setEnabled(enabled) {
                     self?.prefs.launchAtLogin = !enabled
                 }
-            }
-            .store(in: &cancellables)
-        prefs.$preventSleep
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] enabled in
-                self?.sleepController.setEnabled(enabled)
             }
             .store(in: &cancellables)
         prefs.$breakOverlayEnabled
@@ -296,7 +293,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controls = GaugeRowView.Controls(
             onRefresh: { [weak self] in self?.store.refresh() },
             onUpdate: { [weak self] in self?.handleUpdateAction() },
-            onToggleKeepAwake: { [weak self] in self?.prefs.preventSleep.toggle() },
+            onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
             onTogglePet: {},
             onOpenSettings: { [weak self] in self?.openSettings() },
             onQuit: { NSApp.terminate(nil) }
