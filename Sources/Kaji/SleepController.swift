@@ -48,6 +48,9 @@ final class SleepController: ObservableObject {
             do {
                 try Self.registerHelperIfNeeded()
                 commandSucceeded = await Self.requestSleepDisabled(enabled)
+            } catch SleepControllerError.approvalRequired {
+                SMAppService.openSystemSettingsLoginItems()
+                commandSucceeded = false
             } catch {
                 commandSucceeded = false
             }
@@ -82,6 +85,9 @@ final class SleepController: ObservableObject {
             return
         case .notRegistered, .notFound:
             try daemon.register()
+            guard daemon.status == .enabled else {
+                throw SleepControllerError.approvalRequired
+            }
         case .requiresApproval:
             throw SleepControllerError.approvalRequired
         @unknown default:
