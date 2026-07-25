@@ -32,8 +32,10 @@ struct SettingsView: View {
             settingBlock(title: L10n.t(.appearance, prefs.language)) {
                 VStack(alignment: .leading, spacing: 10) {
                     settingRow(title: L10n.t(.language, prefs.language)) {
-                        segment(prefs.language.label, on: true) {
-                            prefs.language = prefs.language.toggled
+                        ForEach(Lang.allCases, id: \.rawValue) { language in
+                            segment(language.label, on: prefs.language == language) {
+                                prefs.language = language
+                            }
                         }
                     }
                     settingRow(title: L10n.t(.usage, prefs.language)) {
@@ -119,11 +121,11 @@ struct SettingsView: View {
     private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {
         let on = prefs.isModuleEnabled(id)
         return settingRow(title: title) {
-            segment("On", on: on) {
+            segment(L10n.t(.on, prefs.language), on: on) {
                 if !lockedOn { prefs.setModule(id, enabled: true) }
             }
             .disabled(lockedOn && on)
-            segment("Off", on: !on) {
+            segment(L10n.t(.off, prefs.language), on: !on) {
                 if !lockedOn { prefs.setModule(id, enabled: false) }
             }
             .disabled(lockedOn)
@@ -191,9 +193,10 @@ struct SettingsView: View {
 
     private var preventSleepTitle: String {
         if sleepController.isBusy {
-            return sleepController.targetEnabled == true ? "On\u{2026}" : "Off\u{2026}"
+            let key: L10n.K = sleepController.targetEnabled == true ? .on : .off
+            return L10n.t(key, prefs.language) + "\u{2026}"
         }
-        return sleepController.isEnabled ? "On" : "Off"
+        return L10n.t(sleepController.isEnabled ? .on : .off, prefs.language)
     }
 
     private func providerRow(_ key: String) -> some View {
@@ -210,7 +213,7 @@ struct SettingsView: View {
                 HStack(spacing: 5) {
                     Image(systemName: prefs.isVisible(key) ? "eye" : "eye.slash")
                         .font(.system(size: 10, weight: .semibold))
-                    Text(prefs.isVisible(key) ? "Show" : "Hide")
+                    Text(L10n.t(prefs.isVisible(key) ? .show : .hide, prefs.language))
                 }
                 .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                 .foregroundColor(prefs.isVisible(key) ? t.bg : t.mute)

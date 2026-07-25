@@ -55,6 +55,15 @@ No `.app.zip` on Releases (unsigned browser downloads trip Gatekeeper). Or run `
 
 Theme: **Mono** only (black / white / gray, light & dark).
 
+## Languages
+
+Kaji supports **English, Simplified Chinese, Brazilian Portuguese, and Spanish**.
+New installs start in English. Existing installs keep their saved language when
+upgrading.
+
+Switch anytime in Settings with `EN / 中文 / PT-BR / ES`. New user-facing copy
+must ship in all four languages.
+
 ## Build
 
 ```sh
