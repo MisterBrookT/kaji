@@ -54,13 +54,13 @@ dev_docs/
   specs/             # acceptable feature specs
 ```
 
-`docs/` is **only** the GitHub Pages publish root (`index.html` + assets + `.nojekyll`). Not a documentation wiki.
+**No public docs site / no GitHub Pages landing.** Repo face is README + Releases only — less is more for a menu-bar tool.
 
 Rules:
 
-- **Internal prose → `dev_docs/`.** Do not grow `docs/` into a docs site.
+- **Internal prose → `dev_docs/`.** Do not recreate a `docs/` wiki or marketing site.
 - **One language per doc** — no EN/ZH duplicate pairs.
-- **Canonical image sources stay in `dev_docs/assets/`**; copy into `docs/assets/` when the Pages landing needs them.
+- **Assets stay in `dev_docs/assets/`** (README images included).
 - New internal prose goes in the matching category folder; update the catalog.
 - After product direction is reviewed: write an **acceptable feature spec** under `dev_docs/specs/`.
 - **Plan docs are optional.** Use them when the work spans many files/sessions or another agent has zero context. If the spec already has clear acceptance cases and a small file touch list, go **tests → implement** and skip a separate plan.

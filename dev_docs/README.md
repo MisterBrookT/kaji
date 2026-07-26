@@ -23,7 +23,6 @@
 | **Draft** | [specs/2026-07-25-four-language-baseline.md](specs/2026-07-25-four-language-baseline.md) — English 默认；EN / 中文 / PT-BR / ES；保留老用户选择 |
 | **Approved** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — 方案 B；已落地 |
 | **Approved** | [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) — Cursor 月度外 API / 内 Auto；v0.6.1 |
-| Parked | [../docs/index.html](../docs/index.html) — GitHub Pages landing only |
 | Optional | [design/palette.html](design/palette.html) |
 
 ## Catalog
@@ -40,7 +39,7 @@
 | Doc | Notes |
 | --- | --- |
 | [design/design-language.md](design/design-language.md) | 黑白灰 Mono |
-| [design/homepage-shot-guide.zh.md](design/homepage-shot-guide.zh.md) | README / 主页截图指南（内部） |
+| [design/homepage-shot-guide.zh.md](design/homepage-shot-guide.zh.md) | README 截图指南（内部） |
 | [design/palette.html](design/palette.html) | 色板页 |
 
 ### Integrate
@@ -80,7 +79,8 @@ dev_docs/
   design/
   integrate/
   ship/
-  specs/     # next
-  plans/     # next
-  index.html # parked
+  specs/
+  plans/
 ```
+
+No public Pages landing — README + Releases only.
