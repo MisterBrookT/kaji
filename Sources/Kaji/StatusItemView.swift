@@ -22,24 +22,42 @@ struct StatusItemView: View {
     /// Optional work countdown (`MM:SS`) to the right of the rings.
     /// `nil` when the work module is disabled — no slot rendered.
     var workSlotLabel: String? = nil
+    /// Optional today's completion summary (`n/n`) when Goals is enabled.
+    var goalsSlotLabel: String? = nil
+    var onQuotaClick: () -> Void = {}
+    var onWorkClick: () -> Void = {}
+    var onGoalsClick: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         HStack(spacing: 5) {
-            if providers.isEmpty {
-                DualRing(provider: nil, showRemaining: showRemaining)
-            } else {
-                // Show every visible provider — capping at 4 keeps the glyph
-                // compact (5+ would crowd the menubar and fight other icons).
-                // 4 also matches the max in `Providers.visible` minus hidden
-                // ones, so this is a future-proof ceiling, not a guess.
-                ForEach(providers.prefix(4)) { p in
-                    DualRing(provider: p, showRemaining: showRemaining)
+            Button(action: onQuotaClick) {
+                HStack(spacing: 5) {
+                    if providers.isEmpty {
+                        DualRing(provider: nil, showRemaining: showRemaining)
+                    } else {
+                        ForEach(providers.prefix(4)) { p in
+                            DualRing(provider: p, showRemaining: showRemaining)
+                        }
+                    }
                 }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
             if let workSlotLabel {
-                WorkStatusSlot(label: workSlotLabel)
+                Button(action: onWorkClick) {
+                    WorkStatusSlot(label: workSlotLabel)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+            if let goalsSlotLabel {
+                Button(action: onGoalsClick) {
+                    GoalsStatusSlot(label: goalsSlotLabel)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.horizontal, 3)
@@ -53,6 +71,26 @@ struct StatusItemView: View {
                     .offset(x: 1, y: 1)
             }
         }
+    }
+}
+
+private struct GoalsStatusSlot: View {
+    let label: String
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var color: Color {
+        scheme == .dark ? .white : .black
+    }
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
+            .monospacedDigit()
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .fixedSize()
+        .padding(.horizontal, 2)
     }
 }
 

@@ -29,7 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     private let dailyGoals = DailyGoalStore()
+    private let popoverNavigation = PopoverNavigation()
     private var breakWindows: [NSWindow] = []
+    private var breakSceneSeed: UInt64?
     private var breakWatchdogTimer: Timer?
     private var petStateTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -84,6 +86,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.applyModuleLifecycle(modules)
                 self?.updateStatusItem()
                 self?.rebuildPopoverContentIfShown()
+            }
+            .store(in: &cancellables)
+        dailyGoals.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.updateStatusItem()
+                }
             }
             .store(in: &cancellables)
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
@@ -193,6 +203,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Re-check on reactivation; the checker's own once/6h throttle keeps this
         // from hitting the network on every menubar interaction.
         updateChecker.checkIfDue()
+        dailyGoals.refreshPeriodBoundaries()
     }
 
     // MARK: - Status item
@@ -204,7 +215,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = StatusItemView(providers: visibleProviders,
                                   showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil,
-                                  workSlotLabel: workStatusSlotLabel)
+                                  workSlotLabel: workStatusSlotLabel,
+                                  goalsSlotLabel: goalsStatusSlotLabel,
+                                  onQuotaClick: { [weak self] in self?.showPopover(.quota) },
+                                  onWorkClick: { [weak self] in self?.showPopover(.work) },
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -215,17 +230,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hostingView.topAnchor.constraint(equalTo: button.topAnchor),
             hostingView.bottomAnchor.constraint(equalTo: button.bottomAnchor),
         ])
-
-        button.target = self
-        button.action = #selector(statusButtonClicked(_:))
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
     }
 
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: visibleProviders,
                                                showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil,
-                                               workSlotLabel: workStatusSlotLabel)
+                                               workSlotLabel: workStatusSlotLabel,
+                                               goalsSlotLabel: goalsStatusSlotLabel,
+                                               onQuotaClick: { [weak self] in self?.showPopover(.quota) },
+                                               onWorkClick: { [weak self] in self?.showPopover(.work) },
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
         statusItem.length = statusItemLength
     }
 
@@ -246,6 +261,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    private var goalsStatusSlotLabel: String? {
+        MenuBarSlotLogic.goalsLabel(
+            enabled: prefs.isModuleEnabled(.goals),
+            goals: dailyGoals.goals
+        )
+    }
+
     private var statusItemLength: CGFloat {
         let count = max(1, min(4, visibleProviders.count))
         var length = CGFloat(count) * 26 + 6
@@ -253,11 +275,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if workStatusSlotLabel != nil {
             length += 40
         }
+        if let goalsStatusSlotLabel {
+            length += 8 + CGFloat(goalsStatusSlotLabel.count) * 7
+        }
         return length
-    }
-
-    @objc private func statusButtonClicked(_ sender: NSStatusBarButton) {
-        togglePopover(sender)
     }
 
     // MARK: - Popover
@@ -269,11 +290,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover = pop
     }
 
-    private func togglePopover(_ sender: NSStatusBarButton) {
+    private func showPopover(_ destination: MenuBarDestination) {
+        guard let sender = statusItem.button else { return }
+        dailyGoals.refreshPeriodBoundaries()
         if popover.isShown {
-            popover.performClose(sender)
+            if destinationMatchesCurrentPanel(destination) {
+                popover.performClose(sender)
+                return
+            }
+            applyPopoverDestination(destination)
             return
         }
+
+        // AppKit's first fitting pass can leave the initial SwiftUI page offset.
+        // Fit from another enabled page, then switch after placement so every
+        // direct menu-bar destination follows the same path as normal paging.
+        let stagingDestination = popoverStagingDestination(for: destination)
+        applyPopoverDestination(stagingDestination)
+        let requestedDestination = destination
+
         // Rebuild content each open. Width is pinned to `prefs.panelSize`
         // so the popover follows S/M; height auto-fits since the popover
         // also shows the settings footer (which the HUD doesn't).
@@ -287,6 +322,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         popover.contentViewController = controller
         popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+
+        if requestedDestination != stagingDestination {
+            DispatchQueue.main.async { [weak self] in
+                self?.applyPopoverDestination(requestedDestination)
+            }
+        }
+    }
+
+    private func popoverStagingDestination(for destination: MenuBarDestination) -> MenuBarDestination {
+        switch destination {
+        case .quota:
+            if prefs.isModuleEnabled(.work) { return .work }
+            if prefs.isModuleEnabled(.goals) { return .goalsToday }
+            return .quota
+        case .work, .goalsToday:
+            return .quota
+        }
+    }
+
+    private func destinationMatchesCurrentPanel(_ destination: MenuBarDestination) -> Bool {
+        switch destination {
+        case .quota:
+            return popoverNavigation.panel == .quota
+        case .work:
+            return popoverNavigation.panel == .work
+        case .goalsToday:
+            return popoverNavigation.panel == .goals
+        }
+    }
+
+    private func applyPopoverDestination(_ destination: MenuBarDestination) {
+        switch destination {
+        case .quota:
+            popoverNavigation.panel = .quota
+        case .work:
+            guard prefs.isModuleEnabled(.work) else {
+                popoverNavigation.panel = .quota
+                break
+            }
+            popoverNavigation.panel = .work
+        case .goalsToday:
+            guard prefs.isModuleEnabled(.goals) else {
+                popoverNavigation.panel = .quota
+                break
+            }
+            popoverNavigation.panel = .goals
+            popoverNavigation.goalHorizon = .today
+        }
     }
 
     private func makePopoverContentController(maxContentHeight: CGFloat? = nil) -> NSHostingController<AnyView> {
@@ -303,6 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       workSession: workSession,
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
+                                      navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
                                       onContentSizeChange: { [weak self] size in
@@ -463,14 +547,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let mainScreen = NSScreen.main
+        let sceneSeed = breakSceneSeed ?? UInt64.random(in: UInt64.min...UInt64.max)
+        breakSceneSeed = sceneSeed
+        let scene = BreakSceneModel.scene(sessionSeed: sceneSeed)
         breakWindows = NSScreen.screens.map { screen in
             let isPrimary = screen == mainScreen
             let view = BreakOverlayView(prefs: prefs,
                                         workSession: workSession,
-                                        petCatalog: petCatalog,
-                                        dailyGoals: dailyGoals,
+                                        scene: scene,
                                         isPrimary: isPrimary,
-                                        onStartBreak: { [weak self] in self?.workSession.startBreak() },
                                         onSkip: { [weak self] in self?.workSession.skipBreak() })
                 .ignoresSafeArea()
             let hostingView = KajiHostingView(rootView: view)
@@ -509,6 +594,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func closeBreakOverlay() {
         breakWindows.forEach { $0.close() }
         breakWindows.removeAll()
+        breakSceneSeed = nil
     }
 }
 

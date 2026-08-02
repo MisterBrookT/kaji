@@ -1,6 +1,12 @@
 import SwiftUI
 import KajiCore
 
+@MainActor
+final class PopoverNavigation: ObservableObject {
+    @Published var panel: KajiModuleID = .quota
+    @Published var goalHorizon: GoalHorizon = .today
+}
+
 private struct PopoverContentSizeKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
 
@@ -16,6 +22,7 @@ struct KajiPopoverView: View {
     @ObservedObject var workSession: WorkSessionController
     @ObservedObject var systemMonitor: SystemMonitor
     @ObservedObject var dailyGoals: DailyGoalStore
+    @ObservedObject var navigation: PopoverNavigation
 
     let controls: GaugeRowView.Controls
     let maxContentHeight: CGFloat
@@ -24,8 +31,10 @@ struct KajiPopoverView: View {
     /// pass `false` for screenshot harnesses.
     var scrollsContent: Bool = true
 
-    @State private var panel: KajiModuleID = .quota
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
+    @State private var previousFocusedGoalID: UUID?
+    @State private var previousFocusedGoalHorizon: GoalHorizon = .today
+    @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
     @Environment(\.colorScheme) private var scheme
 
@@ -33,6 +42,10 @@ struct KajiPopoverView: View {
     private var shown: [ProviderView] { store.providers.filter { prefs.isVisible($0.id) } }
     private var panelScrollMaxHeight: CGFloat { max(180, maxContentHeight - 104) }
     private var pages: [KajiModuleID] { prefs.popoverModulePages }
+    private var panel: KajiModuleID {
+        get { navigation.panel }
+        nonmutating set { navigation.panel = newValue }
+    }
     private var pageIndex: Int {
         pages.firstIndex(of: panel) ?? 0
     }
@@ -67,6 +80,18 @@ struct KajiPopoverView: View {
         .onAppear { clampPanelToEnabledPages() }
         .onChange(of: prefs.enabledModules) { _ in
             clampPanelToEnabledPages()
+        }
+        .onChange(of: focusedGoalID) { newValue in
+            if let previousFocusedGoalID,
+               let goal = dailyGoals.goals(for: previousFocusedGoalHorizon)
+                .first(where: { $0.id == previousFocusedGoalID }) {
+                dailyGoals.removeIfBlank(goal, in: previousFocusedGoalHorizon)
+            }
+            previousFocusedGoalID = newValue
+            previousFocusedGoalHorizon = navigation.goalHorizon
+        }
+        .onChange(of: navigation.goalHorizon) { _ in
+            focusedGoalID = nil
         }
     }
 
@@ -577,33 +602,75 @@ struct KajiPopoverView: View {
     }
 
     private var goalsPanel: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("\(dailyGoals.completedCount)/\(dailyGoals.goals.count)")
-                    .font(.system(size: 28, weight: .bold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .monospacedDigit()
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Daily Goals")
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
+        VStack(alignment: .leading, spacing: 13) {
+            goalSection(.today, title: "今天", showsHeatmap: true)
+            if !dailyGoals.yesterdayPending.isEmpty {
+                yesterdayPendingSection
+            }
+            Divider().overlay(t.track.opacity(0.7))
+            goalSection(.week, title: "本周", showsHeatmap: false)
+            Divider().overlay(t.track.opacity(0.7))
+            goalSection(.longTerm, title: "长期", showsHeatmap: false)
+        }
+    }
+
+    private var yesterdayPendingSection: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text("昨日未完成")
+                .font(.system(size: 11, weight: .bold, design: .rounded))
+                .foregroundColor(t.mute)
+            ForEach(dailyGoals.yesterdayPending) { goal in
+                HStack(spacing: 8) {
+                    Text(goal.title)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(t.cream)
-                    Text("明天自动清空完成状态")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(t.mute)
+                        .lineLimit(1)
+                    Spacer()
+                    miniButton("arrow.turn.down.right") {
+                        dailyGoals.moveYesterdayGoalToToday(goal)
+                    }
+                    miniButton("trash") {
+                        dailyGoals.dismissYesterdayGoal(goal)
+                    }
                 }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
+            }
+        }
+    }
+
+    private func goalSection(
+        _ horizon: GoalHorizon,
+        title: String,
+        showsHeatmap: Bool
+    ) -> some View {
+        let goals = dailyGoals.goals(for: horizon)
+        let summary = dailyGoals.summary(for: horizon)
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Text(title)
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Text("\(summary.completed)/\(summary.total)")
+                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .foregroundColor(t.mute)
+                    .monospacedDigit()
                 Spacer()
-                chip("Reset", filled: false) {
-                    dailyGoals.resetToday()
-                }
-                chip("Add", filled: true) {
-                    dailyGoals.addGoal()
+                miniButton("plus") {
+                    navigation.goalHorizon = horizon
+                    let id = dailyGoals.addGoal(in: horizon)
+                    DispatchQueue.main.async {
+                        focusedGoalID = id
+                    }
                 }
             }
-            goalHeatmap
-            ForEach(dailyGoals.goals) { goal in
+            if showsHeatmap {
+                goalHeatmap
+            }
+            ForEach(goals) { goal in
                 HStack(spacing: 8) {
                     Button {
-                        dailyGoals.toggle(goal)
+                        dailyGoals.toggle(goal, in: horizon)
                     } label: {
                         Image(systemName: goal.isDone ? "checkmark.circle.fill" : "circle")
                             .font(.system(size: 15, weight: .bold))
@@ -612,18 +679,27 @@ struct KajiPopoverView: View {
                     .buttonStyle(.plain)
                     TextField("", text: Binding(
                         get: { goal.title },
-                        set: { dailyGoals.updateTitle(goal, title: $0) }
+                        set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
                     ))
                     .textFieldStyle(.plain)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
                     .foregroundColor(goal.isDone ? t.mute : t.cream)
-                    miniButton("trash") {
-                        dailyGoals.delete(goal)
+                    .focused($focusedGoalID, equals: goal.id)
+                    .onSubmit {
+                        dailyGoals.removeIfBlank(goal, in: horizon)
                     }
-                    .disabled(dailyGoals.goals.count <= 1)
+                    miniButton("trash") {
+                        dailyGoals.delete(goal, in: horizon)
+                    }
                 }
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+            }
+            if goals.isEmpty {
+                Text("暂无目标")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             }
         }
     }
@@ -708,7 +784,7 @@ struct KajiPopoverView: View {
         case .quota: return "5h + 7d pressure"
         case .work: return "45m work, hard break"
         case .system: return "Health + hot processes + cleanup"
-        case .goals: return "Daily completion"
+        case .goals: return "Today · Week · Long term"
         }
     }
 
@@ -724,11 +800,11 @@ struct KajiPopoverView: View {
     private var workStatusText: String {
         switch workSession.phase {
         case .working:
-            return prefs.breakOverlayEnabled ? "工作中。到点后宠物会弹出拦截。" : "工作中。强制休息已关闭。"
+            return prefs.breakOverlayEnabled ? "工作中。到点后进入休息画面。" : "工作中。强制休息已关闭。"
         case .breakDue:
-            return prefs.breakOverlayEnabled ? "该休息了。宠物会挡住工作，Skip 会记录。" : "该休息了。现在只记录倒计时。"
+            return prefs.breakOverlayEnabled ? "休息时间到了。" : "该休息了。现在只记录倒计时。"
         case .breaking:
-            return "休息中。站起来，走两分钟。"
+            return "休息中。离开屏幕片刻。"
         }
     }
 

@@ -1,136 +1,204 @@
 import Foundation
+import KajiCore
 
-struct DailyGoal: Identifiable, Codable, Equatable {
-    let id: UUID
-    var title: String
-    var isDone: Bool
-}
-
-struct DailyGoalHistoryDay: Identifiable, Codable, Equatable {
-    let day: String
-    var completed: Int
-    var total: Int
-
-    var id: String { day }
-    var ratio: Double {
-        guard total > 0 else { return 0 }
-        return min(max(Double(completed) / Double(total), 0), 1)
-    }
-}
+typealias DailyGoal = GoalItem
+typealias DailyGoalHistoryDay = GoalHistoryDay
 
 @MainActor
 final class DailyGoalStore: ObservableObject {
-    @Published private(set) var goals: [DailyGoal] {
-        didSet {
-            save()
-            recordToday()
-        }
-    }
-    @Published private(set) var history: [String: DailyGoalHistoryDay] {
-        didSet { saveHistory() }
+    @Published private(set) var state: GoalHorizonState {
+        didSet { save() }
     }
 
-    private var dayKey: String {
-        didSet { UserDefaults.standard.set(dayKey, forKey: Key.dayKey) }
-    }
+    private let defaults: UserDefaults
+    private var now: () -> Date
+    private var calendar: Calendar
 
     private enum Key {
-        static let goals = "dailyGoals"
-        static let dayKey = "dailyGoalsDayKey"
-        static let history = "dailyGoalsHistory"
+        static let state = "goalHorizonStateV1"
+        static let migrationVersion = "goalHorizonMigrationVersion"
+        static let legacyGoals = "dailyGoals"
+        static let legacyDayKey = "dailyGoalsDayKey"
+        static let legacyHistory = "dailyGoalsHistory"
     }
 
-    init() {
-        let defaults = UserDefaults.standard
-        if let data = defaults.data(forKey: Key.goals),
-           let decoded = try? JSONDecoder().decode([DailyGoal].self, from: data),
-           !decoded.isEmpty {
-            goals = decoded
+    init(
+        defaults: UserDefaults = .standard,
+        now: @escaping () -> Date = Date.init,
+        calendar: Calendar = .current
+    ) {
+        self.defaults = defaults
+        self.now = now
+        self.calendar = calendar
+
+        let date = now()
+        let dayKey = Self.dayKey(for: date, calendar: calendar)
+        let weekKey = Self.weekKey(for: date, calendar: calendar)
+        if let data = defaults.data(forKey: Key.state),
+           let decoded = try? JSONDecoder().decode(GoalHorizonState.self, from: data) {
+            state = decoded
+            if !Self.containsYesterdayPendingField(data), decoded.dayKey == dayKey {
+                var migrated = decoded
+                migrated.yesterdayPending = decoded.today.filter {
+                    !$0.isDone && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                }.map {
+                    DailyGoal(id: $0.id, title: $0.title, isDone: false)
+                }
+                migrated.today = []
+                state = migrated
+            }
         } else {
-            goals = Self.defaultGoals
+            state = Self.migratedState(
+                defaults: defaults,
+                currentDayKey: dayKey,
+                currentWeekKey: weekKey
+            )
         }
-        if let data = defaults.data(forKey: Key.history),
-           let decoded = try? JSONDecoder().decode([String: DailyGoalHistoryDay].self, from: data) {
-            history = decoded
-        } else {
-            history = [:]
+        state = GoalHorizonLogic.refresh(state, dayKey: dayKey, weekKey: weekKey)
+        recordToday()
+        save()
+        defaults.set(1, forKey: Key.migrationVersion)
+    }
+
+    var goals: [DailyGoal] { state.today }
+    var completedCount: Int { summary(for: .today).completed }
+    var history: [String: DailyGoalHistoryDay] { state.history }
+    var pendingGoals: [DailyGoal] {
+        state.today.filter {
+            !$0.isDone && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         }
-        dayKey = defaults.string(forKey: Key.dayKey) ?? Self.todayKey()
-        resetIfNeeded()
+    }
+    var yesterdayPending: [DailyGoal] { state.yesterdayPending }
+
+    func goals(for horizon: GoalHorizon) -> [DailyGoal] {
+        state[horizon]
+    }
+
+    func summary(for horizon: GoalHorizon) -> (completed: Int, total: Int) {
+        GoalHorizonLogic.summary(for: state[horizon])
+    }
+
+    func toggle(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
+        mutate(horizon) { goals in
+            guard let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
+            goals[index].isDone.toggle()
+        }
+    }
+
+    func updateTitle(_ goal: DailyGoal, title: String, in horizon: GoalHorizon = .today) {
+        mutate(horizon) { goals in
+            guard let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
+            goals[index].title = title
+        }
+    }
+
+    @discardableResult
+    func addGoal(in horizon: GoalHorizon = .today) -> UUID {
+        let id = UUID()
+        mutate(horizon) { goals in
+            goals.append(DailyGoal(id: id, title: "", isDone: false))
+        }
+        return id
+    }
+
+    func delete(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
+        mutate(horizon) { goals in
+            goals.removeAll { $0.id == goal.id }
+        }
+    }
+
+    func removeIfBlank(_ goal: DailyGoal, in horizon: GoalHorizon) {
+        guard goal.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        delete(goal, in: horizon)
+    }
+
+    func moveYesterdayGoalToToday(_ goal: DailyGoal) {
+        var next = state
+        guard let index = next.yesterdayPending.firstIndex(where: { $0.id == goal.id }) else { return }
+        let moved = next.yesterdayPending.remove(at: index)
+        next.today.append(DailyGoal(id: moved.id, title: moved.title, isDone: false))
+        state = next
         recordToday()
     }
 
-    var completedCount: Int {
-        goals.filter(\.isDone).count
+    func dismissYesterdayGoal(_ goal: DailyGoal) {
+        var next = state
+        next.yesterdayPending.removeAll { $0.id == goal.id }
+        state = next
     }
 
-    func toggle(_ goal: DailyGoal) {
-        guard let idx = goals.firstIndex(where: { $0.id == goal.id }) else { return }
-        goals[idx].isDone.toggle()
-    }
-
-    func updateTitle(_ goal: DailyGoal, title: String) {
-        guard let idx = goals.firstIndex(where: { $0.id == goal.id }) else { return }
-        goals[idx].title = title
-    }
-
-    func addGoal() {
-        goals.append(DailyGoal(id: UUID(), title: "新的目标", isDone: false))
-    }
-
-    func delete(_ goal: DailyGoal) {
-        guard goals.count > 1 else { return }
-        goals.removeAll { $0.id == goal.id }
-    }
-
-    var pendingGoals: [DailyGoal] {
-        goals.filter { !$0.isDone && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-    }
-
-    var heatmapDays: [DailyGoalHistoryDay] {
-        (0..<35).reversed().map { offset in
-            let date = Calendar.current.date(byAdding: .day, value: -offset, to: Date()) ?? Date()
-            let key = Self.key(for: date)
-            return history[key] ?? DailyGoalHistoryDay(day: key, completed: 0, total: 0)
+    func reset(_ horizon: GoalHorizon) {
+        mutate(horizon) { goals in
+            for index in goals.indices {
+                goals[index].isDone = false
+            }
         }
     }
 
     func resetToday() {
-        for idx in goals.indices {
-            goals[idx].isDone = false
-        }
-        dayKey = Self.todayKey()
+        reset(.today)
     }
 
-    private func resetIfNeeded() {
-        let now = Self.todayKey()
-        guard now != dayKey else { return }
-        record(day: dayKey)
-        for idx in goals.indices {
-            goals[idx].isDone = false
-        }
-        dayKey = now
+    func refreshPeriodBoundaries() {
+        let date = now()
+        state = GoalHorizonLogic.refresh(
+            state,
+            dayKey: Self.dayKey(for: date, calendar: calendar),
+            weekKey: Self.weekKey(for: date, calendar: calendar)
+        )
         recordToday()
     }
 
-    private func save() {
-        guard let data = try? JSONEncoder().encode(goals) else { return }
-        UserDefaults.standard.set(data, forKey: Key.goals)
+    var heatmapDays: [DailyGoalHistoryDay] {
+        let date = now()
+        return (0..<35).reversed().map { offset in
+            let value = calendar.date(byAdding: .day, value: -offset, to: date) ?? date
+            let key = Self.dayKey(for: value, calendar: calendar)
+            return state.history[key] ?? DailyGoalHistoryDay(day: key, completed: 0, total: 0)
+        }
     }
 
-    private func saveHistory() {
-        guard let data = try? JSONEncoder().encode(history) else { return }
-        UserDefaults.standard.set(data, forKey: Key.history)
+    private func mutate(_ horizon: GoalHorizon, _ body: (inout [DailyGoal]) -> Void) {
+        var next = state
+        body(&next[horizon])
+        state = next
+        if horizon == .today {
+            recordToday()
+        }
     }
 
     private func recordToday() {
-        record(day: Self.todayKey())
+        var next = state
+        let summary = GoalHorizonLogic.summary(for: next.today)
+        next.history[next.dayKey] = DailyGoalHistoryDay(
+            day: next.dayKey,
+            completed: summary.completed,
+            total: summary.total
+        )
+        if next != state {
+            state = next
+        }
     }
 
-    private func record(day: String) {
-        history[day] = DailyGoalHistoryDay(day: day,
-                                           completed: completedCount,
-                                           total: goals.count)
+    private func save() {
+        guard let data = try? JSONEncoder().encode(state) else { return }
+        defaults.set(data, forKey: Key.state)
+    }
+
+    private static func migratedState(
+        defaults: UserDefaults,
+        currentDayKey: String,
+        currentWeekKey: String
+    ) -> GoalHorizonState {
+        GoalHorizonLogic.migrateLegacy(
+            goalsData: defaults.data(forKey: Key.legacyGoals),
+            goalsKeyExists: defaults.object(forKey: Key.legacyGoals) != nil,
+            dayKey: defaults.string(forKey: Key.legacyDayKey),
+            historyData: defaults.data(forKey: Key.legacyHistory),
+            currentDayKey: currentDayKey,
+            currentWeekKey: currentWeekKey,
+            freshDefaults: defaultGoals
+        )
     }
 
     private static let defaultGoals: [DailyGoal] = [
@@ -139,12 +207,20 @@ final class DailyGoalStore: ObservableObject {
         DailyGoal(id: UUID(), title: "按时休息", isDone: false),
     ]
 
-    private static func todayKey() -> String {
-        key(for: Date())
+    private static func dayKey(for date: Date, calendar: Calendar) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return "\(components.year ?? 0)-\(components.month ?? 0)-\(components.day ?? 0)"
     }
 
-    private static func key(for date: Date) -> String {
-        let comps = Calendar.current.dateComponents([.year, .month, .day], from: date)
-        return "\(comps.year ?? 0)-\(comps.month ?? 0)-\(comps.day ?? 0)"
+    private static func weekKey(for date: Date, calendar: Calendar) -> String {
+        let components = calendar.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+        return "\(components.yearForWeekOfYear ?? 0)-\(components.weekOfYear ?? 0)"
+    }
+
+    private static func containsYesterdayPendingField(_ data: Data) -> Bool {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return false
+        }
+        return object["yesterdayPending"] != nil
     }
 }

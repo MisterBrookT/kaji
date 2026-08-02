@@ -23,6 +23,10 @@
 | **Draft** | [specs/2026-07-25-four-language-baseline.md](specs/2026-07-25-four-language-baseline.md) — English 默认；EN / 中文 / PT-BR / ES；保留老用户选择 |
 | **Approved** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — 方案 B；已落地 |
 | **Approved** | [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) — Cursor 月度外 API / 内 Auto；v0.6.1 |
+| **Approved** | [specs/2026-07-31-calm-break.md](specs/2026-07-31-calm-break.md) — 日系自然动态休息页；无 Widget |
+| **Approved** | [specs/2026-08-01-three-horizon-goals.md](specs/2026-08-01-three-horizon-goals.md) — 今天 / 本周 / 长期三层计划 |
+| **Approved** | [specs/2026-08-01-interactive-menu-bar-slots.md](specs/2026-08-01-interactive-menu-bar-slots.md) — Goals 今日进度；Quota / Work / Goals 分区直达 |
+| **Approved** | [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) — 纯数字今日进度；三层同屏 |
 | Optional | [design/palette.html](design/palette.html) |
 
 ## Catalog
@@ -63,6 +67,10 @@
 | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) | 已通过：focus/break 剩余 `MM:SS`，无 BREAK |
 | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) | 已落地：方案 B，只留黑白灰 |
 | [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) | 已通过：外 API / 内 Auto；limits-only；默认可见 → v0.6.1 |
+| [specs/2026-07-31-calm-break.md](specs/2026-07-31-calm-break.md) | 已通过：日系自然动态休息页；无 Widget |
+| [specs/2026-08-01-three-horizon-goals.md](specs/2026-08-01-three-horizon-goals.md) | 已通过：今天 / 本周 / 长期三层计划 |
+| [specs/2026-08-01-interactive-menu-bar-slots.md](specs/2026-08-01-interactive-menu-bar-slots.md) | 已通过：Goals 今日进度；Quota / Work / Goals 分区直达 |
+| [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) | 已通过：纯数字今日进度；今天 / 本周 / 长期同屏 |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
 ### Assets

@@ -1,354 +1,321 @@
 import AppKit
 import SwiftUI
+import KajiCore
 
 struct BreakOverlayView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var workSession: WorkSessionController
-    @ObservedObject var petCatalog: PetCatalogStore
-    @ObservedObject var dailyGoals: DailyGoalStore
 
+    let scene: BreakSceneID
     let isPrimary: Bool
-    let onStartBreak: () -> Void
     let onSkip: () -> Void
 
-    @State private var exerciseIndex = Int.random(in: 0..<BreakExercise.allCases.count)
-    @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var t: KajiTheme { .resolve(scheme) }
+    @State private var drifting = false
 
     var body: some View {
-        GeometryReader { geo in
-            ZStack {
-                background
-                if isPrimary {
-                    let compactHeight = geo.size.height < 1_280
-                    let controlsWidth = min(560, max(0, geo.size.width - 48))
-                    if compactHeight {
-                        VStack(spacing: 10) {
-                            Spacer(minLength: 8)
-                            petMark(in: geo.size, heightScale: 0.42)
-                            breakControls(spacing: 10, showGoals: false)
-                                .frame(width: controlsWidth)
-                        }
-                        .frame(width: min(760, max(0, geo.size.width - 48)))
-                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 24))
-                    } else {
-                        petMark(in: geo.size, heightScale: 0.72)
-                        VStack(spacing: 14) {
-                            Spacer()
-                            breakControls(spacing: 14, showGoals: true)
-                        }
-                        .frame(width: controlsWidth)
-                        .padding(.bottom, max(28, geo.safeAreaInsets.bottom + 24))
-                    }
-                }
+        ZStack {
+            sceneBackground
+            atmosphere
+            readabilityGradient
+
+            if isPrimary {
+                controls
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 72)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
-        .task {
-            guard isPrimary, !reduceMotion else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(10))
-                guard !Task.isCancelled else { break }
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    exerciseIndex = (exerciseIndex + 1) % BreakExercise.allCases.count
-                }
+        .background(Color.black)
+        .task(id: reduceMotion) {
+            drifting = false
+            guard BreakSceneModel.allowsMotion(reduceMotion: reduceMotion) else { return }
+            withAnimation(.easeInOut(duration: 28).repeatForever(autoreverses: true)) {
+                drifting = true
             }
         }
-    }
-
-    private var title: String {
-        switch workSession.phase {
-        case .working:
-            return "Break"
-        case .breakDue:
-            return "该休息了"
-        case .breaking:
-            return "休息中"
-        }
-    }
-
-    private var subtitle: String {
-        let petName = petCatalog.displayName(for: prefs.petId)
-        switch workSession.phase {
-        case .working:
-            return petName
-        case .breakDue:
-            return "\(petName) 拦住你。站起来，走两分钟。"
-        case .breaking:
-            return "别切回工作。结束后自动放行。"
-        }
-    }
-
-    private var clock: String {
-        workSession.phase == .breaking ? workSession.breakClock : "\(prefs.breakMinutes):00"
     }
 
     @ViewBuilder
-    private func petMark(in size: CGSize, heightScale: CGFloat) -> some View {
-        let width = min(size.width * 0.78, size.height * heightScale, 760)
-        ZStack {
-            Ellipse()
-                .fill(t.panel.opacity(0.36))
-                .frame(width: width * 0.72, height: width * 0.15)
-                .blur(radius: 16)
-                .offset(y: width * 0.22)
-            NaviBreakPandaImage()
-                .frame(width: width, height: width * 0.62)
-                .shadow(color: t.gold.opacity(0.16), radius: 38, x: 0, y: 24)
-        }
-        .accessibilityLabel(Text("Navi Panda blocks work"))
-    }
-
-    private func breakControls(spacing: CGFloat, showGoals: Bool) -> some View {
-        VStack(spacing: spacing) {
-            VStack(spacing: 8) {
-                Text(title)
-                    .font(.system(size: 42, weight: .bold, design: .rounded))
-                    .foregroundColor(t.cream)
-                Text(subtitle)
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .multilineTextAlignment(.center)
-            }
-            Text(clock)
-                .font(.system(size: 64, weight: .bold, design: .rounded))
-                .foregroundColor(t.cream)
-                .monospacedDigit()
-            exerciseCard
-            if showGoals {
-                pendingGoalStrip
-            }
-            HStack(spacing: 12) {
-                actionButton(workSession.phase == .breaking ? "Breaking" : "Start Break",
-                             filled: true,
-                             action: onStartBreak)
-                if prefs.allowBreakSkip {
-                    actionButton("Skip", filled: false, action: onSkip)
-                }
-            }
-            Text("Skip today \(workSession.skipCountToday)")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundColor(t.ash)
-        }
-    }
-
-    private var selectedExercise: BreakExercise {
-        BreakExercise.allCases[exerciseIndex % BreakExercise.allCases.count]
-    }
-
-    private var exerciseCard: some View {
-        HStack(spacing: 14) {
-            BreakExerciseMotionView(exercise: selectedExercise,
-                                    accent: t.gold,
-                                    ink: t.cream,
-                                    muted: t.mute)
-                .frame(width: 92, height: 82)
-                .padding(.horizontal, 4)
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 7) {
-                    Text("推荐动作")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(t.gold)
-                    Text(selectedExercise.duration)
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .foregroundColor(t.mute)
-                }
-                Text(selectedExercise.title)
-                    .font(.system(size: 17, weight: .bold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .contentTransition(.opacity)
-                Text(selectedExercise.cue)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .lineLimit(2)
-            }
-            Spacer(minLength: 4)
-            Button {
-                withAnimation(.easeInOut(duration: 0.25)) {
-                    exerciseIndex = (exerciseIndex + 1) % BreakExercise.allCases.count
-                }
-            } label: {
-                Image(systemName: "arrow.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(t.cream)
-                    .frame(width: 34, height: 34)
-                    .background(Circle().fill(t.track.opacity(0.7)))
-            }
-            .buttonStyle(.plain)
-            .help("换一个动作")
-            .accessibilityLabel(Text("换一个动作"))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 9)
-        .frame(maxWidth: .infinity, minHeight: 100, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(t.panel.opacity(0.82)))
-        .id(selectedExercise.id)
-        .transition(.opacity)
-    }
-
-    private var pendingGoalStrip: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("还没做")
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-                .foregroundColor(t.mute)
-            if dailyGoals.pendingGoals.isEmpty {
-                Text("今天目标都完成了")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.cream)
-            } else {
-                ForEach(dailyGoals.pendingGoals.prefix(3)) { goal in
-                    HStack(spacing: 8) {
-                        Circle().fill(t.gold).frame(width: 6, height: 6)
-                        Text(goal.title)
-                            .font(.system(size: 13, weight: .semibold, design: .rounded))
-                            .foregroundColor(t.cream)
-                            .lineLimit(1)
-                    }
-                }
-            }
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(t.panel.opacity(0.72)))
-    }
-
-    private var background: some View {
-        LinearGradient(colors: [t.bgTop.opacity(0.98), t.bg.opacity(0.98)],
-                       startPoint: .topTrailing,
-                       endPoint: .bottomLeading)
-            .overlay(t.gold.opacity(0.08))
-    }
-
-    private func actionButton(_ title: String, filled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundColor(filled ? t.bg : t.cream)
-                .frame(width: 148, height: 44)
-                .background(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(filled ? t.gold : Color.clear)
-                        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(filled ? Color.clear : t.track, lineWidth: 1))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct NaviBreakPandaImage: View {
-    private static let image: NSImage? = {
-        guard let url = Bundle.main.url(forResource: "navi-panda", withExtension: "png") else { return nil }
-        return NSImage(contentsOf: url)
-    }()
-
-    var body: some View {
-        if let image = Self.image {
+    private var sceneBackground: some View {
+        if let image = BreakSceneImageStore.image(for: scene) {
             Image(nsImage: image)
                 .resizable()
-                .scaledToFit()
+                .scaledToFill()
+                .scaleEffect(drifting ? 1.09 : 1.04)
+                .offset(x: drifting ? 12 : -8, y: drifting ? -7 : 6)
+                .clipped()
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
         } else {
-            PandaMark(accent: .green, ink: .white, mute: .gray)
-        }
-    }
-}
-
-private struct PixelShibaMark: View {
-    let accent: Color
-    let ink: Color
-    let mute: Color
-
-    var body: some View {
-        ZStack {
-            ear(x: -18)
-            ear(x: 18)
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(accent.opacity(0.96))
-                .frame(width: 48, height: 42)
-                .offset(y: 5)
-            RoundedRectangle(cornerRadius: 11, style: .continuous)
-                .fill(ink.opacity(0.92))
-                .frame(width: 28, height: 18)
-                .offset(y: 14)
-            eye(x: -10)
-            eye(x: 10)
-            RoundedRectangle(cornerRadius: 2, style: .continuous)
-                .fill(.black.opacity(0.72))
-                .frame(width: 5, height: 4)
-                .offset(y: 14)
-            HStack(spacing: 3) {
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(.black.opacity(0.46))
-                    .frame(width: 8, height: 3)
-                    .rotationEffect(.degrees(12))
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(.black.opacity(0.46))
-                    .frame(width: 8, height: 3)
-                    .rotationEffect(.degrees(-12))
-            }
-            .offset(y: 21)
-            Circle()
-                .fill(ink.opacity(0.55))
-                .frame(width: 6, height: 6)
-                .offset(x: -18, y: 12)
-            Circle()
-                .fill(ink.opacity(0.55))
-                .frame(width: 6, height: 6)
-                .offset(x: 18, y: 12)
-        }
-    }
-
-    private func ear(x: CGFloat) -> some View {
-        Triangle()
-            .fill(accent)
-            .frame(width: 18, height: 22)
-            .rotationEffect(.degrees(x < 0 ? -22 : 22))
-            .offset(x: x, y: -14)
-    }
-
-    private func eye(x: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: 3, style: .continuous)
-            .fill(.black.opacity(0.72))
-            .frame(width: 6, height: 8)
-            .offset(x: x, y: 4)
-            .overlay(
-                Circle()
-                    .fill(.white.opacity(0.9))
-                    .frame(width: 2, height: 2)
-                    .offset(x: x + 1, y: 1)
+            LinearGradient(
+                colors: [Color(white: 0.34), Color(white: 0.12)],
+                startPoint: .top,
+                endPoint: .bottom
             )
-    }
-}
-
-private struct PandaMark: View {
-    let accent: Color
-    let ink: Color
-    let mute: Color
-
-    var body: some View {
-        ZStack {
-            Circle().fill(ink).frame(width: 52, height: 48).offset(y: 4)
-            Circle().fill(mute).frame(width: 18, height: 18).offset(x: -20, y: -13)
-            Circle().fill(mute).frame(width: 18, height: 18).offset(x: 20, y: -13)
-            Circle().fill(mute).frame(width: 14, height: 18).offset(x: -11, y: 3)
-            Circle().fill(mute).frame(width: 14, height: 18).offset(x: 11, y: 3)
-            Circle().fill(.black.opacity(0.72)).frame(width: 5, height: 5).offset(x: -10, y: 4)
-            Circle().fill(.black.opacity(0.72)).frame(width: 5, height: 5).offset(x: 10, y: 4)
-            RoundedRectangle(cornerRadius: 3, style: .continuous)
-                .fill(accent)
-                .frame(width: 8, height: 5)
-                .offset(y: 13)
+            .ignoresSafeArea()
         }
     }
+
+    @ViewBuilder
+    private var atmosphere: some View {
+        switch scene {
+        case .windowRain:
+            WindowRainLayer(isPaused: reduceMotion)
+        case .rainField:
+            RainLayer(isPaused: reduceMotion)
+        case .mistHill:
+            MistLayer(isPaused: reduceMotion)
+        case .sunlitMeadow:
+            SunlightLayer(isPaused: reduceMotion)
+        }
+    }
+
+    private var readabilityGradient: some View {
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0.12), location: 0),
+                .init(color: .clear, location: 0.42),
+                .init(color: .black.opacity(0.62), location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private var controls: some View {
+        VStack(spacing: 12) {
+            Text("休息一下")
+                .font(.system(size: 34, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+
+            Text("离开屏幕片刻。")
+                .font(.system(size: 14, weight: .medium, design: .rounded))
+                .foregroundStyle(.white.opacity(0.7))
+
+            Text(workSession.breakClock)
+                .font(.system(size: 68, weight: .semibold, design: .rounded))
+                .foregroundStyle(.white)
+                .monospacedDigit()
+                .padding(.top, 4)
+
+            if prefs.allowBreakSkip {
+                Button("Skip", action: onSkip)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .padding(.horizontal, 22)
+                    .frame(height: 38)
+                    .background(.ultraThinMaterial, in: Capsule())
+                    .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
+                    .padding(.top, 6)
+            }
+        }
+        .padding(.horizontal, 38)
+        .padding(.vertical, 28)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
+        .accessibilityElement(children: .contain)
+    }
 }
 
-private struct Triangle: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.closeSubpath()
-        return path
+private enum BreakSceneImageStore {
+    static func image(for scene: BreakSceneID) -> NSImage? {
+        guard let url = Bundle.main.url(
+            forResource: scene.resourceName,
+            withExtension: "png"
+        ) else {
+            return nil
+        }
+        return NSImage(contentsOf: url)
+    }
+}
+
+private struct WindowRainLayer: View {
+    let isPaused: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 15.0, paused: isPaused)) { timeline in
+            Canvas { context, size in
+                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                let travel = size.height + 180
+
+                for index in 0..<22 {
+                    let seed = Double((index * 43) % 113) / 113
+                    let x = size.width * seed
+                    let speed = 16 + Double(index % 6) * 4
+                    let startY = (phase * speed + Double(index * 97))
+                        .truncatingRemainder(dividingBy: travel) - 100
+                    let trailLength = 48 + Double(index % 5) * 21
+
+                    var trail = Path()
+                    trail.move(to: CGPoint(x: x, y: startY))
+                    for step in 1...8 {
+                        let progress = Double(step) / 8
+                        let wobble = sin(Double(index) * 1.7 + progress * 5.2) * (2 + Double(index % 3))
+                        trail.addLine(
+                            to: CGPoint(
+                                x: x + wobble,
+                                y: startY + trailLength * progress
+                            )
+                        )
+                    }
+
+                    context.stroke(
+                        trail,
+                        with: .linearGradient(
+                            Gradient(colors: [
+                                .white.opacity(0.02),
+                                .white.opacity(0.13),
+                                .white.opacity(0.04)
+                            ]),
+                            startPoint: CGPoint(x: x, y: startY),
+                            endPoint: CGPoint(x: x, y: startY + trailLength)
+                        ),
+                        lineWidth: index % 4 == 0 ? 1.8 : 1.1
+                    )
+
+                    let beadSize = 3.2 + Double(index % 4) * 0.9
+                    let beadRect = CGRect(
+                        x: x - beadSize / 2,
+                        y: startY + trailLength - beadSize / 2,
+                        width: beadSize,
+                        height: beadSize * 1.35
+                    )
+                    context.fill(
+                        Path(ellipseIn: beadRect),
+                        with: .radialGradient(
+                            Gradient(colors: [.white.opacity(0.22), .white.opacity(0.03)]),
+                            center: CGPoint(x: beadRect.midX - 0.5, y: beadRect.midY - 0.8),
+                            startRadius: 0,
+                            endRadius: beadSize
+                        )
+                    )
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct RainLayer: View {
+    let isPaused: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: isPaused)) { timeline in
+            Canvas { context, size in
+                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                for index in 0..<44 {
+                    let seed = Double((index * 37) % 101) / 101
+                    let x = size.width * seed
+                    let speed = 42 + Double(index % 5) * 9
+                    let travel = size.height + 90
+                    let y = (phase * speed + Double(index * 73))
+                        .truncatingRemainder(dividingBy: travel) - 45
+                    var path = Path()
+                    path.move(to: CGPoint(x: x, y: y))
+                    path.addLine(to: CGPoint(x: x - 4, y: y + 22))
+                    context.stroke(
+                        path,
+                        with: .color(.white.opacity(0.08 + Double(index % 3) * 0.025)),
+                        lineWidth: index % 4 == 0 ? 1.2 : 0.7
+                    )
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
+private struct MistLayer: View {
+    let isPaused: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 10.0, paused: isPaused)) { timeline in
+            GeometryReader { geo in
+                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
+                ZStack {
+                    mistBand(index: 0, phase: phase, size: geo.size)
+                    mistBand(index: 1, phase: phase, size: geo.size)
+                    mistBand(index: 2, phase: phase, size: geo.size)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+
+    private func mistBand(index: Int, phase: TimeInterval, size: CGSize) -> some View {
+        let direction = index.isMultiple(of: 2) ? 1.0 : -1.0
+        let travel = size.width * 0.12
+        let offset = isPaused ? 0 : sin(phase / (13 + Double(index) * 4)) * travel * direction
+
+        return Ellipse()
+            .fill(.white.opacity(0.07 + Double(index) * 0.018))
+            .frame(width: size.width * (0.82 + Double(index) * 0.14), height: 150 + CGFloat(index) * 48)
+            .blur(radius: 34 + CGFloat(index) * 8)
+            .offset(x: offset, y: size.height * (0.02 + Double(index) * 0.18))
+    }
+}
+
+private struct SunlightLayer: View {
+    let isPaused: Bool
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 10.0, paused: isPaused)) { timeline in
+            Canvas { context, size in
+                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
+
+                for index in 0..<20 {
+                    let seedX = Double((index * 47) % 103) / 103
+                    let seedY = Double((index * 71) % 109) / 109
+                    let driftX = isPaused ? 0 : sin(phase / 9 + Double(index)) * 9
+                    let driftY = isPaused ? 0 : -phase * (1.2 + Double(index % 4) * 0.45)
+                    let y = (size.height * seedY + driftY)
+                        .truncatingRemainder(dividingBy: size.height + 30)
+                    let radius = 1.2 + Double(index % 3) * 0.7
+                    let rect = CGRect(
+                        x: size.width * seedX + driftX,
+                        y: y < -10 ? y + size.height + 30 : y,
+                        width: radius * 2,
+                        height: radius * 2
+                    )
+                    context.fill(
+                        Path(ellipseIn: rect),
+                        with: .color(.white.opacity(0.11 + Double(index % 3) * 0.035))
+                    )
+                }
+
+                var ray = Path()
+                ray.move(to: CGPoint(x: size.width * 0.58, y: 0))
+                ray.addLine(to: CGPoint(x: size.width * 0.82, y: 0))
+                ray.addLine(to: CGPoint(x: size.width * 0.62, y: size.height))
+                ray.addLine(to: CGPoint(x: size.width * 0.35, y: size.height))
+                ray.closeSubpath()
+                let pulse = isPaused ? 0.055 : 0.045 + (sin(phase / 7) + 1) * 0.012
+                context.fill(
+                    ray,
+                    with: .linearGradient(
+                        Gradient(colors: [.white.opacity(pulse), .white.opacity(0.005)]),
+                        startPoint: CGPoint(x: size.width * 0.7, y: 0),
+                        endPoint: CGPoint(x: size.width * 0.5, y: size.height)
+                    )
+                )
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 }
