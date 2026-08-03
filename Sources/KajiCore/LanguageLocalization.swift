@@ -58,6 +58,7 @@ public enum L10n {
         case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
         case defaultPet
         case work, focusLength, breakLength, skipBreak, breakOverlay
+        case fixedPlan
         case launchAtLogin
         case modules, modulesHint
         case moduleQuota, moduleWork, moduleSystem, moduleGoals
@@ -131,6 +132,7 @@ public enum L10n {
         .source: .init(en: "Source", zh: "来源", ptBR: "Fonte", es: "Fuente"),
         .defaultPet: .init(en: "Default pet:", zh: "默认宠物：", ptBR: "Pet padrão:", es: "Mascota predeterminada:"),
         .work: .init(en: "Work", zh: "工作", ptBR: "Trabalho", es: "Trabajo"),
+        .fixedPlan: .init(en: "Fixed Plan", zh: "固定计划", ptBR: "Plano fixo", es: "Plan fijo"),
         .focusLength: .init(en: "Focus", zh: "专注", ptBR: "Foco", es: "Enfoque"),
         .breakLength: .init(en: "Break", zh: "休息", ptBR: "Pausa", es: "Descanso"),
         .skipBreak: .init(en: "Allow Skip", zh: "允许跳过", ptBR: "Permitir pular", es: "Permitir omitir"),

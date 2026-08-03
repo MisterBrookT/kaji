@@ -16,6 +16,29 @@ final class MenuBarSlotLogicTests: XCTestCase {
         XCTAssertEqual(MenuBarSlotLogic.goalsLabel(enabled: true, goals: goals), "2/4")
     }
 
+    func testGoalsLabelIncludesFixedPlanAsOneGoal() {
+        let goals = [
+            GoalItem(id: UUID(), title: "One", isDone: true),
+            GoalItem(id: UUID(), title: "Two", isDone: false),
+        ]
+        XCTAssertEqual(
+            MenuBarSlotLogic.goalsLabel(
+                enabled: true,
+                goals: goals,
+                fixedPlanCompleted: false
+            ),
+            "1/3"
+        )
+        XCTAssertEqual(
+            MenuBarSlotLogic.goalsLabel(
+                enabled: true,
+                goals: goals,
+                fixedPlanCompleted: true
+            ),
+            "2/3"
+        )
+    }
+
     func testEmptyGoalsStillShowsEntryPoint() {
         XCTAssertEqual(MenuBarSlotLogic.goalsLabel(enabled: true, goals: []), "0/0")
     }

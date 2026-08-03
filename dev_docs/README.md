@@ -27,6 +27,8 @@
 | **Approved** | [specs/2026-08-01-three-horizon-goals.md](specs/2026-08-01-three-horizon-goals.md) — 今天 / 本周 / 长期三层计划 |
 | **Approved** | [specs/2026-08-01-interactive-menu-bar-slots.md](specs/2026-08-01-interactive-menu-bar-slots.md) — Goals 今日进度；Quota / Work / Goals 分区直达 |
 | **Approved** | [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) — 纯数字今日进度；三层同屏 |
+| **Approved** | [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) — Fixed 整体目标 + Vision |
+| **Approved** | [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) — 轻量分类符号与完成态 |
 | Optional | [design/palette.html](design/palette.html) |
 
 ## Catalog
@@ -71,6 +73,9 @@
 | [specs/2026-08-01-three-horizon-goals.md](specs/2026-08-01-three-horizon-goals.md) | 已通过：今天 / 本周 / 长期三层计划 |
 | [specs/2026-08-01-interactive-menu-bar-slots.md](specs/2026-08-01-interactive-menu-bar-slots.md) | 已通过：Goals 今日进度；Quota / Work / Goals 分区直达 |
 | [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) | 已通过：纯数字今日进度；今天 / 本周 / 长期同屏 |
+| [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) | 已通过：Fixed 整体目标 + Vision |
+| [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) | 已通过：轻量分类符号与完成态 |
+| [specs/2026-08-03-goals-copy-cleanup.md](specs/2026-08-03-goals-copy-cleanup.md) | 已通过：Goals 解释文案减法 |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
 ### Assets

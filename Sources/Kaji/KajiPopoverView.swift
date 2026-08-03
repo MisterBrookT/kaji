@@ -22,6 +22,7 @@ struct KajiPopoverView: View {
     @ObservedObject var workSession: WorkSessionController
     @ObservedObject var systemMonitor: SystemMonitor
     @ObservedObject var dailyGoals: DailyGoalStore
+    @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var navigation: PopoverNavigation
 
     let controls: GaugeRowView.Controls
@@ -34,6 +35,8 @@ struct KajiPopoverView: View {
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
     @State private var previousFocusedGoalID: UUID?
     @State private var previousFocusedGoalHorizon: GoalHorizon = .today
+    @State private var showsFixedPlanDetails = false
+    @State private var fixedPlanHoverGeneration = 0
     @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
     @Environment(\.colorScheme) private var scheme
@@ -51,6 +54,39 @@ struct KajiPopoverView: View {
     }
 
     var body: some View {
+        mainSurface
+        .background(background)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            GeometryReader { proxy in
+                Color.clear.preference(key: PopoverContentSizeKey.self, value: proxy.size)
+            }
+        )
+        .onPreferenceChange(PopoverContentSizeKey.self) { size in
+            onContentSizeChange?(size)
+        }
+        .onAppear { clampPanelToEnabledPages() }
+        .onChange(of: prefs.enabledModules) { _ in
+            clampPanelToEnabledPages()
+        }
+        .onChange(of: panel) { _ in
+            showsFixedPlanDetails = false
+        }
+        .onChange(of: focusedGoalID) { newValue in
+            if let previousFocusedGoalID,
+               let goal = dailyGoals.goals(for: previousFocusedGoalHorizon)
+                .first(where: { $0.id == previousFocusedGoalID }) {
+                dailyGoals.removeIfBlank(goal, in: previousFocusedGoalHorizon)
+            }
+            previousFocusedGoalID = newValue
+            previousFocusedGoalHorizon = navigation.goalHorizon
+        }
+        .onChange(of: navigation.goalHorizon) { _ in
+            focusedGoalID = nil
+        }
+    }
+
+    private var mainSurface: some View {
         VStack(alignment: .leading, spacing: 10) {
             header
             Divider().overlay(t.track.opacity(0.8))
@@ -68,31 +104,6 @@ struct KajiPopoverView: View {
         .padding(12)
         .frame(width: prefs.panelSize.frameSize.width, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
-        .background(background)
-        .overlay(
-            GeometryReader { proxy in
-                Color.clear.preference(key: PopoverContentSizeKey.self, value: proxy.size)
-            }
-        )
-        .onPreferenceChange(PopoverContentSizeKey.self) { size in
-            onContentSizeChange?(size)
-        }
-        .onAppear { clampPanelToEnabledPages() }
-        .onChange(of: prefs.enabledModules) { _ in
-            clampPanelToEnabledPages()
-        }
-        .onChange(of: focusedGoalID) { newValue in
-            if let previousFocusedGoalID,
-               let goal = dailyGoals.goals(for: previousFocusedGoalHorizon)
-                .first(where: { $0.id == previousFocusedGoalID }) {
-                dailyGoals.removeIfBlank(goal, in: previousFocusedGoalHorizon)
-            }
-            previousFocusedGoalID = newValue
-            previousFocusedGoalHorizon = navigation.goalHorizon
-        }
-        .onChange(of: navigation.goalHorizon) { _ in
-            focusedGoalID = nil
-        }
     }
 
     private var header: some View {
@@ -105,10 +116,12 @@ struct KajiPopoverView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(t.cream)
                     .lineLimit(1)
-                Text(panelSubtitle)
-                    .font(.system(size: 10, weight: .medium, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .lineLimit(1)
+                if !panelSubtitle.isEmpty {
+                    Text(panelSubtitle)
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
+                        .foregroundColor(t.mute)
+                        .lineLimit(1)
+                }
             }
             Spacer(minLength: 8)
             Text("\(pageIndex + 1)/\(max(pages.count, 1))")
@@ -131,6 +144,101 @@ struct KajiPopoverView: View {
             systemPanel
         case .goals:
             goalsPanel
+        }
+    }
+
+    private var fixedPlanGoalRow: some View {
+        let plan = fixedPlanStore.today
+        return Button {
+            fixedPlanStore.toggleTodayCompletion()
+        } label: {
+            HStack(spacing: 8) {
+                tagIcon(
+                    GoalTagLogic.resolve(plan.tag, title: plan.title),
+                    filled: fixedPlanStore.isTodayCompleted
+                )
+                    .foregroundColor(fixedPlanStore.isTodayCompleted ? t.gold : t.mute)
+                Text(plan.title)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(fixedPlanStore.isTodayCompleted ? t.mute : t.cream)
+                    .strikethrough(fixedPlanStore.isTodayCompleted)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: "sidebar.right")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(t.mute)
+                    .frame(width: 96, alignment: .trailing)
+            }
+            .padding(8)
+            .background(RoundedRectangle(cornerRadius: 8).fill(t.panel.opacity(0.75)))
+        }
+        .buttonStyle(.plain)
+        .onHover { inside in
+            updateFixedPlanHover(inside)
+        }
+        .popover(isPresented: $showsFixedPlanDetails, arrowEdge: .trailing) {
+            fixedPlanDetails
+                .onHover { inside in
+                    updateFixedPlanHover(inside)
+                }
+        }
+    }
+
+    private var fixedPlanDetails: some View {
+        let plan = fixedPlanStore.today
+        return VStack(alignment: .leading, spacing: 7) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(plan.title)
+                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Text("完整计划 · \(plan.items.count) 项")
+                    .font(.system(size: 9, weight: .medium, design: .rounded))
+                    .foregroundColor(t.mute)
+            }
+            Divider().overlay(t.track.opacity(0.8))
+            ScrollView(.vertical, showsIndicators: true) {
+                LazyVStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(plan.items.enumerated()), id: \.element.id) { index, item in
+                        HStack(alignment: .top, spacing: 6) {
+                            Text("\(index + 1)")
+                                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
+                                .foregroundColor(t.ash)
+                                .frame(width: 15, alignment: .trailing)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.title)
+                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                                    .foregroundColor(t.cream)
+                                if !item.dose.isEmpty {
+                                    Text(item.dose)
+                                        .font(.system(size: 8.5, weight: .medium, design: .rounded))
+                                        .foregroundColor(t.mute)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(5)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(t.panel.opacity(0.7)))
+                    }
+                }
+                .padding(.trailing, 4)
+            }
+            .frame(height: min(300, CGFloat(max(plan.items.count, 1)) * 40))
+        }
+        .padding(10)
+        .frame(width: 250, alignment: .topLeading)
+        .background(background)
+    }
+
+    private func updateFixedPlanHover(_ inside: Bool) {
+        fixedPlanHoverGeneration += 1
+        let generation = fixedPlanHoverGeneration
+        if inside {
+            showsFixedPlanDetails = true
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            guard generation == fixedPlanHoverGeneration else { return }
+            showsFixedPlanDetails = false
         }
     }
 
@@ -610,7 +718,62 @@ struct KajiPopoverView: View {
             Divider().overlay(t.track.opacity(0.7))
             goalSection(.week, title: "本周", showsHeatmap: false)
             Divider().overlay(t.track.opacity(0.7))
-            goalSection(.longTerm, title: "长期", showsHeatmap: false)
+            visionSection
+        }
+    }
+
+    private var visionSection: some View {
+        let visions = dailyGoals.goals(for: .longTerm)
+        return VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 7) {
+                Text("Vision")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Spacer()
+                miniButton("plus") {
+                    navigation.goalHorizon = .longTerm
+                    let id = dailyGoals.addGoal(in: .longTerm)
+                    DispatchQueue.main.async {
+                        focusedGoalID = id
+                    }
+                }
+            }
+            ForEach(Array(visions.enumerated()), id: \.element.id) { index, vision in
+                HStack(spacing: 7) {
+                    goalTagMenu(vision, horizon: .longTerm)
+                    TextField("写下一条长期方向", text: Binding(
+                        get: { vision.title },
+                        set: { dailyGoals.updateTitle(vision, title: $0, in: .longTerm) }
+                    ), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.cream)
+                    .lineLimit(1...2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .focused($focusedGoalID, equals: vision.id)
+                    .onSubmit {
+                        dailyGoals.removeIfBlank(vision, in: .longTerm)
+                    }
+                    HStack(spacing: 4) {
+                        if index > 0 {
+                            miniButton("chevron.up") {
+                                dailyGoals.move(vision, in: .longTerm, offset: -1)
+                            }
+                        }
+                        if index < visions.count - 1 {
+                            miniButton("chevron.down") {
+                                dailyGoals.move(vision, in: .longTerm, offset: 1)
+                            }
+                        }
+                        miniButton("trash") {
+                            dailyGoals.delete(vision, in: .longTerm)
+                        }
+                    }
+                    .frame(width: 96, alignment: .trailing)
+                }
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
+            }
         }
     }
 
@@ -621,17 +784,23 @@ struct KajiPopoverView: View {
                 .foregroundColor(t.mute)
             ForEach(dailyGoals.yesterdayPending) { goal in
                 HStack(spacing: 8) {
+                    tagIcon(GoalTagLogic.resolve(goal.tag, title: goal.title))
+                        .foregroundColor(t.mute)
                     Text(goal.title)
                         .font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(t.cream)
-                        .lineLimit(1)
-                    Spacer()
-                    miniButton("arrow.turn.down.right") {
-                        dailyGoals.moveYesterdayGoalToToday(goal)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: 4) {
+                        miniButton("arrow.turn.down.right") {
+                            dailyGoals.moveYesterdayGoalToToday(goal)
+                        }
+                        miniButton("trash") {
+                            dailyGoals.dismissYesterdayGoal(goal)
+                        }
                     }
-                    miniButton("trash") {
-                        dailyGoals.dismissYesterdayGoal(goal)
-                    }
+                    .frame(width: 96, alignment: .trailing)
                 }
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
@@ -646,12 +815,15 @@ struct KajiPopoverView: View {
     ) -> some View {
         let goals = dailyGoals.goals(for: horizon)
         let summary = dailyGoals.summary(for: horizon)
+        let includesFixedPlan = horizon == .today
+        let completed = summary.completed + (includesFixedPlan && fixedPlanStore.isTodayCompleted ? 1 : 0)
+        let total = summary.total + (includesFixedPlan ? 1 : 0)
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Text(title)
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(t.cream)
-                Text("\(summary.completed)/\(summary.total)")
+                Text("\(completed)/\(total)")
                     .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
                     .foregroundColor(t.mute)
                     .monospacedDigit()
@@ -667,41 +839,101 @@ struct KajiPopoverView: View {
             if showsHeatmap {
                 goalHeatmap
             }
-            ForEach(goals) { goal in
-                HStack(spacing: 8) {
-                    Button {
-                        dailyGoals.toggle(goal, in: horizon)
-                    } label: {
-                        Image(systemName: goal.isDone ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 15, weight: .bold))
-                            .foregroundColor(goal.isDone ? t.gold : t.mute)
-                    }
-                    .buttonStyle(.plain)
-                    TextField("", text: Binding(
-                        get: { goal.title },
-                        set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
-                    ))
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(goal.isDone ? t.mute : t.cream)
-                    .focused($focusedGoalID, equals: goal.id)
-                    .onSubmit {
-                        dailyGoals.removeIfBlank(goal, in: horizon)
-                    }
-                    miniButton("trash") {
-                        dailyGoals.delete(goal, in: horizon)
-                    }
-                }
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+            if includesFixedPlan {
+                fixedPlanGoalRow
             }
-            if goals.isEmpty {
+            ForEach(goals) { goal in
+                goalRow(goal, horizon: horizon)
+            }
+            if goals.isEmpty && !includesFixedPlan {
                 Text("暂无目标")
                     .font(.system(size: 10.5, weight: .medium, design: .rounded))
                     .foregroundColor(t.mute)
                     .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             }
         }
+    }
+
+    private func goalRow(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        HStack(spacing: 8) {
+            goalCompletionMenu(goal, horizon: horizon)
+            if goal.isDone {
+                Text(goal.title)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .strikethrough()
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                TextField("", text: Binding(
+                    get: { goal.title },
+                    set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
+                ), axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .lineLimit(1...2)
+                .fixedSize(horizontal: false, vertical: true)
+                .focused($focusedGoalID, equals: goal.id)
+                .onSubmit {
+                    dailyGoals.removeIfBlank(goal, in: horizon)
+                }
+            }
+            HStack(spacing: 4) {
+                miniButton("trash") {
+                    dailyGoals.delete(goal, in: horizon)
+                }
+            }
+            .frame(width: 96, alignment: .trailing)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+    }
+
+    private func goalTagMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        let selected = GoalTagLogic.resolve(goal.tag, title: goal.title)
+        return Menu {
+            ForEach(GoalTag.allCases, id: \.rawValue) { tag in
+                Button {
+                    dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
+                } label: {
+                    Label(tag.label, systemImage: tag.systemImage)
+                }
+            }
+        } label: {
+            tagIcon(selected)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 22, height: 22)
+    }
+
+    private func goalCompletionMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        let selected = GoalTagLogic.resolve(goal.tag, title: goal.title)
+        return Menu {
+            ForEach(GoalTag.allCases, id: \.rawValue) { tag in
+                Button {
+                    dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
+                } label: {
+                    Label(tag.label, systemImage: tag.systemImage)
+                }
+            }
+        } label: {
+            tagIcon(selected, filled: goal.isDone)
+                .foregroundColor(goal.isDone ? t.gold : t.mute)
+        } primaryAction: {
+            dailyGoals.toggle(goal, in: horizon)
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .frame(width: 22, height: 22)
+    }
+
+    private func tagIcon(_ tag: GoalTag, filled: Bool = false) -> some View {
+        Image(systemName: filled ? "\(tag.systemImage).fill" : tag.systemImage)
+            .font(.system(size: 10, weight: .regular))
+            .frame(width: 18, height: 18)
     }
 
     private var goalHeatmap: some View {
@@ -784,7 +1016,7 @@ struct KajiPopoverView: View {
         case .quota: return "5h + 7d pressure"
         case .work: return "45m work, hard break"
         case .system: return "Health + hot processes + cleanup"
-        case .goals: return "Today · Week · Long term"
+        case .goals: return ""
         }
     }
 

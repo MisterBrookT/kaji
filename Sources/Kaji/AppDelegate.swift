@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     private let dailyGoals = DailyGoalStore()
+    private let fixedPlanStore = FixedPlanStore()
     private let popoverNavigation = PopoverNavigation()
     private var breakWindows: [NSWindow] = []
     private var breakSceneSeed: UInt64?
@@ -89,6 +90,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &cancellables)
         dailyGoals.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    self?.updateStatusItem()
+                }
+            }
+            .store(in: &cancellables)
+        fixedPlanStore.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
@@ -264,7 +273,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var goalsStatusSlotLabel: String? {
         MenuBarSlotLogic.goalsLabel(
             enabled: prefs.isModuleEnabled(.goals),
-            goals: dailyGoals.goals
+            goals: dailyGoals.goals,
+            fixedPlanCompleted: fixedPlanStore.isTodayCompleted
         )
     }
 
@@ -276,7 +286,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             length += 40
         }
         if let goalsStatusSlotLabel {
-            length += 8 + CGFloat(goalsStatusSlotLabel.count) * 7
+            length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
         }
         return length
     }
@@ -386,6 +396,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       workSession: workSession,
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
+                                      fixedPlanStore: fixedPlanStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
@@ -468,7 +479,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let controller = KajiHostingController(rootView: SettingsView(prefs: prefs,
                                                                        sleepController: sleepController,
-                                                                       petCatalog: petCatalog))
+                                                                       petCatalog: petCatalog,
+                                                                       fixedPlanStore: fixedPlanStore,
+                                                                       onFixedPlanEditorChange: { [weak self] shown in
+                                                                           self?.resizeSettingsWindow(showingDetail: shown)
+                                                                       }))
         controller.view.configureKajiHost(cornerRadius: 12)
         let window = NSWindow(contentViewController: controller)
         window.title = "Kaji Settings"
@@ -479,6 +494,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func resizeSettingsWindow(showingDetail: Bool) {
+        guard let window = settingsWindow else { return }
+        let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
+        let width: CGFloat = showingDetail ? 701 : 360
+        window.setContentSize(NSSize(width: width, height: window.contentLayoutRect.height))
+        window.setFrameTopLeftPoint(topLeft)
     }
 
     private func refreshPetCatalogSelection() {

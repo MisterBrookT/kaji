@@ -2,6 +2,45 @@ import XCTest
 import KajiCore
 
 final class GoalHorizonModelTests: XCTestCase {
+    func testOldGoalJSONDecodesWithEmptyTag() throws {
+        let json = """
+        {"id":"00000000-0000-0000-0000-000000000001","title":"Ship","isDone":false}
+        """
+        let goal = try JSONDecoder().decode(GoalItem.self, from: Data(json.utf8))
+        XCTAssertEqual(goal.tag, "")
+    }
+
+    func testRefreshPreservesTags() {
+        let goal = GoalItem(id: UUID(), title: "Run", isDone: false, tag: "Health")
+        let state = GoalHorizonState(
+            today: [goal],
+            week: [],
+            longTerm: [],
+            dayKey: "2026-8-1",
+            weekKey: "2026-31",
+            history: [:]
+        )
+        let refreshed = GoalHorizonLogic.refresh(
+            state,
+            dayKey: "2026-8-2",
+            weekKey: "2026-31"
+        )
+        XCTAssertEqual(refreshed.yesterdayPending.first?.tag, "Health")
+    }
+
+    func testTagInferenceClassifiesCurrentTaskStyles() {
+        XCTAssertEqual(GoalTagLogic.resolve("", title: "洗衣服 + 扔垃圾"), .home)
+        XCTAssertEqual(GoalTagLogic.resolve("", title: "调研 RSI 研究方向"), .learn)
+        XCTAssertEqual(GoalTagLogic.resolve("", title: "acl 报账"), .admin)
+        XCTAssertEqual(GoalTagLogic.resolve("", title: "提交 dataset 和视频"), .learn)
+        XCTAssertEqual(GoalTagLogic.resolve("", title: "完成公司项目"), .work)
+        XCTAssertEqual(GoalTagLogic.resolve("", title: "戒烟"), .health)
+    }
+
+    func testTagResolutionPreservesExplicitChoice() {
+        XCTAssertEqual(GoalTagLogic.resolve("Work", title: "洗衣服"), .work)
+        XCTAssertEqual(GoalTagLogic.resolve("personal", title: "公司项目"), .personal)
+    }
     private let todayID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
     private let weekID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
     private let longID = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!

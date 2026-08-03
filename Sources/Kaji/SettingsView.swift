@@ -5,16 +5,42 @@ import KajiCore
 // MARK: - SettingsView
 //
 // Slower preferences live outside the status popover so the main surface stays
-// focused on quota, system state, and pet controls.
+// focused on modules, appearance, system, and fixed-plan templates.
 struct SettingsView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var sleepController: SleepController
     @ObservedObject var petCatalog: PetCatalogStore
+    @ObservedObject var fixedPlanStore: FixedPlanStore
+    var onFixedPlanEditorChange: ((Bool) -> Void)? = nil
+
+    @State private var fixedPlanWeekday = Calendar.current.component(.weekday, from: Date())
+    @State private var showsFixedPlanEditor = false
 
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
     var body: some View {
+        HStack(spacing: 0) {
+            mainSettings
+            if showsFixedPlanEditor {
+                Divider().overlay(t.track)
+                fixedPlanEditor
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .background(t.bg)
+        .animation(.easeOut(duration: 0.16), value: showsFixedPlanEditor)
+        .onChange(of: showsFixedPlanEditor) { shown in
+            onFixedPlanEditorChange?(shown)
+        }
+        .onChange(of: prefs.enabledModules) { modules in
+            if !modules.contains(.goals) {
+                showsFixedPlanEditor = false
+            }
+        }
+    }
+
+    private var mainSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
             settingBlock(title: L10n.t(.modules, prefs.language)) {
@@ -27,6 +53,14 @@ struct SettingsView: View {
                     moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
                     moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
+                    if prefs.isModuleEnabled(.goals) {
+                        HStack {
+                            Spacer()
+                            outlineButton(title: "编辑固定计划", systemImage: "sidebar.right") {
+                                showsFixedPlanEditor = true
+                            }
+                        }
+                    }
                 }
             }
             settingBlock(title: L10n.t(.appearance, prefs.language)) {
@@ -112,7 +146,6 @@ struct SettingsView: View {
         }
         .padding(18)
         .frame(width: 360, alignment: .topLeading)
-        .background(t.bg)
         .onAppear {
             refreshPetCatalogSelection()
         }
@@ -166,8 +199,136 @@ struct SettingsView: View {
         }
     }
 
-    private var petColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 86, maximum: 132), spacing: 7, alignment: .trailing)]
+    private var fixedPlanEditor: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(L10n.t(.fixedPlan, prefs.language))
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(t.cream)
+                    Text("每周重复")
+                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                        .foregroundColor(t.mute)
+                }
+                Spacer()
+                Button {
+                    showsFixedPlanEditor = false
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(t.panel))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(t.mute)
+            }
+            VStack(alignment: .leading, spacing: 9) {
+                Picker("", selection: $fixedPlanWeekday) {
+                    ForEach(1...7, id: \.self) { day in
+                        Text(weekdayName(day)).tag(day)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                TextField("标题", text: Binding(
+                    get: { fixedPlanStore.plan(for: fixedPlanWeekday).title },
+                    set: { fixedPlanStore.update(weekday: fixedPlanWeekday, title: $0) }
+                ))
+                .textFieldStyle(.roundedBorder)
+                Picker("Category", selection: Binding(
+                    get: {
+                        let plan = fixedPlanStore.plan(for: fixedPlanWeekday)
+                        return GoalTagLogic.resolve(plan.tag, title: plan.title)
+                    },
+                    set: {
+                        fixedPlanStore.update(weekday: fixedPlanWeekday, tag: $0.rawValue)
+                    }
+                )) {
+                    ForEach(GoalTag.allCases, id: \.rawValue) { tag in
+                        Label(tag.label, systemImage: tag.systemImage).tag(tag)
+                    }
+                }
+                .pickerStyle(.menu)
+                HStack {
+                    Text("计划事项")
+                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.mute)
+                    Spacer()
+                    outlineButton(title: "添加", systemImage: "plus") {
+                        _ = fixedPlanStore.addItem(weekday: fixedPlanWeekday)
+                    }
+                }
+                ScrollView(.vertical, showsIndicators: true) {
+                    LazyVStack(spacing: 7) {
+                        ForEach(fixedPlanStore.plan(for: fixedPlanWeekday).items) { item in
+                            fixedPlanItemRow(item)
+                        }
+                    }
+                    .padding(.trailing, 4)
+                }
+                .frame(minHeight: 220, maxHeight: .infinity)
+                HStack {
+                    Spacer()
+                    outlineButton(title: "恢复默认", systemImage: "arrow.counterclockwise") {
+                        fixedPlanStore.reset(weekday: fixedPlanWeekday)
+                    }
+                }
+            }
+        }
+        .padding(18)
+        .frame(width: 340, alignment: .topLeading)
+        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .background(t.bg)
+    }
+
+    private func fixedPlanItemRow(_ item: FixedPlanItem) -> some View {
+        HStack(spacing: 7) {
+            VStack(spacing: 5) {
+                TextField("事项", text: Binding(
+                    get: {
+                        fixedPlanStore.plan(for: fixedPlanWeekday).items
+                            .first(where: { $0.id == item.id })?.title ?? ""
+                    },
+                    set: {
+                        fixedPlanStore.updateItem(
+                            weekday: fixedPlanWeekday,
+                            id: item.id,
+                            title: $0
+                        )
+                    }
+                ))
+                TextField("说明（可选）", text: Binding(
+                    get: {
+                        fixedPlanStore.plan(for: fixedPlanWeekday).items
+                            .first(where: { $0.id == item.id })?.dose ?? ""
+                    },
+                    set: {
+                        fixedPlanStore.updateItem(
+                            weekday: fixedPlanWeekday,
+                            id: item.id,
+                            dose: $0
+                        )
+                    }
+                ))
+            }
+            .textFieldStyle(.roundedBorder)
+            Button {
+                fixedPlanStore.deleteItem(weekday: fixedPlanWeekday, id: item.id)
+            } label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 11, weight: .semibold))
+                    .frame(width: 28, height: 28)
+                    .background(RoundedRectangle(cornerRadius: 7).fill(t.panel))
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(t.mute)
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 9).fill(t.panel.opacity(0.65)))
+    }
+
+    private func weekdayName(_ weekday: Int) -> String {
+        ["日", "一", "二", "三", "四", "五", "六"][max(1, min(7, weekday)) - 1]
     }
 
     private var selectedPetMeta: some View {
@@ -185,6 +346,12 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private func refreshPetCatalogSelection() {
+        let resolvedPetId = petCatalog.refresh(selectedPetId: prefs.petId)
+        guard !resolvedPetId.isEmpty, prefs.petId != resolvedPetId else { return }
+        prefs.petId = resolvedPetId
     }
 
     private var providerSettingsKeys: [String] {
@@ -231,17 +398,6 @@ struct SettingsView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.65)))
-    }
-
-    private func openPetGallery() {
-        guard let url = URL(string: "https://misterbrookt.github.io/pethatch/") else { return }
-        NSWorkspace.shared.open(url)
-    }
-
-    private func refreshPetCatalogSelection() {
-        let resolvedPetId = petCatalog.refresh(selectedPetId: prefs.petId)
-        guard !resolvedPetId.isEmpty, prefs.petId != resolvedPetId else { return }
-        prefs.petId = resolvedPetId
     }
 
     private func outlineButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {

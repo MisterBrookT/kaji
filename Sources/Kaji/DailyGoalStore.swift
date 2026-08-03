@@ -42,7 +42,7 @@ final class DailyGoalStore: ObservableObject {
                 migrated.yesterdayPending = decoded.today.filter {
                     !$0.isDone && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 }.map {
-                    DailyGoal(id: $0.id, title: $0.title, isDone: false)
+                    DailyGoal(id: $0.id, title: $0.title, isDone: false, tag: $0.tag)
                 }
                 migrated.today = []
                 state = migrated
@@ -55,6 +55,7 @@ final class DailyGoalStore: ObservableObject {
             )
         }
         state = GoalHorizonLogic.refresh(state, dayKey: dayKey, weekKey: weekKey)
+        state = Self.normalizedTags(state)
         recordToday()
         save()
         defaults.set(1, forKey: Key.migrationVersion)
@@ -92,11 +93,18 @@ final class DailyGoalStore: ObservableObject {
         }
     }
 
+    func updateTag(_ goal: DailyGoal, tag: String, in horizon: GoalHorizon = .today) {
+        mutate(horizon) { goals in
+            guard let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
+            goals[index].tag = tag
+        }
+    }
+
     @discardableResult
     func addGoal(in horizon: GoalHorizon = .today) -> UUID {
         let id = UUID()
         mutate(horizon) { goals in
-            goals.append(DailyGoal(id: id, title: "", isDone: false))
+            goals.append(DailyGoal(id: id, title: "", isDone: false, tag: GoalTag.personal.rawValue))
         }
         return id
     }
@@ -104,6 +112,16 @@ final class DailyGoalStore: ObservableObject {
     func delete(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
         mutate(horizon) { goals in
             goals.removeAll { $0.id == goal.id }
+        }
+    }
+
+    func move(_ goal: DailyGoal, in horizon: GoalHorizon, offset: Int) {
+        mutate(horizon) { goals in
+            guard let source = goals.firstIndex(where: { $0.id == goal.id }) else { return }
+            let destination = min(max(0, source + offset), goals.count - 1)
+            guard source != destination else { return }
+            let moved = goals.remove(at: source)
+            goals.insert(moved, at: destination)
         }
     }
 
@@ -116,7 +134,7 @@ final class DailyGoalStore: ObservableObject {
         var next = state
         guard let index = next.yesterdayPending.firstIndex(where: { $0.id == goal.id }) else { return }
         let moved = next.yesterdayPending.remove(at: index)
-        next.today.append(DailyGoal(id: moved.id, title: moved.title, isDone: false))
+        next.today.append(DailyGoal(id: moved.id, title: moved.title, isDone: false, tag: moved.tag))
         state = next
         recordToday()
     }
@@ -222,5 +240,22 @@ final class DailyGoalStore: ObservableObject {
             return false
         }
         return object["yesterdayPending"] != nil
+    }
+
+    private static func normalizedTags(_ state: GoalHorizonState) -> GoalHorizonState {
+        var result = state
+        for horizon in GoalHorizon.allCases {
+            result[horizon] = result[horizon].map { goal in
+                var next = goal
+                next.tag = GoalTagLogic.resolve(goal.tag, title: goal.title).rawValue
+                return next
+            }
+        }
+        result.yesterdayPending = result.yesterdayPending.map { goal in
+            var next = goal
+            next.tag = GoalTagLogic.resolve(goal.tag, title: goal.title).rawValue
+            return next
+        }
+        return result
     }
 }

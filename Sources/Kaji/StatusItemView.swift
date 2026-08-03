@@ -84,9 +84,13 @@ private struct GoalsStatusSlot: View {
     }
 
     var body: some View {
-        Text(label)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .monospacedDigit()
+        HStack(spacing: 2) {
+            Image(systemName: "calendar")
+                .font(.system(size: 10, weight: .medium))
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+        }
         .foregroundStyle(color)
         .lineLimit(1)
         .fixedSize()

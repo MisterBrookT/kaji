@@ -6,15 +6,84 @@ public enum GoalHorizon: String, CaseIterable, Codable, Sendable {
     case longTerm
 }
 
+public enum GoalTag: String, CaseIterable, Codable, Sendable {
+    case work
+    case health
+    case home
+    case learn
+    case admin
+    case personal
+
+    public var label: String {
+        rawValue.prefix(1).uppercased() + rawValue.dropFirst()
+    }
+
+    public var systemImage: String {
+        switch self {
+        case .work: "square"
+        case .health: "circle"
+        case .home: "diamond"
+        case .learn: "triangle"
+        case .admin: "hexagon"
+        case .personal: "star"
+        }
+    }
+}
+
+public enum GoalTagLogic {
+    public static func resolve(_ rawValue: String, title: String) -> GoalTag {
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let explicit = GoalTag(rawValue: normalized) {
+            return explicit
+        }
+
+        let value = title.lowercased()
+        if contains(value, ["训练", "拉伸", "运动", "健身", "跑步", "恢复", "休息", "戒烟", "睡眠", "health"]) {
+            return .health
+        }
+        if contains(value, ["洗衣", "垃圾", "寝室", "打扫", "清洁", "收拾", "家里", "clean", "home"]) {
+            return .home
+        }
+        if contains(value, ["视频", "调研", "研究", "学习", "课程", "读书", "kdd", "rsi", "saas", "learn"]) {
+            return .learn
+        }
+        if contains(value, ["注册", "报账", "申诉", "离职", "手续", "办理", "账单", "admin"]) {
+            return .admin
+        }
+        if contains(value, ["公司", "提交", "dataset", "产品", "项目", "orivue", "claude", "acl", "工作", "work"]) {
+            return .work
+        }
+        return .personal
+    }
+
+    private static func contains(_ value: String, _ keywords: [String]) -> Bool {
+        keywords.contains { value.contains($0) }
+    }
+}
+
 public struct GoalItem: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public var title: String
     public var isDone: Bool
+    public var tag: String
 
-    public init(id: UUID, title: String, isDone: Bool) {
+    public init(id: UUID, title: String, isDone: Bool, tag: String = "") {
         self.id = id
         self.title = title
         self.isDone = isDone
+        self.tag = tag
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, title, isDone, tag
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        title = try container.decode(String.self, forKey: .title)
+        isDone = try container.decode(Bool.self, forKey: .isDone)
+        tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? ""
     }
 }
 
@@ -147,14 +216,14 @@ public enum GoalHorizonLogic {
             )
             result.yesterdayPending = valid.compactMap {
                 guard !$0.isDone else { return nil }
-                return GoalItem(id: $0.id, title: $0.title, isDone: false)
+                return GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag)
             }
             result.today = []
             result.dayKey = dayKey
         }
         if result.weekKey != weekKey {
             result.week = result.week.map {
-                GoalItem(id: $0.id, title: $0.title, isDone: false)
+                GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag)
             }
             result.weekKey = weekKey
         }
@@ -165,6 +234,7 @@ public enum GoalHorizonLogic {
         let valid = goals.filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         return (valid.filter(\.isDone).count, valid.count)
     }
+
 }
 
 public enum MenuBarDestination: Equatable, Sendable {
@@ -174,10 +244,16 @@ public enum MenuBarDestination: Equatable, Sendable {
 }
 
 public enum MenuBarSlotLogic {
-    public static func goalsLabel(enabled: Bool, goals: [GoalItem]) -> String? {
+    public static func goalsLabel(
+        enabled: Bool,
+        goals: [GoalItem],
+        fixedPlanCompleted: Bool? = nil
+    ) -> String? {
         guard enabled else { return nil }
         let summary = GoalHorizonLogic.summary(for: goals)
-        return "\(summary.completed)/\(summary.total)"
+        let fixedTotal = fixedPlanCompleted == nil ? 0 : 1
+        let fixedDone = fixedPlanCompleted == true ? 1 : 0
+        return "\(summary.completed + fixedDone)/\(summary.total + fixedTotal)"
     }
 
     public static func destination(for slot: MenuBarSlot) -> MenuBarDestination {
