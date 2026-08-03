@@ -13,14 +13,7 @@ final class DailyGoalStore: ObservableObject {
     private let defaults: UserDefaults
     private var now: () -> Date
     private var calendar: Calendar
-
-    private enum Key {
-        static let state = "goalHorizonStateV1"
-        static let migrationVersion = "goalHorizonMigrationVersion"
-        static let legacyGoals = "dailyGoals"
-        static let legacyDayKey = "dailyGoalsDayKey"
-        static let legacyHistory = "dailyGoalsHistory"
-    }
+    private(set) var loadIssue: GoalStateLoadIssue?
 
     init(
         defaults: UserDefaults = .standard,
@@ -34,31 +27,21 @@ final class DailyGoalStore: ObservableObject {
         let date = now()
         let dayKey = Self.dayKey(for: date, calendar: calendar)
         let weekKey = Self.weekKey(for: date, calendar: calendar)
-        if let data = defaults.data(forKey: Key.state),
-           let decoded = try? JSONDecoder().decode(GoalHorizonState.self, from: data) {
-            state = decoded
-            if !Self.containsYesterdayPendingField(data), decoded.dayKey == dayKey {
-                var migrated = decoded
-                migrated.yesterdayPending = decoded.today.filter {
-                    !$0.isDone && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                }.map {
-                    DailyGoal(id: $0.id, title: $0.title, isDone: false, tag: $0.tag)
-                }
-                migrated.today = []
-                state = migrated
-            }
-        } else {
-            state = Self.migratedState(
-                defaults: defaults,
-                currentDayKey: dayKey,
-                currentWeekKey: weekKey
-            )
+        let loaded = GoalStatePersistence.load(
+            defaults: defaults,
+            currentDayKey: dayKey,
+            currentWeekKey: weekKey
+        )
+        let refreshed = GoalHorizonLogic.refresh(
+            loaded.state,
+            dayKey: dayKey,
+            weekKey: weekKey
+        )
+        state = refreshed
+        loadIssue = loaded.issue
+        if refreshed != loaded.state {
+            save()
         }
-        state = GoalHorizonLogic.refresh(state, dayKey: dayKey, weekKey: weekKey)
-        state = Self.normalizedTags(state)
-        recordToday()
-        save()
-        defaults.set(1, forKey: Key.migrationVersion)
     }
 
     var goals: [DailyGoal] { state.today }
@@ -199,31 +182,8 @@ final class DailyGoalStore: ObservableObject {
     }
 
     private func save() {
-        guard let data = try? JSONEncoder().encode(state) else { return }
-        defaults.set(data, forKey: Key.state)
+        try? GoalStatePersistence.save(state, defaults: defaults)
     }
-
-    private static func migratedState(
-        defaults: UserDefaults,
-        currentDayKey: String,
-        currentWeekKey: String
-    ) -> GoalHorizonState {
-        GoalHorizonLogic.migrateLegacy(
-            goalsData: defaults.data(forKey: Key.legacyGoals),
-            goalsKeyExists: defaults.object(forKey: Key.legacyGoals) != nil,
-            dayKey: defaults.string(forKey: Key.legacyDayKey),
-            historyData: defaults.data(forKey: Key.legacyHistory),
-            currentDayKey: currentDayKey,
-            currentWeekKey: currentWeekKey,
-            freshDefaults: defaultGoals
-        )
-    }
-
-    private static let defaultGoals: [DailyGoal] = [
-        DailyGoal(id: UUID(), title: "完成一件重要事", isDone: false),
-        DailyGoal(id: UUID(), title: "训练或恢复", isDone: false),
-        DailyGoal(id: UUID(), title: "按时休息", isDone: false),
-    ]
 
     private static func dayKey(for date: Date, calendar: Calendar) -> String {
         let components = calendar.dateComponents([.year, .month, .day], from: date)
@@ -235,27 +195,4 @@ final class DailyGoalStore: ObservableObject {
         return "\(components.yearForWeekOfYear ?? 0)-\(components.weekOfYear ?? 0)"
     }
 
-    private static func containsYesterdayPendingField(_ data: Data) -> Bool {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return false
-        }
-        return object["yesterdayPending"] != nil
-    }
-
-    private static func normalizedTags(_ state: GoalHorizonState) -> GoalHorizonState {
-        var result = state
-        for horizon in GoalHorizon.allCases {
-            result[horizon] = result[horizon].map { goal in
-                var next = goal
-                next.tag = GoalTagLogic.resolve(goal.tag, title: goal.title).rawValue
-                return next
-            }
-        }
-        result.yesterdayPending = result.yesterdayPending.map { goal in
-            var next = goal
-            next.tag = GoalTagLogic.resolve(goal.tag, title: goal.title).rawValue
-            return next
-        }
-        return result
-    }
 }

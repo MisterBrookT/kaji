@@ -29,6 +29,7 @@
 | **Approved** | [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) — 纯数字今日进度；三层同屏 |
 | **Approved** | [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) — Fixed 整体目标 + Vision |
 | **Approved** | [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) — 轻量分类符号与完成态 |
+| **Approved** | [specs/2026-08-03-goals-state-cleanup.md](specs/2026-08-03-goals-state-cleanup.md) — 单一状态、legacy 清理、损坏诊断 |
 | Optional | [design/palette.html](design/palette.html) |
 
 ## Catalog
@@ -76,6 +77,7 @@
 | [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) | 已通过：Fixed 整体目标 + Vision |
 | [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) | 已通过：轻量分类符号与完成态 |
 | [specs/2026-08-03-goals-copy-cleanup.md](specs/2026-08-03-goals-copy-cleanup.md) | 已通过：Goals 解释文案减法 |
+| [specs/2026-08-03-goals-state-cleanup.md](specs/2026-08-03-goals-state-cleanup.md) | 已通过：单一状态、legacy 清理、损坏诊断 |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
 ### Assets

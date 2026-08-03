@@ -166,41 +166,6 @@ public struct GoalHorizonState: Codable, Equatable, Sendable {
 }
 
 public enum GoalHorizonLogic {
-    public static func migrateLegacy(
-        goalsData: Data?,
-        goalsKeyExists: Bool,
-        dayKey: String?,
-        historyData: Data?,
-        currentDayKey: String,
-        currentWeekKey: String,
-        freshDefaults: [GoalItem]
-    ) -> GoalHorizonState {
-        let goals: [GoalItem]
-        if let goalsData,
-           let decoded = try? JSONDecoder().decode([GoalItem].self, from: goalsData) {
-            goals = decoded
-        } else {
-            goals = goalsKeyExists ? [] : freshDefaults
-        }
-
-        let history: [String: GoalHistoryDay]
-        if let historyData,
-           let decoded = try? JSONDecoder().decode([String: GoalHistoryDay].self, from: historyData) {
-            history = decoded
-        } else {
-            history = [:]
-        }
-
-        return GoalHorizonState(
-            today: goals,
-            week: [],
-            longTerm: [],
-            dayKey: dayKey ?? currentDayKey,
-            weekKey: currentWeekKey,
-            history: history
-        )
-    }
-
     public static func refresh(
         _ state: GoalHorizonState,
         dayKey: String,

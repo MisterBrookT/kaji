@@ -118,38 +118,4 @@ final class GoalHorizonModelTests: XCTestCase {
         XCTAssertTrue(decoded.yesterdayPending.isEmpty)
     }
 
-    func testLegacyMigrationPreservesGoalsIDsCompletionAndHistory() throws {
-        let goals = [GoalItem(id: todayID, title: "Existing", isDone: true)]
-        let history = ["2026-7-31": GoalHistoryDay(day: "2026-7-31", completed: 2, total: 3)]
-        let migrated = GoalHorizonLogic.migrateLegacy(
-            goalsData: try JSONEncoder().encode(goals),
-            goalsKeyExists: true,
-            dayKey: "2026-8-1",
-            historyData: try JSONEncoder().encode(history),
-            currentDayKey: "2026-8-1",
-            currentWeekKey: "2026-31",
-            freshDefaults: []
-        )
-
-        XCTAssertEqual(migrated.today, goals)
-        XCTAssertEqual(migrated.history, history)
-        XCTAssertTrue(migrated.week.isEmpty)
-        XCTAssertTrue(migrated.longTerm.isEmpty)
-    }
-
-    func testCorruptLegacyDataDoesNotInsertDefaultsOverExistingKey() {
-        let fallback = [GoalItem(id: todayID, title: "Sample", isDone: false)]
-        let migrated = GoalHorizonLogic.migrateLegacy(
-            goalsData: Data("bad".utf8),
-            goalsKeyExists: true,
-            dayKey: nil,
-            historyData: Data("bad".utf8),
-            currentDayKey: "2026-8-1",
-            currentWeekKey: "2026-31",
-            freshDefaults: fallback
-        )
-
-        XCTAssertTrue(migrated.today.isEmpty)
-        XCTAssertTrue(migrated.history.isEmpty)
-    }
 }
