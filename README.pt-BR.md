@@ -7,9 +7,9 @@
   </picture>aji
 </h1>
 
-**A barra de menus que vale a pena manter na era da IA.**
+**A camada pessoal de estado e controle para um Mac nativo de IA.**
 
-Veja a pressão das cotas rapidamente e volte ao agent.
+O que importa hoje, a um olhar de distância.
 
 [English](README.md) · [中文](README.zh.md) · [Español](README.es.md)
 
@@ -27,11 +27,15 @@ Veja a pressão das cotas rapidamente e volte ao agent.
 
 ## O que é
 
-Um app de barra de menus para macOS que acompanha **cotas de AI coding** (Claude Code / Cursor / Codex e outros). Os anéis na barra mostram uso e horários de renovação para você perceber a pressão antes de uma execução parar no meio.
+O Kaji coloca na **barra de menus** os estados vivos que importam para você. Isso inclui cotas de IA, foco, metas e o seu Mac.
 
-Sem dashboard. Sem ícone no Dock. Módulos opcionais para foco e pausas, carga do sistema e metas diárias — desligados até você ativá-los nos Ajustes.
+Por que a barra de menus? Porque ela permanece ao lado do que você já está fazendo: olhe para saber, passe o cursor para obter contexto e clique para agir. Sem trocar de app e sem uma notificação exigindo atenção.
 
-`Kaji` vem do japonês `舵 / かじ` — leme.
+O Kaji começa pequeno. Quota vem ligado. Os outros módulos são opcionais. Um só shell. Apenas os sinais que você escolhe manter por perto.
+
+`Kaji` vem do japonês `舵 / かじ`. Significa leme.
+
+[Leia a visão](dev_docs/product/vision.md).
 
 ## Instalação
 
@@ -41,7 +45,7 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 Requer macOS 13+ (Apple Silicon), `git` e `swift`. Clona a tag da versão mais recente, compila localmente, remove a quarentena e instala em `/Applications`.
 
-As Releases não incluem `.app.zip` — downloads sem assinatura feitos pelo navegador são bloqueados pelo Gatekeeper. Como alternativa, execute `./scripts/build-local.sh` em um clone.
+As Releases não incluem `.app.zip`. Downloads sem assinatura feitos pelo navegador são bloqueados pelo Gatekeeper. Como alternativa, execute `./scripts/build-local.sh` em um clone.
 
 ## Módulos
 
@@ -65,8 +69,8 @@ swift test
 ## Links
 
 - [Versão mais recente](https://github.com/blackblue-labs/kaji/releases/latest)
-- [AGENTS.md](AGENTS.md) — notas para contributors / agents
-- [dev_docs/](dev_docs/README.md) — specs internas
+- [AGENTS.md](AGENTS.md): notas para contributors / agents
+- [dev_docs/](dev_docs/README.md): specs internas
 
 ## Licença
 

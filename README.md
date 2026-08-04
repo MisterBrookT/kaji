@@ -7,9 +7,9 @@
   </picture>aji
 </h1>
 
-**The menu bar worth keeping for AI coding.**
+**The personal status and control layer for an AI-native Mac.**
 
-See quota pressure at a glance — then back to the agent.
+What matters today, one glance away.
 
 [中文](README.zh.md) · [Português](README.pt-BR.md) · [Español](README.es.md)
 
@@ -27,11 +27,15 @@ See quota pressure at a glance — then back to the agent.
 
 ## What it is
 
-A macOS menu-bar app for **AI coding quota** (Claude Code / Cursor / Codex and friends). Rings in the bar show usage pressure and reset timing so you notice before a run dies mid-flight.
+Kaji brings the live state that matters to you into the **Menu Bar**. This includes AI quota, focus, goals, and your Mac.
 
-No dashboard. No dock icon. Optional modules for focus breaks, system load, and daily goals — off until you turn them on in Settings.
+Why the Menu Bar? It stays beside whatever you are doing: glance to know, hover for context, click to act. No app switch and no notification demanding attention.
 
-`Kaji` is Japanese `舵 / かじ` — rudder.
+Kaji starts small. Quota is on. Other modules are opt-in. One shell. Only the signals you choose to keep close.
+
+`Kaji` is Japanese `舵 / かじ`. It means rudder.
+
+[Read the vision](dev_docs/product/vision.md).
 
 ## Install
 
@@ -65,8 +69,8 @@ swift test
 ## Links
 
 - [Latest release](https://github.com/blackblue-labs/kaji/releases/latest)
-- [AGENTS.md](AGENTS.md) — contributor / agent notes
-- [dev_docs/](dev_docs/README.md) — internal specs
+- [AGENTS.md](AGENTS.md): contributor / agent notes
+- [dev_docs/](dev_docs/README.md): internal specs
 
 ## License
 

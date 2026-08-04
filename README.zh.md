@@ -7,9 +7,9 @@
   </picture>aji
 </h1>
 
-**AI 时代还值得一直挂着的菜单栏。**
+**AI 时代 Mac 上离个人最近的状态与控制层。**
 
-一眼看清额度压力，然后继续跑 agent。
+今天真正重要的事情，一眼就够。
 
 [English](README.md) · [Português](README.pt-BR.md) · [Español](README.es.md)
 
@@ -27,11 +27,15 @@
 
 ## 是什么
 
-给 **AI coding 额度**用的 macOS 菜单栏应用（Claude Code / Codex 等）。菜单栏上的环显示 5h / 7d 用量和重置时间，跑飞之前能看见压力。
+Kaji 把与你有关的活状态放进 **Menu Bar**。这些状态包括 AI quota、专注、Goals 和 Mac。
 
-没有 dashboard，没有 Dock 图标。专注休息、系统负载、每日目标是可选模块——默认关，在 Settings 里按需打开。
+为什么是 Menu Bar？因为它始终在当前工作旁边：一眼知道状态，hover 获得上下文，点击立即操作。不需要切换 App，也不需要一条通知来打断你。
+
+Kaji 默认很小。Quota 开启，其它 module 按需选择：一个壳，只留下你愿意放在身边的信号。
 
 `Kaji` 来自日语 `舵 / かじ`。
+
+[阅读 Vision](dev_docs/product/vision.md)。
 
 ## 安装
 
@@ -65,8 +69,8 @@ swift test
 ## 链接
 
 - [最新 Release](https://github.com/blackblue-labs/kaji/releases/latest)
-- [AGENTS.md](AGENTS.md) — 贡献者 / agent 笔记
-- [dev_docs/](dev_docs/README.md) — 内部 spec
+- [AGENTS.md](AGENTS.md)：贡献者 / agent 笔记
+- [dev_docs/](dev_docs/README.md)：内部 spec
 
 ## License
 
