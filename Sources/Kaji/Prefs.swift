@@ -66,6 +66,13 @@ final class Prefs: ObservableObject {
     @Published var preventSleep: Bool {
         didSet { UserDefaults.standard.set(preventSleep, forKey: Key.preventSleep) }
     }
+    @Published var aiNewsRefreshHours: Int {
+        didSet {
+            let normalized = AIHotRefreshPolicy.normalize(hours: aiNewsRefreshHours)
+            if normalized != aiNewsRefreshHours { aiNewsRefreshHours = normalized; return }
+            UserDefaults.standard.set(normalized, forKey: Key.aiNewsRefreshHours)
+        }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -86,12 +93,13 @@ final class Prefs: ObservableObject {
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
         static let preferencesInitialized = "preferencesInitialized"
+        static let aiNewsRefreshHours = "aiNewsRefreshHours"
 
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
             showRemaining, panelSize, petId, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
-            visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep
+            visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep, aiNewsRefreshHours
         ]
     }
 
@@ -189,6 +197,8 @@ final class Prefs: ObservableObject {
         } else {
             preventSleep = false
         }
+        aiNewsRefreshHours = AIHotRefreshPolicy.normalize(hours: d.object(forKey: Key.aiNewsRefreshHours) == nil ? 5 : d.integer(forKey: Key.aiNewsRefreshHours))
+        d.set(aiNewsRefreshHours, forKey: Key.aiNewsRefreshHours)
         d.set(true, forKey: Key.preferencesInitialized)
     }
 

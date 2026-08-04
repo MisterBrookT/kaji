@@ -31,6 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let dailyGoals = DailyGoalStore()
     private let fixedPlanStore = FixedPlanStore()
     private let popoverNavigation = PopoverNavigation()
+    private let aiNewsStore = AIHotNewsStore()
     private var breakWindows: [NSWindow] = []
     private var breakSceneSeed: UInt64?
     private var breakWatchdogTimer: Timer?
@@ -88,6 +89,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.updateStatusItem()
                 self?.rebuildPopoverContentIfShown()
             }
+            .store(in: &cancellables)
+        prefs.$aiNewsRefreshHours
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] hours in self?.aiNewsStore.updateRefreshHours(hours) }
             .store(in: &cancellables)
         dailyGoals.objectWillChange
             .receive(on: RunLoop.main)
@@ -193,6 +199,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             systemMonitor.stop()
         }
+        aiNewsStore.setEnabled(modules.contains(.aiNews), refreshHours: prefs.aiNewsRefreshHours)
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -206,6 +213,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         breakWatchdogTimer?.invalidate()
         petStateTimer?.invalidate()
         closeBreakOverlay()
+        aiNewsStore.stop()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -213,6 +221,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from hitting the network on every menubar interaction.
         updateChecker.checkIfDue()
         dailyGoals.refreshPeriodBoundaries()
+        if prefs.isModuleEnabled(.aiNews) {
+            aiNewsStore.setEnabled(true, refreshHours: prefs.aiNewsRefreshHours)
+        }
     }
 
     // MARK: - Status item
@@ -226,9 +237,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
                                   goalsSlotLabel: goalsStatusSlotLabel,
+                                  showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                  onAINewsClick: { [weak self] in self?.showPopover(.aiNews) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -247,9 +260,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
                                                goalsSlotLabel: goalsStatusSlotLabel,
+                                               showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                               onAINewsClick: { [weak self] in self?.showPopover(.aiNews) })
         statusItem.length = statusItemLength
     }
 
@@ -288,6 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let goalsStatusSlotLabel {
             length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
         }
+        if prefs.isModuleEnabled(.aiNews) { length += 20 }
         return length
     }
 
@@ -346,7 +362,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday:
+        case .work, .goalsToday, .aiNews:
             return .quota
         }
     }
@@ -359,6 +375,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
+        case .aiNews:
+            return popoverNavigation.panel == .aiNews
         }
     }
 
@@ -379,6 +397,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
+        case .aiNews:
+            popoverNavigation.panel = prefs.isModuleEnabled(.aiNews) ? .aiNews : .quota
         }
     }
 
@@ -397,6 +417,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
+                                      aiNewsStore: aiNewsStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),

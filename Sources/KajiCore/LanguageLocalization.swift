@@ -61,7 +61,8 @@ public enum L10n {
         case fixedPlan
         case launchAtLogin
         case modules, modulesHint
-        case moduleQuota, moduleWork, moduleSystem, moduleGoals
+        case moduleQuota, moduleWork, moduleSystem, moduleGoals, moduleAINews
+        case aiNews, dataSource, updated, loading, noHotNews, retry, sources, refreshInterval
     }
 
     private struct Text {
@@ -148,7 +149,16 @@ public enum L10n {
         .moduleQuota: .init(en: "Quota", zh: "Quota", ptBR: "Quota", es: "Quota"),
         .moduleWork: .init(en: "Work / Break", zh: "Work / Break", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
         .moduleSystem: .init(en: "System", zh: "System", ptBR: "Sistema", es: "Sistema"),
-        .moduleGoals: .init(en: "Goals", zh: "Goals", ptBR: "Metas", es: "Metas")
+        .moduleGoals: .init(en: "Goals", zh: "Goals", ptBR: "Metas", es: "Metas"),
+        .moduleAINews: .init(en: "AI News", zh: "AI 新闻", ptBR: "Notícias de IA", es: "Noticias de IA"),
+        .aiNews: .init(en: "AI News", zh: "AI 新闻", ptBR: "Notícias de IA", es: "Noticias de IA"),
+        .dataSource: .init(en: "Data source", zh: "数据来源", ptBR: "Fonte de dados", es: "Fuente de datos"),
+        .updated: .init(en: "Updated", zh: "更新于", ptBR: "Atualizado", es: "Actualizado"),
+        .loading: .init(en: "Loading…", zh: "加载中…", ptBR: "Carregando…", es: "Cargando…"),
+        .noHotNews: .init(en: "No hot news", zh: "暂无热点", ptBR: "Sem notícias em alta", es: "Sin noticias destacadas"),
+        .retry: .init(en: "Retry", zh: "重试", ptBR: "Tentar novamente", es: "Reintentar"),
+        .sources: .init(en: "sources", zh: "个来源", ptBR: "fontes", es: "fuentes"),
+        .refreshInterval: .init(en: "Refresh", zh: "刷新间隔", ptBR: "Atualização", es: "Actualización")
     ]
 
     public static func t(_ key: K, _ language: AppLanguage) -> String {
