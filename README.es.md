@@ -7,9 +7,9 @@
   </picture>aji
 </h1>
 
-**La barra de menús que merece quedarse en la era de la IA.**
+**La capa personal de estado y control para un Mac nativo de IA.**
 
-Consulta la presión de tus cuotas de un vistazo y vuelve al agent.
+Lo que importa hoy, a un vistazo de distancia.
 
 [English](README.md) · [中文](README.zh.md) · [Português](README.pt-BR.md)
 
@@ -27,11 +27,15 @@ Consulta la presión de tus cuotas de un vistazo y vuelve al agent.
 
 ## Qué es
 
-Una app de barra de menús para macOS que controla las **cuotas de AI coding** (Claude Code / Cursor / Codex y otros). Los anillos de la barra muestran el uso y los tiempos de reinicio para que detectes la presión antes de que una ejecución se detenga a mitad de camino.
+Kaji lleva a la **barra de menús** los estados vivos que te importan. Esto incluye cuotas de IA, enfoque, objetivos y tu Mac.
 
-Sin dashboard. Sin icono en el Dock. Módulos opcionales para enfoque y descansos, carga del sistema y objetivos diarios — desactivados hasta que los habilites en Ajustes.
+¿Por qué la barra de menús? Porque permanece junto a lo que ya estás haciendo: mira para saber, pasa el cursor para obtener contexto y haz clic para actuar. Sin cambiar de app ni recibir una notificación que exija atención.
 
-`Kaji` viene del japonés `舵 / かじ` — timón.
+Kaji empieza pequeño. Quota está activado. Los demás módulos son opcionales. Un solo shell. Únicamente las señales que eliges mantener cerca.
+
+`Kaji` viene del japonés `舵 / かじ`. Significa timón.
+
+[Lee la visión](dev_docs/product/vision.md).
 
 ## Instalación
 
@@ -65,8 +69,8 @@ swift test
 ## Enlaces
 
 - [Última versión](https://github.com/blackblue-labs/kaji/releases/latest)
-- [AGENTS.md](AGENTS.md) — notas para contributors / agents
-- [dev_docs/](dev_docs/README.md) — specs internas
+- [AGENTS.md](AGENTS.md): notas para contributors / agents
+- [dev_docs/](dev_docs/README.md): specs internas
 
 ## Licencia
 
