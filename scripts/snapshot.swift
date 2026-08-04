@@ -90,6 +90,8 @@ struct Snap {
             let workSession = WorkSessionController(prefs: prefs)
             let systemMonitor = SystemMonitor()
             let dailyGoals = DailyGoalStore()
+            let fixedPlanStore = FixedPlanStore()
+            let aiNewsStore = AIHotNewsStore()
             let navigation = PopoverNavigation()
             let controls = GaugeRowView.Controls(
                 onRefresh: {},
@@ -106,6 +108,8 @@ struct Snap {
                 workSession: workSession,
                 systemMonitor: systemMonitor,
                 dailyGoals: dailyGoals,
+                fixedPlanStore: fixedPlanStore,
+                aiNewsStore: aiNewsStore,
                 navigation: navigation,
                 controls: controls,
                 maxContentHeight: 720,
