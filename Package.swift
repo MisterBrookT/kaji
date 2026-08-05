@@ -33,7 +33,7 @@ let package = Package(
         ),
         .testTarget(
             name: "KajiTests",
-            dependencies: ["KajiCore"],
+            dependencies: ["KajiCore", "Kaji"],
             path: "Tests/KajiTests"
         )
     ]

@@ -71,6 +71,7 @@ struct SettingsView: View {
                     moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
                     moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
+                    moduleRow(.aiNews, title: L10n.t(.moduleAINews, prefs.language), lockedOn: false)
                 }
             }
             }
@@ -151,6 +152,14 @@ struct SettingsView: View {
                     ForEach(providerSettingsKeys, id: \.self) { key in
                         providerRow(key)
                     }
+                    settingRow(title: L10n.t(.refreshInterval, prefs.language)) {
+                        ForEach(AIHotRefreshPolicy.allowedHours, id: \.self) { hours in
+                            segment("\(hours)h", on: prefs.aiNewsRefreshHours == hours) {
+                                prefs.aiNewsRefreshHours = hours
+                            }
+                        }
+                    }
+                    .help("AI News uses AI HOT's anonymous read-only v1 API.")
                 }
             }
             }
