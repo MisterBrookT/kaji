@@ -18,12 +18,9 @@ What matters today, one glance away.
 <a href="LICENSE"><img src="https://img.shields.io/github/license/blackblue-labs/kaji?color=8A8A8A&labelColor=1A1A1A" alt="MIT license"></a>
 <img src="https://img.shields.io/github/v/release/blackblue-labs/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Latest release">
 
-<br />
-<br />
-
-<img src="dev_docs/assets/readme-hero-20260724.jpg" width="860" alt="Kaji menu bar popover" />
-
 </div>
+
+https://github.com/user-attachments/assets/a345bc3f-d74e-4092-8e8f-5730b154d39c
 
 ## What it is
 
