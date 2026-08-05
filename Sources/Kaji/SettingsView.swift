@@ -7,7 +7,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case modules = "Modules"
     case work = "Work"
     case goals = "Goals"
-    case ai = "AI"
+    case quota = "Quota"
+    case aiNews = "AI News"
 
     var id: String { rawValue }
     var systemImage: String {
@@ -16,7 +17,8 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .modules: "square.grid.2x2"
         case .work: "timer"
         case .goals: "checkmark.circle"
-        case .ai: "sparkles"
+        case .quota: "gauge.with.dots.needle.67percent"
+        case .aiNews: "newspaper"
         }
     }
 }
@@ -144,14 +146,18 @@ struct SettingsView: View {
                 }
             }
             if selection == .goals {
-                fixedPlanEditor
+                EmptyView()
             }
-            if selection == .ai {
-                settingBlock(title: "AI") {
+            if selection == .quota {
                 VStack(alignment: .leading, spacing: 7) {
                     ForEach(providerSettingsKeys, id: \.self) { key in
                         providerRow(key)
                     }
+                }
+            }
+            if selection == .aiNews {
+                settingBlock(title: "AI News") {
+                VStack(alignment: .leading, spacing: 7) {
                     settingRow(title: L10n.t(.refreshInterval, prefs.language)) {
                         ForEach(AIHotRefreshPolicy.allowedHours, id: \.self) { hours in
                             segment("\(hours)h", on: prefs.aiNewsRefreshHours == hours) {
