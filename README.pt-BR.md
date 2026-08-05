@@ -53,8 +53,9 @@ As Releases não incluem `.app.zip`. Downloads sem assinatura feitos pelo navega
 | --- | --- | --- |
 | **Quota** | ligado | Uso de 5h / 7d, renovação, tendência de tokens, estimativa de custo e provedores |
 | **Work / Break** | desligado | Timer de foco, contagem regressiva na barra e sobreposição de pausa |
-| **System** | desligado | CPU / memória / disco, processos principais e Auto Reclaim conservador |
-| **Goals** | desligado | Metas diárias + mapa de calor |
+| **System** | desligado | CPU / memória, categorias de disco e processos principais |
+| **Goals** | desligado | Today / Week / Vision / Schedule, notas, etiquetas e mapa de calor |
+| **AI News** | desligado | Top 10 do AI HOT, resumos no hover e contexto das fontes |
 | **Pet** | ponte | Navi opcional via `~/Library/Application Support/Kaji/pet-state.json` |
 
 Tema: somente **Mono** (preto / branco / cinza, claro e escuro).
