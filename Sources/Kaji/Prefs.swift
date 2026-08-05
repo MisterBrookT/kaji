@@ -63,6 +63,9 @@ final class Prefs: ObservableObject {
     @Published var preventSleep: Bool {
         didSet { UserDefaults.standard.set(preventSleep, forKey: Key.preventSleep) }
     }
+    @Published var mcpEnabled: Bool {
+        didSet { UserDefaults.standard.set(mcpEnabled, forKey: Key.mcpEnabled) }
+    }
     @Published var aiNewsRefreshHours: Int {
         didSet {
             let normalized = AIHotRefreshPolicy.normalize(hours: aiNewsRefreshHours)
@@ -88,6 +91,7 @@ final class Prefs: ObservableObject {
         static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
+        static let mcpEnabled = "mcpEnabled"
         static let preferencesInitialized = "preferencesInitialized"
         static let aiNewsRefreshHours = "aiNewsRefreshHours"
 
@@ -95,7 +99,8 @@ final class Prefs: ObservableObject {
             visibleProviders, enabledModules, language, menubarStyle,
             showRemaining, petId, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
-            visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep, aiNewsRefreshHours
+            visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
+            aiNewsRefreshHours, mcpEnabled
         ]
     }
 
@@ -188,6 +193,9 @@ final class Prefs: ObservableObject {
         } else {
             preventSleep = false
         }
+        mcpEnabled = d.object(forKey: Key.mcpEnabled) == nil
+            ? false
+            : d.bool(forKey: Key.mcpEnabled)
         aiNewsRefreshHours = AIHotRefreshPolicy.normalize(hours: d.object(forKey: Key.aiNewsRefreshHours) == nil ? 5 : d.integer(forKey: Key.aiNewsRefreshHours))
         d.set(aiNewsRefreshHours, forKey: Key.aiNewsRefreshHours)
         d.set(true, forKey: Key.preferencesInitialized)
