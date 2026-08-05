@@ -2,6 +2,12 @@ import XCTest
 import KajiCore
 
 final class AIHotRefreshPolicyTests: XCTestCase {
+    func testHoverPolicyOpensFirstItemBrieflyAndSwitchesImmediately() {
+        XCTAssertEqual(AIHotHoverPolicy.openDelay(hasActiveTopic: false), 0.10)
+        XCTAssertEqual(AIHotHoverPolicy.openDelay(hasActiveTopic: true), 0)
+        XCTAssertGreaterThan(AIHotHoverPolicy.closeDelay, AIHotHoverPolicy.initialOpenDelay)
+    }
+
     func testRefreshHoursNormalizeAndDuePolicy() {
         XCTAssertEqual(AIHotRefreshPolicy.normalize(hours: 7), 5)
         XCTAssertEqual(AIHotRefreshPolicy.allowedHours, [1, 3, 5, 12, 24])

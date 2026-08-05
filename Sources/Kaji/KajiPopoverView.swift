@@ -198,6 +198,23 @@ struct KajiPopoverView: View {
                     .font(.system(size: 9, weight: .medium)).foregroundColor(t.mute)
             }.padding(.top, 3)
         }
+        .popover(
+            isPresented: Binding(
+                get: { hoveredNewsID != nil },
+                set: {
+                    if !$0 {
+                        newsHoverGeneration += 1
+                        hoveredNewsID = nil
+                    }
+                }
+            ),
+            arrowEdge: .trailing
+        ) {
+            if let topic = aiNewsStore.topics.first(where: { $0.id == hoveredNewsID }) {
+                aiNewsDetail(topic)
+                    .onHover { updateNewsDetailHover(inside: $0) }
+            }
+        }
     }
 
     private func aiNewsRow(_ topic: AIHotTopic) -> some View {
@@ -211,7 +228,7 @@ struct KajiPopoverView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(topic.title).font(.system(size: 11, weight: .semibold, design: .rounded))
                         .foregroundColor(t.cream).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                    Text("\(topic.sourceName) · \(topic.sourceCount) \(L10n.t(.sources, prefs.language)) · \(topic.latestAt.formatted(.relative(presentation: .numeric)))")
+                    Text(topic.latestAt.formatted(.relative(presentation: .numeric)))
                         .font(.system(size: 8.5, weight: .medium)).foregroundColor(t.mute).lineLimit(1)
                 }
             }.padding(7).background(RoundedRectangle(cornerRadius: 7).fill(t.panel.opacity(0.7)))
@@ -219,28 +236,50 @@ struct KajiPopoverView: View {
         }
         .buttonStyle(.plain)
         .onHover { inside in updateNewsHover(topic, inside: inside) }
-        .popover(isPresented: Binding(get: { hoveredNewsID == topic.id }, set: { if !$0 { hoveredNewsID = nil } }), arrowEdge: .trailing) {
-            aiNewsDetail(topic).onHover { inside in updateNewsHover(topic, inside: inside) }
-        }
     }
 
     private func aiNewsDetail(_ topic: AIHotTopic) -> some View {
         let story = topic.storyPublicID.flatMap { aiNewsStore.hoveredStoryByID[$0] }
+        let sourceNames = topic.sourceNames.isEmpty ? [topic.sourceName] : topic.sourceNames
+        let sourceSummary = sourceNames.prefix(3).joined(separator: " · ")
         return VStack(alignment: .leading, spacing: 7) {
             Text(topic.title).font(.system(size: 12, weight: .bold)).lineLimit(3)
             Divider()
-            Text(story?.digest ?? story?.latest ?? "\(topic.sourceCount) \(L10n.t(.sources, prefs.language))")
+            Text(story?.digest ?? story?.latest ?? L10n.t(.loading, prefs.language))
                 .font(.system(size: 10)).textSelection(.enabled)
+            Divider()
+            Text(sourceSummary)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(t.mute)
+                .lineLimit(2)
+            Text("\(topic.sourceCount) \(L10n.t(.sources, prefs.language)) · \(topic.latestAt.formatted(.relative(presentation: .numeric)))")
+                .font(.system(size: 8.5, weight: .medium))
+                .foregroundColor(t.mute)
             Link("AI HOT", destination: topic.aiHotURL).font(.system(size: 9, weight: .semibold))
         }.padding(12).frame(width: 250, alignment: .leading)
     }
 
     private func updateNewsHover(_ topic: AIHotTopic, inside: Bool) {
-        newsHoverGeneration += 1; let generation = newsHoverGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + (inside ? 0.2 : 0.22)) {
+        let hadActiveTopic = hoveredNewsID != nil
+        newsHoverGeneration += 1
+        let generation = newsHoverGeneration
+        let delay = inside
+            ? AIHotHoverPolicy.openDelay(hasActiveTopic: hadActiveTopic)
+            : AIHotHoverPolicy.closeDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             guard generation == newsHoverGeneration else { return }
             if inside { hoveredNewsID = topic.id; aiNewsStore.loadStory(for: topic) }
             else if hoveredNewsID == topic.id { hoveredNewsID = nil }
+        }
+    }
+
+    private func updateNewsDetailHover(inside: Bool) {
+        newsHoverGeneration += 1
+        guard !inside else { return }
+        let generation = newsHoverGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + AIHotHoverPolicy.closeDelay) {
+            guard generation == newsHoverGeneration else { return }
+            hoveredNewsID = nil
         }
     }
 

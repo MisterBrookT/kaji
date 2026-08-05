@@ -1,5 +1,15 @@
 import Foundation
 
+public enum AIHotHoverPolicy {
+    public static let initialOpenDelay: TimeInterval = 0.10
+    public static let transitionDelay: TimeInterval = 0
+    public static let closeDelay: TimeInterval = 0.35
+
+    public static func openDelay(hasActiveTopic: Bool) -> TimeInterval {
+        hasActiveTopic ? transitionDelay : initialOpenDelay
+    }
+}
+
 public enum AIHotRefreshPolicy {
     public static let allowedHours = [1, 3, 5, 12, 24]
     public static let defaultHours = 5
