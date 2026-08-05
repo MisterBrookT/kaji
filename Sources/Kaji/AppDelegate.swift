@@ -29,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     private let dailyGoals = DailyGoalStore()
+    private lazy var mcpServer = KajiMCPServer(goals: dailyGoals)
     private let fixedPlanStore = FixedPlanStore()
     private let popoverNavigation = PopoverNavigation()
     private let aiNewsStore = AIHotNewsStore()
@@ -45,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sleepController.refresh()
         store.start()
         applyModuleLifecycle(prefs.enabledModules)
+        mcpServer.setEnabled(prefs.mcpEnabled)
         refreshPetCatalogSelection()
 
         setupStatusItem()
@@ -145,6 +147,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
+        prefs.$mcpEnabled
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] enabled in
+                self?.mcpServer.setEnabled(enabled)
+            }
+            .store(in: &cancellables)
         // Update availability re-renders the glyph (adds/removes the badge dot).
         updateChecker.$available
             .receive(on: RunLoop.main)
@@ -189,6 +198,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         petStateTimer?.invalidate()
         closeBreakOverlay()
         aiNewsStore.stop()
+        mcpServer.stop()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -477,7 +487,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = KajiHostingController(rootView: SettingsView(prefs: prefs,
                                                                        sleepController: sleepController,
                                                                        petCatalog: petCatalog,
-                                                                       fixedPlanStore: fixedPlanStore))
+                                                                       fixedPlanStore: fixedPlanStore,
+                                                                       mcpServer: mcpServer))
         controller.view.configureKajiHost()
         let window = NSWindow(contentViewController: controller)
         window.title = "Kaji Settings"

@@ -37,6 +37,7 @@
 | **Approved** | [specs/2026-08-05-ai-news-module.md](specs/2026-08-05-ai-news-module.md) — AI HOT Top 10 第五模块 |
 | **Approved** | [specs/2026-08-05-ai-news-list-hover-polish.md](specs/2026-08-05-ai-news-list-hover-polish.md) — 一级信息减法 + 稳定 hover 切换 |
 | **Approved** | [specs/2026-08-05-settings-information-architecture-polish.md](specs/2026-08-05-settings-information-architecture-polish.md) — Quota / AI News 分栏；Goals 暂留空 |
+| **Approved** | [specs/2026-08-05-local-mcp.md](specs/2026-08-05-local-mcp.md) — v0.7 localhost MCP 读写 Goals |
 | Optional | [design/palette.html](design/palette.html) |
 
 ## Catalog
@@ -95,6 +96,7 @@
 | [specs/2026-08-05-ai-news-module.md](specs/2026-08-05-ai-news-module.md) | 已通过：AI HOT Top 10、5h 刷新与 hover digest |
 | [specs/2026-08-05-ai-news-list-hover-polish.md](specs/2026-08-05-ai-news-list-hover-polish.md) | 已通过：来源移入详情、相邻 hover 即时切换 |
 | [specs/2026-08-05-settings-information-architecture-polish.md](specs/2026-08-05-settings-information-architecture-polish.md) | 已通过：Quota / AI News 职责拆分，Goals 只保留设置入口 |
+| [specs/2026-08-05-local-mcp.md](specs/2026-08-05-local-mcp.md) | 已通过：不改 v0.7 Goals UI，仅增加 localhost MCP |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
 ### Assets

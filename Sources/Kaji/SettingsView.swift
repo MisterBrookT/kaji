@@ -32,6 +32,7 @@ struct SettingsView: View {
     @ObservedObject var sleepController: SleepController
     @ObservedObject var petCatalog: PetCatalogStore
     @ObservedObject var fixedPlanStore: FixedPlanStore
+    @ObservedObject var mcpServer: KajiMCPServer
     var onFixedPlanEditorChange: ((Bool) -> Void)? = nil
 
     @State private var selectedScheduleID: UUID?
@@ -118,6 +119,42 @@ struct SettingsView: View {
                     }
                 }
             }
+            settingBlock(title: "Local MCP") {
+                VStack(alignment: .leading, spacing: 8) {
+                    settingRow(title: "AI access") {
+                        segment(L10n.t(.on, prefs.language), on: prefs.mcpEnabled) {
+                            prefs.mcpEnabled = true
+                        }
+                        segment(L10n.t(.off, prefs.language), on: !prefs.mcpEnabled) {
+                            prefs.mcpEnabled = false
+                        }
+                    }
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(mcpStatusColor)
+                            .frame(width: 6, height: 6)
+                        Text(mcpStatusText)
+                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                            .foregroundColor(t.mute)
+                            .lineLimit(1)
+                        Spacer()
+                        Button("Copy endpoint") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(
+                                KajiMCPServer.endpoint,
+                                forType: .string
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.cream)
+                    }
+                    Text("Localhost only. While enabled, local AI tools can read and edit Goals.")
+                        .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                        .foregroundColor(t.mute)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             }
             if selection == .work {
                 settingBlock(title: L10n.t(.work, prefs.language)) {
@@ -173,6 +210,24 @@ struct SettingsView: View {
         .padding(24)
         .onAppear {
             refreshPetCatalogSelection()
+        }
+    }
+
+    private var mcpStatusText: String {
+        switch mcpServer.status {
+        case .stopped: "Stopped · \(KajiMCPServer.endpoint)"
+        case .starting: "Starting · \(KajiMCPServer.endpoint)"
+        case .running: "Running · \(KajiMCPServer.endpoint)"
+        case .failed(let message): "Failed · \(message)"
+        }
+    }
+
+    private var mcpStatusColor: Color {
+        switch mcpServer.status {
+        case .running: t.cream
+        case .failed: .red
+        case .starting: t.gold
+        case .stopped: t.mute
         }
     }
 

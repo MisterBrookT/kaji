@@ -105,6 +105,79 @@ final class DailyGoalStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    func addGoal(
+        title: String,
+        tag: String,
+        note: String,
+        in horizon: GoalHorizon
+    ) throws -> DailyGoal {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTitle.isEmpty else {
+            throw GoalStoreMutationError.emptyTitle
+        }
+        let goal = DailyGoal(
+            id: UUID(),
+            title: normalizedTitle,
+            isDone: false,
+            tag: GoalTagLogic.resolve(tag, title: normalizedTitle).rawValue,
+            note: note
+        )
+        mutate(horizon) { $0.append(goal) }
+        return goal
+    }
+
+    func updateGoal(
+        id: UUID,
+        title: String?,
+        tag: String?,
+        note: String?,
+        in horizon: GoalHorizon
+    ) throws {
+        var next = state
+        guard let index = next[horizon].firstIndex(where: { $0.id == id }) else {
+            throw GoalStoreMutationError.goalNotFound
+        }
+        if let title {
+            let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedTitle.isEmpty else {
+                throw GoalStoreMutationError.emptyTitle
+            }
+            next[horizon][index].title = normalizedTitle
+        }
+        if let tag {
+            next[horizon][index].tag = GoalTagLogic.resolve(
+                tag,
+                title: next[horizon][index].title
+            ).rawValue
+        }
+        if let note {
+            next[horizon][index].note = note
+        }
+        state = next
+        if horizon == .today { recordToday() }
+    }
+
+    func setGoalCompleted(id: UUID, isDone: Bool, in horizon: GoalHorizon) throws {
+        var next = state
+        guard let index = next[horizon].firstIndex(where: { $0.id == id }) else {
+            throw GoalStoreMutationError.goalNotFound
+        }
+        next[horizon][index].isDone = isDone
+        state = next
+        if horizon == .today { recordToday() }
+    }
+
+    func deleteGoal(id: UUID, in horizon: GoalHorizon) throws {
+        var next = state
+        guard next[horizon].contains(where: { $0.id == id }) else {
+            throw GoalStoreMutationError.goalNotFound
+        }
+        next[horizon].removeAll { $0.id == id }
+        state = next
+        if horizon == .today { recordToday() }
+    }
+
     func move(_ goal: DailyGoal, in horizon: GoalHorizon, offset: Int) {
         mutate(horizon) { goals in
             guard let source = goals.firstIndex(where: { $0.id == goal.id }) else { return }
@@ -208,4 +281,9 @@ final class DailyGoalStore: ObservableObject {
         return "\(components.yearForWeekOfYear ?? 0)-\(components.weekOfYear ?? 0)"
     }
 
+}
+
+enum GoalStoreMutationError: Error {
+    case goalNotFound
+    case emptyTitle
 }
