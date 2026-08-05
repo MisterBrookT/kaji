@@ -198,23 +198,6 @@ struct KajiPopoverView: View {
                     .font(.system(size: 9, weight: .medium)).foregroundColor(t.mute)
             }.padding(.top, 3)
         }
-        .popover(
-            isPresented: Binding(
-                get: { hoveredNewsID != nil },
-                set: {
-                    if !$0 {
-                        newsHoverGeneration += 1
-                        hoveredNewsID = nil
-                    }
-                }
-            ),
-            arrowEdge: .trailing
-        ) {
-            if let topic = aiNewsStore.topics.first(where: { $0.id == hoveredNewsID }) {
-                aiNewsDetail(topic)
-                    .onHover { updateNewsDetailHover(inside: $0) }
-            }
-        }
     }
 
     private func aiNewsRow(_ topic: AIHotTopic) -> some View {
@@ -236,6 +219,21 @@ struct KajiPopoverView: View {
         }
         .buttonStyle(.plain)
         .onHover { inside in updateNewsHover(topic, inside: inside) }
+        .popover(
+            isPresented: Binding(
+                get: { hoveredNewsID == topic.id },
+                set: {
+                    if !$0, hoveredNewsID == topic.id {
+                        newsHoverGeneration += 1
+                        hoveredNewsID = nil
+                    }
+                }
+            ),
+            arrowEdge: .trailing
+        ) {
+            aiNewsDetail(topic)
+                .onHover { updateNewsDetailHover(inside: $0) }
+        }
     }
 
     private func aiNewsDetail(_ topic: AIHotTopic) -> some View {
@@ -243,10 +241,18 @@ struct KajiPopoverView: View {
         let sourceNames = topic.sourceNames.isEmpty ? [topic.sourceName] : topic.sourceNames
         let sourceSummary = sourceNames.prefix(3).joined(separator: " · ")
         return VStack(alignment: .leading, spacing: 7) {
-            Text(topic.title).font(.system(size: 12, weight: .bold)).lineLimit(3)
+            Text(topic.title)
+                .font(.system(size: 12, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
             Divider()
-            Text(story?.digest ?? story?.latest ?? L10n.t(.loading, prefs.language))
-                .font(.system(size: 10)).textSelection(.enabled)
+            ScrollView {
+                Text(story?.digest ?? story?.latest ?? L10n.t(.loading, prefs.language))
+                    .font(.system(size: 10))
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 320)
             Divider()
             Text(sourceSummary)
                 .font(.system(size: 9, weight: .semibold))
@@ -264,8 +270,8 @@ struct KajiPopoverView: View {
         newsHoverGeneration += 1
         let generation = newsHoverGeneration
         let delay = inside
-            ? AIHotHoverPolicy.openDelay(hasActiveTopic: hadActiveTopic)
-            : AIHotHoverPolicy.closeDelay
+            ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActiveTopic)
+            : HoverDisclosurePolicy.closeDelay
         DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             guard generation == newsHoverGeneration else { return }
             if inside { hoveredNewsID = topic.id; aiNewsStore.loadStory(for: topic) }
@@ -277,7 +283,7 @@ struct KajiPopoverView: View {
         newsHoverGeneration += 1
         guard !inside else { return }
         let generation = newsHoverGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + AIHotHoverPolicy.closeDelay) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
             guard generation == newsHoverGeneration else { return }
             hoveredNewsID = nil
         }
@@ -1273,15 +1279,19 @@ struct KajiPopoverView: View {
     }
 
     private func updateGoalNoteHover(_ goal: DailyGoal, inside: Bool) {
+        let hadActiveGoal = shownGoalNoteID != nil
         goalNoteHoverGeneration += 1
         let generation = goalNoteHoverGeneration
-        if inside {
-            shownGoalNoteID = goal.id
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+        let delay = inside
+            ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActiveGoal)
+            : HoverDisclosurePolicy.closeDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
             guard generation == goalNoteHoverGeneration else { return }
-            shownGoalNoteID = nil
+            if inside {
+                shownGoalNoteID = goal.id
+            } else if shownGoalNoteID == goal.id {
+                shownGoalNoteID = nil
+            }
         }
     }
 

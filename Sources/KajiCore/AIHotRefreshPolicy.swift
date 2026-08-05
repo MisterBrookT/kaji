@@ -1,6 +1,6 @@
 import Foundation
 
-public enum AIHotHoverPolicy {
+public enum HoverDisclosurePolicy {
     public static let initialOpenDelay: TimeInterval = 0.10
     public static let transitionDelay: TimeInterval = 0
     public static let closeDelay: TimeInterval = 0.35

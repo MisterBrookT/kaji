@@ -3,9 +3,9 @@ import KajiCore
 
 final class AIHotRefreshPolicyTests: XCTestCase {
     func testHoverPolicyOpensFirstItemBrieflyAndSwitchesImmediately() {
-        XCTAssertEqual(AIHotHoverPolicy.openDelay(hasActiveTopic: false), 0.10)
-        XCTAssertEqual(AIHotHoverPolicy.openDelay(hasActiveTopic: true), 0)
-        XCTAssertGreaterThan(AIHotHoverPolicy.closeDelay, AIHotHoverPolicy.initialOpenDelay)
+        XCTAssertEqual(HoverDisclosurePolicy.openDelay(hasActiveTopic: false), 0.10)
+        XCTAssertEqual(HoverDisclosurePolicy.openDelay(hasActiveTopic: true), 0)
+        XCTAssertGreaterThan(HoverDisclosurePolicy.closeDelay, HoverDisclosurePolicy.initialOpenDelay)
     }
 
     func testRefreshHoursNormalizeAndDuePolicy() {
