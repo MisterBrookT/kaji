@@ -4,126 +4,148 @@ import KajiCore
 
 @MainActor
 final class FixedPlanStore: ObservableObject {
-    @Published private(set) var plans: [FixedDayPlan]
-    @Published private(set) var isTodayCompleted: Bool
+    @Published private(set) var schedules: [ScheduledGoal]
+    @Published private(set) var completion: ScheduleCompletionState
 
     private let defaults: UserDefaults
     private let calendar: Calendar
-    private var completionDay: String
+    private let now: () -> Date
 
     private enum Key {
-        static let plans = "fixedPlansV1"
-        static let completed = "fixedPlanCompletedV2"
-        static let completionDay = "fixedPlanCompletionDayV1"
+        static let schedules = "scheduledGoalsV1"
+        static let completion = "scheduledGoalCompletionV1"
+        static let migration = "scheduledGoalsMigrationV1"
+        static let legacyPlans = "fixedPlansV1"
+        static let legacyCompleted = "fixedPlanCompletedV2"
+        static let legacyCompletionDay = "fixedPlanCompletionDayV1"
     }
 
-    init(defaults: UserDefaults = .standard, calendar: Calendar = .current) {
+    init(
+        defaults: UserDefaults = .standard,
+        calendar: Calendar = .current,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.defaults = defaults
         self.calendar = calendar
-        if let data = defaults.data(forKey: Key.plans),
-           let decoded = try? JSONDecoder().decode([FixedDayPlan].self, from: data) {
-            plans = decoded.map { saved in
-                var migrated = saved
-                if saved.tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                   let defaultPlan = FixedPlanModel.defaults.first(where: {
-                          $0.weekday == saved.weekday && $0.title == saved.title
-                   }) {
-                    migrated.tag = defaultPlan.tag
-                } else {
-                    migrated.tag = GoalTagLogic.resolve(saved.tag, title: saved.title).rawValue
-                }
-                return migrated
+        self.now = now
+
+        let date = now()
+        let dayKey = Self.dayKey(date, calendar: calendar)
+        if let data = defaults.data(forKey: Key.schedules),
+           let decoded = try? JSONDecoder().decode([ScheduledGoal].self, from: data) {
+            schedules = decoded
+            if let completionData = defaults.data(forKey: Key.completion),
+               let decodedCompletion = try? JSONDecoder().decode(ScheduleCompletionState.self, from: completionData) {
+                completion = ScheduledGoalLogic.refreshedCompletion(decodedCompletion, dayKey: dayKey)
+            } else {
+                completion = ScheduleCompletionState(dayKey: dayKey)
             }
         } else {
-            plans = FixedPlanModel.defaults
+            let legacyPlans: [FixedDayPlan]
+            if let data = defaults.data(forKey: Key.legacyPlans),
+               let decoded = try? JSONDecoder().decode([FixedDayPlan].self, from: data) {
+                legacyPlans = decoded
+            } else {
+                legacyPlans = FixedPlanModel.defaults
+            }
+            let legacyCompleted = defaults.string(forKey: Key.legacyCompletionDay) == dayKey
+                && defaults.bool(forKey: Key.legacyCompleted)
+            let migrated = ScheduleMigration.migrate(
+                plans: legacyPlans,
+                todayWeekday: calendar.component(.weekday, from: date),
+                todayCompleted: legacyCompleted
+            )
+            schedules = migrated.schedules
+            completion = ScheduleCompletionState(dayKey: dayKey, completedIDs: migrated.completedIDs)
+            defaults.set(true, forKey: Key.migration)
         }
-        completionDay = Self.dayKey(Date(), calendar: calendar)
-        if defaults.string(forKey: Key.completionDay) == completionDay {
-            isTodayCompleted = defaults.bool(forKey: Key.completed)
+        persist()
+    }
+
+    var today: [ScheduledGoal] {
+        refreshDayBoundary()
+        return ScheduledGoalLogic.active(
+            schedules,
+            weekday: calendar.component(.weekday, from: now())
+        )
+    }
+
+    var todayCompletedCount: Int {
+        today.filter { completion.completedIDs.contains($0.id) }.count
+    }
+
+    func isCompleted(_ schedule: ScheduledGoal) -> Bool {
+        refreshDayBoundary()
+        return completion.completedIDs.contains(schedule.id)
+    }
+
+    func toggleCompletion(_ schedule: ScheduledGoal) {
+        refreshDayBoundary()
+        if completion.completedIDs.contains(schedule.id) {
+            completion.completedIDs.remove(schedule.id)
         } else {
-            isTodayCompleted = false
-            persistCompletion()
+            completion.completedIDs.insert(schedule.id)
         }
-    }
-
-    var today: FixedDayPlan {
-        refreshDayBoundary()
-        return FixedPlanModel.plan(for: calendar.component(.weekday, from: Date()), in: plans)
-    }
-
-    func toggleTodayCompletion() {
-        refreshDayBoundary()
-        isTodayCompleted.toggle()
         persistCompletion()
     }
 
-    func plan(for weekday: Int) -> FixedDayPlan {
-        FixedPlanModel.plan(for: weekday, in: plans)
+    @discardableResult
+    func add(title: String, tag: String, note: String, weekdays: Set<Int>) -> UUID? {
+        guard ScheduledGoalLogic.canSave(title: title, weekdays: weekdays) else { return nil }
+        let schedule = ScheduledGoal(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            tag: tag,
+            note: note.trimmingCharacters(in: .whitespacesAndNewlines),
+            weekdays: ScheduledGoalLogic.normalizedWeekdays(weekdays)
+        )
+        schedules.append(schedule)
+        persistSchedules()
+        return schedule.id
     }
 
-    func update(weekday: Int, title: String? = nil, tag: String? = nil, text: String? = nil) {
-        var plan = self.plan(for: weekday)
-        if let title { plan.title = title }
-        if let tag { plan.tag = tag }
-        if let text { plan.items = FixedPlanModel.items(from: text) }
-        plans.removeAll { $0.weekday == weekday }
-        plans.append(plan)
-        plans.sort { $0.weekday < $1.weekday }
-        persistPlans()
+    func update(
+        _ schedule: ScheduledGoal,
+        title: String? = nil,
+        tag: String? = nil,
+        note: String? = nil,
+        weekdays: Set<Int>? = nil
+    ) {
+        guard let index = schedules.firstIndex(where: { $0.id == schedule.id }) else { return }
+        if let title { schedules[index].title = title }
+        if let tag { schedules[index].tag = tag }
+        if let note { schedules[index].note = note }
+        if let weekdays {
+            let normalized = ScheduledGoalLogic.normalizedWeekdays(weekdays)
+            if !normalized.isEmpty { schedules[index].weekdays = normalized }
+        }
+        persistSchedules()
     }
 
-    func addItem(weekday: Int) -> UUID {
-        var plan = self.plan(for: weekday)
-        let item = FixedPlanItem(title: "", dose: "")
-        plan.items.append(item)
-        replace(plan)
-        return item.id
-    }
-
-    func updateItem(weekday: Int, id: UUID, title: String? = nil, dose: String? = nil) {
-        var plan = self.plan(for: weekday)
-        guard let index = plan.items.firstIndex(where: { $0.id == id }) else { return }
-        if let title { plan.items[index].title = title }
-        if let dose { plan.items[index].dose = dose }
-        replace(plan)
-    }
-
-    func deleteItem(weekday: Int, id: UUID) {
-        var plan = self.plan(for: weekday)
-        plan.items.removeAll { $0.id == id }
-        replace(plan)
-    }
-
-    func reset(weekday: Int) {
-        guard let plan = FixedPlanModel.defaults.first(where: { $0.weekday == weekday }) else { return }
-        plans.removeAll { $0.weekday == weekday }
-        plans.append(plan)
-        plans.sort { $0.weekday < $1.weekday }
-        persistPlans()
+    func delete(_ schedule: ScheduledGoal) {
+        schedules.removeAll { $0.id == schedule.id }
+        completion.completedIDs.remove(schedule.id)
+        persist()
     }
 
     func refreshDayBoundary() {
-        let key = Self.dayKey(Date(), calendar: calendar)
-        guard key != completionDay else { return }
-        completionDay = key
-        isTodayCompleted = false
+        let key = Self.dayKey(now(), calendar: calendar)
+        let refreshed = ScheduledGoalLogic.refreshedCompletion(completion, dayKey: key)
+        guard refreshed != completion else { return }
+        completion = refreshed
         persistCompletion()
     }
 
-    private func persistPlans() {
-        defaults.set(try? JSONEncoder().encode(plans), forKey: Key.plans)
+    private func persist() {
+        persistSchedules()
+        persistCompletion()
     }
 
-    private func replace(_ plan: FixedDayPlan) {
-        plans.removeAll { $0.weekday == plan.weekday }
-        plans.append(plan)
-        plans.sort { $0.weekday < $1.weekday }
-        persistPlans()
+    private func persistSchedules() {
+        defaults.set(try? JSONEncoder().encode(schedules), forKey: Key.schedules)
     }
 
     private func persistCompletion() {
-        defaults.set(completionDay, forKey: Key.completionDay)
-        defaults.set(isTodayCompleted, forKey: Key.completed)
+        defaults.set(try? JSONEncoder().encode(completion), forKey: Key.completion)
     }
 
     private static func dayKey(_ date: Date, calendar: Calendar) -> String {

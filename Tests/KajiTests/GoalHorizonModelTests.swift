@@ -8,6 +8,7 @@ final class GoalHorizonModelTests: XCTestCase {
         """
         let goal = try JSONDecoder().decode(GoalItem.self, from: Data(json.utf8))
         XCTAssertEqual(goal.tag, "")
+        XCTAssertEqual(goal.note, "")
     }
 
     func testRefreshPreservesTags() {

@@ -39,9 +39,6 @@ final class Prefs: ObservableObject {
     @Published var showRemaining: Bool {
         didSet { UserDefaults.standard.set(showRemaining, forKey: Key.showRemaining) }
     }
-    @Published var panelSize: PanelSize {
-        didSet { UserDefaults.standard.set(panelSize.rawValue, forKey: Key.panelSize) }
-    }
     @Published var petId: String {
         didSet { UserDefaults.standard.set(petId, forKey: Key.petId) }
     }
@@ -73,7 +70,6 @@ final class Prefs: ObservableObject {
         static let language = "language"
         static let menubarStyle = "menubarStyle"
         static let showRemaining = "showRemaining"
-        static let panelSize = "panelSize"
         static let petId = "petId"
         static let focusMinutes = "focusMinutes"
         static let breakMinutes = "breakMinutes"
@@ -89,7 +85,7 @@ final class Prefs: ObservableObject {
 
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
-            showRemaining, panelSize, petId, focusMinutes, breakMinutes,
+            showRemaining, petId, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep
         ]
@@ -152,11 +148,6 @@ final class Prefs: ObservableObject {
             showRemaining = d.bool(forKey: Key.showRemaining)
         } else {
             showRemaining = false
-        }
-        if let raw = d.string(forKey: Key.panelSize), let size = PanelSize(rawValue: raw) {
-            panelSize = size
-        } else {
-            panelSize = .small
         }
         petId = "navi"
         d.set("navi", forKey: Key.petId)

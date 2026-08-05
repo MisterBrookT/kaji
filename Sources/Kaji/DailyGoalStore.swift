@@ -83,6 +83,13 @@ final class DailyGoalStore: ObservableObject {
         }
     }
 
+    func updateNote(_ goal: DailyGoal, note: String, in horizon: GoalHorizon = .today) {
+        mutate(horizon) { goals in
+            guard let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
+            goals[index].note = note
+        }
+    }
+
     @discardableResult
     func addGoal(in horizon: GoalHorizon = .today) -> UUID {
         let id = UUID()
@@ -117,7 +124,13 @@ final class DailyGoalStore: ObservableObject {
         var next = state
         guard let index = next.yesterdayPending.firstIndex(where: { $0.id == goal.id }) else { return }
         let moved = next.yesterdayPending.remove(at: index)
-        next.today.append(DailyGoal(id: moved.id, title: moved.title, isDone: false, tag: moved.tag))
+        next.today.append(DailyGoal(
+            id: moved.id,
+            title: moved.title,
+            isDone: false,
+            tag: moved.tag,
+            note: moved.note
+        ))
         state = next
         recordToday()
     }

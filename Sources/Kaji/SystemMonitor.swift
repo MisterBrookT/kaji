@@ -1,5 +1,5 @@
 import Foundation
-import Darwin
+import KajiCore
 
 struct ProcessSnapshot: Identifiable, Equatable, Sendable {
     let pid: Int
@@ -28,6 +28,31 @@ struct CleanableItem: Identifiable, Equatable, Sendable {
     let isAutoSafe: Bool
 
     var isEmpty: Bool { bytes <= 0 }
+}
+
+struct DiskDirectoryUsage: Identifiable, Codable, Equatable, Sendable {
+    let title: String
+    let path: String
+    let bytes: Int64
+    var id: String { path }
+}
+
+struct DiskInsightSnapshot: Codable, Equatable, Sendable {
+    let totalBytes: Int64
+    let availableBytes: Int64
+    let directories: [DiskDirectoryUsage]
+    let categoryBytes: [String: Int64]
+    let restrictedCount: Int
+    let scannedAt: Date
+
+    static let empty = DiskInsightSnapshot(totalBytes: 0, availableBytes: 0,
+                                           directories: [],
+                                           categoryBytes: [:],
+                                           restrictedCount: 0, scannedAt: .distantPast)
+
+    func bytes(for category: DiskFileCategory) -> Int64 {
+        max(0, categoryBytes[category.rawValue] ?? 0)
+    }
 }
 
 struct OrphanProcessSnapshot: Identifiable, Equatable, Sendable {
@@ -60,9 +85,13 @@ final class SystemMonitor: ObservableObject {
     @Published private(set) var lastMemoryReclaimAt: Date?
     @Published private(set) var orphanProcesses: [OrphanProcessSnapshot] = []
     @Published private(set) var lastOrphanCleanedCount = 0
+    @Published private(set) var diskInsights = DiskInsightSnapshot.empty
+    @Published private(set) var isScanningDisk = false
+    @Published private(set) var diskScanError: String?
 
     nonisolated(unsafe) private var timer: Timer?
-    nonisolated(unsafe) private var scanTimer: Timer?
+    private let defaults: UserDefaults
+    private let now: () -> Date
     private var lastAutoMaintenanceAt: Date?
     private var hasInitializedCleanableSelection = false
 
@@ -73,35 +102,30 @@ final class SystemMonitor: ObservableObject {
         static let cooldown: TimeInterval = 30 * 60
     }
 
+    private enum Key {
+        static let diskInsights = "diskInsightSnapshotV2"
+    }
+
+    init(defaults: UserDefaults = .standard, now: @escaping () -> Date = Date.init) {
+        self.defaults = defaults
+        self.now = now
+        if let data = defaults.data(forKey: Key.diskInsights),
+           let cached = try? JSONDecoder().decode(DiskInsightSnapshot.self, from: data) {
+            diskInsights = cached
+        }
+    }
+
     deinit {
         timer?.invalidate()
-        scanTimer?.invalidate()
     }
 
     func start() {
-        guard timer == nil else {
-            refresh()
-            return
-        }
-        refresh()
-        scanCleanables()
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.refresh()
-            }
-        }
-        scanTimer = Timer.scheduledTimer(withTimeInterval: 300, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.scanCleanables()
-            }
-        }
+        scanDiskInsights()
     }
 
     func stop() {
         timer?.invalidate()
         timer = nil
-        scanTimer?.invalidate()
-        scanTimer = nil
     }
 
     func refresh() {
@@ -162,6 +186,32 @@ final class SystemMonitor: ObservableObject {
         }
     }
 
+    func scanDiskInsights(force: Bool = false) {
+        guard !isScanningDisk else { return }
+        guard DiskInsightScanPolicy.shouldScan(
+            lastSuccessfulAt: diskInsights.scannedAt == .distantPast ? nil : diskInsights.scannedAt,
+            now: now(),
+            force: force
+        ) else { return }
+        isScanningDisk = true
+        diskScanError = nil
+        Task {
+            let result = await Task.detached(priority: .utility) {
+                Self.readDiskInsights()
+            }.value
+            await MainActor.run {
+                self.isScanningDisk = false
+                switch result {
+                case .success(let insights):
+                    self.diskInsights = insights
+                    self.defaults.set(try? JSONEncoder().encode(insights), forKey: Key.diskInsights)
+                case .failure:
+                    self.diskScanError = "无法完成磁盘扫描"
+                }
+            }
+        }
+    }
+
     func toggleCleanable(_ item: CleanableItem) {
         guard !item.isEmpty else { return }
         if selectedCleanableIds.contains(item.id) {
@@ -172,20 +222,7 @@ final class SystemMonitor: ObservableObject {
     }
 
     func cleanKajiArtifacts() {
-        if isCleaning { return }
-        let selected = selectedCleanableIds
-        guard !selected.isEmpty else { return }
-        isCleaning = true
-        Task {
-            let bytes = await Task.detached(priority: .utility) {
-                Self.cleanKajiArtifacts(selectedIds: selected)
-            }.value
-            await MainActor.run {
-                self.lastCleanedBytes = bytes
-                self.isCleaning = false
-                self.scanCleanables()
-            }
-        }
+        scanDiskInsights()
     }
 
     func refreshOrphans() {
@@ -200,83 +237,19 @@ final class SystemMonitor: ObservableObject {
     }
 
     func cleanOrphans() {
-        let pids = orphanProcesses.map(\.pid)
-        guard !pids.isEmpty else { return }
-        Task {
-            let killed = await Task.detached(priority: .utility) {
-                Self.terminate(pids: pids)
-            }.value
-            await MainActor.run {
-                self.lastOrphanCleanedCount = killed
-                self.refreshOrphans()
-            }
-        }
+        refreshOrphans()
     }
 
     func runAutoMaintenanceIfNeeded() {
-        guard !isAutoCleaning, !isReclaimingMemory, snapshot.hasSample else { return }
-        if let lastAutoMaintenanceAt,
-           Date().timeIntervalSince(lastAutoMaintenanceAt) < AutoClean.cooldown {
-            return
-        }
-        let shouldReclaimMemory = snapshot.memoryPercent >= AutoClean.memoryPercent
-        let shouldCleanDisk = snapshot.diskPercent >= AutoClean.diskPercent || autoCleanableBytes >= AutoClean.cleanableBytes
-        let shouldCleanOrphans = !orphanProcesses.isEmpty
-        guard shouldReclaimMemory || shouldCleanDisk || shouldCleanOrphans else { return }
-        if shouldCleanDisk && cleanableItems.filter(\.isAutoSafe).allSatisfy(\.isEmpty) {
-            if !isScanningCleanables { scanCleanables() }
-            if !shouldReclaimMemory { return }
-        }
-        lastAutoMaintenanceAt = Date()
-        if shouldReclaimMemory {
-            reclaimMemory()
-        }
-        if shouldCleanDisk {
-            autoCleanDisk()
-        } else if cleanableItems.isEmpty && !isScanningCleanables {
-            scanCleanables()
-        }
-        if shouldCleanOrphans {
-            cleanOrphans()
-        }
+        scanDiskInsights()
     }
 
     private func autoCleanDisk() {
-        let selected = Set(cleanableItems.filter { $0.isAutoSafe && !$0.isEmpty }.map(\.id))
-        guard !selected.isEmpty else {
-            scanCleanables()
-            return
-        }
-        isAutoCleaning = true
-        Task {
-            let bytes = await Task.detached(priority: .utility) {
-                Self.cleanKajiArtifacts(selectedIds: selected)
-            }.value
-            await MainActor.run {
-                self.lastAutoCleanedBytes = bytes
-                self.isAutoCleaning = false
-                self.scanCleanables()
-            }
-        }
+        scanDiskInsights()
     }
 
     func reclaimMemory() {
-        if isReclaimingMemory { return }
-        isReclaimingMemory = true
-        Task {
-            let succeeded = await Task.detached(priority: .utility) {
-                Self.runPurge()
-            }.value
-            await MainActor.run {
-                if succeeded {
-                    self.lastMemoryReclaimAt = Date()
-                    self.refresh()
-                } else {
-                    self.lastError = "memory_reclaim_failed"
-                }
-                self.isReclaimingMemory = false
-            }
-        }
+        refresh()
     }
 
     nonisolated private static func readProcessSnapshot() -> Result<SystemSnapshot, Error> {
@@ -372,22 +345,6 @@ final class SystemMonitor: ObservableObject {
         return String(data: data, encoding: .utf8) ?? ""
     }
 
-    nonisolated private static func runPurge() -> Bool {
-        let path = "/usr/bin/purge"
-        guard FileManager.default.fileExists(atPath: path) else { return false }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: path)
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        do {
-            try process.run()
-            process.waitUntilExit()
-            return process.terminationStatus == 0
-        } catch {
-            return false
-        }
-    }
-
     nonisolated private static func readOrphans() -> [OrphanProcessSnapshot] {
         guard let out = try? run("/bin/ps", ["-axo", "pid=,ppid=,etimes=,stat=,comm=,args="]) else {
             return []
@@ -423,16 +380,6 @@ final class SystemMonitor: ObservableObject {
         return false
     }
 
-    nonisolated private static func terminate(pids: [Int]) -> Int {
-        var killed = 0
-        for pid in pids {
-            if kill(pid_t(pid), SIGTERM) == 0 {
-                killed += 1
-            }
-        }
-        return killed
-    }
-
     nonisolated private static func scanKajiCleanables() -> [CleanableItem] {
         cleanableURLs().map { title, url, isAutoSafe in
             CleanableItem(id: url.path,
@@ -443,9 +390,63 @@ final class SystemMonitor: ObservableObject {
         }
     }
 
-    nonisolated private static func cleanKajiArtifacts(selectedIds: Set<String>) -> Int64 {
-        cleanableURLs().filter { selectedIds.contains($0.url.path) }.reduce(Int64(0)) { total, entry in
-            total + removeItemIfPresent(entry.url)
+    nonisolated private static func readDiskInsights() -> Result<DiskInsightSnapshot, Error> {
+        let fm = FileManager.default
+        let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+        do {
+            let volume = try URL(fileURLWithPath: "/").resourceValues(
+                forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey]
+            )
+            let roots: [(String, String)] = [
+                ("Downloads", "Downloads"), ("Documents", "Documents"),
+                ("Desktop", "Desktop"), ("Movies", "Movies"),
+                ("Pictures", "Pictures"), ("Music", "Music"),
+                ("Caches", "Library/Caches"),
+                ("Developer", "Library/Developer"),
+                ("Applications", "Applications"),
+            ]
+            var restricted = 0
+            var directories: [DiskDirectoryUsage] = []
+            var categoryTotals: [DiskFileCategory: Int64] = [:]
+            for (title, relativePath) in roots {
+                let url = home.appendingPathComponent(relativePath, isDirectory: true)
+                guard fm.isReadableFile(atPath: url.path) else {
+                    if fm.fileExists(atPath: url.path) { restricted += 1 }
+                    continue
+                }
+                var directoryBytes: Int64 = 0
+                let keys: Set<URLResourceKey> = [.fileAllocatedSizeKey, .fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]
+                if let enumerator = fm.enumerator(
+                    at: url,
+                    includingPropertiesForKeys: Array(keys),
+                    options: [.skipsHiddenFiles, .skipsPackageDescendants]
+                ) {
+                    for case let fileURL as URL in enumerator {
+                        let values = try? fileURL.resourceValues(forKeys: keys)
+                        guard values?.isRegularFile == true, values?.isSymbolicLink != true else { continue }
+                        let size = Int64(values?.fileAllocatedSize ?? values?.fileSize ?? 0)
+                        directoryBytes += size
+                        let category = DiskFileCategoryLogic.category(
+                            path: fileURL.path,
+                            pathExtension: fileURL.pathExtension
+                        )
+                        categoryTotals[category, default: 0] += size
+                    }
+                }
+                directories.append(DiskDirectoryUsage(title: title, path: url.path, bytes: directoryBytes))
+            }
+            return .success(DiskInsightSnapshot(
+                totalBytes: Int64(volume.volumeTotalCapacity ?? 0),
+                availableBytes: volume.volumeAvailableCapacityForImportantUsage ?? 0,
+                directories: directories.sorted { $0.bytes > $1.bytes },
+                categoryBytes: Dictionary(uniqueKeysWithValues:
+                    DiskFileCategoryLogic.normalizedTotals(categoryTotals).map { ($0.key.rawValue, $0.value) }
+                ),
+                restrictedCount: restricted,
+                scannedAt: Date()
+            ))
+        } catch {
+            return .failure(error)
         }
     }
 
@@ -483,15 +484,4 @@ final class SystemMonitor: ObservableObject {
         return total
     }
 
-    nonisolated private static func removeItemIfPresent(_ url: URL) -> Int64 {
-        let fm = FileManager.default
-        guard fm.fileExists(atPath: url.path) else { return 0 }
-        let size = sizeOfItem(at: url)
-        do {
-            try fm.removeItem(at: url)
-            return size
-        } catch {
-            return 0
-        }
-    }
 }

@@ -16,6 +16,13 @@ private struct PopoverContentSizeKey: PreferenceKey {
     }
 }
 
+private enum GoalCreationKind: String, CaseIterable {
+    case today = "Today"
+    case week = "Week"
+    case vision = "Vision"
+    case fixed = "Schedule"
+}
+
 struct KajiPopoverView: View {
     @ObservedObject var store: QuotaStore
     @ObservedObject var prefs: Prefs
@@ -35,10 +42,20 @@ struct KajiPopoverView: View {
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
     @State private var previousFocusedGoalID: UUID?
     @State private var previousFocusedGoalHorizon: GoalHorizon = .today
-    @State private var showsFixedPlanDetails = false
+    @State private var shownScheduleDetailsID: UUID?
     @State private var fixedPlanHoverGeneration = 0
     @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
+    @State private var showsGoalCreator = false
+    @State private var goalCreationKind: GoalCreationKind = .today
+    @State private var goalCreationTitle = ""
+    @State private var goalCreationTag: GoalTag = .personal
+    @State private var goalCreationWeekdays: Set<Int> = [
+        Calendar.current.component(.weekday, from: Date())
+    ]
+    @State private var goalCreationNote = ""
+    @State private var shownGoalNoteID: UUID?
+    @State private var goalNoteHoverGeneration = 0
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -70,7 +87,7 @@ struct KajiPopoverView: View {
             clampPanelToEnabledPages()
         }
         .onChange(of: panel) { _ in
-            showsFixedPlanDetails = false
+            shownScheduleDetailsID = nil
         }
         .onChange(of: focusedGoalID) { newValue in
             if let previousFocusedGoalID,
@@ -102,7 +119,7 @@ struct KajiPopoverView: View {
             controlsFooter
         }
         .padding(12)
-        .frame(width: prefs.panelSize.frameSize.width, alignment: .topLeading)
+        .frame(width: PanelSize.medium.frameSize.width, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
     }
 
@@ -147,98 +164,75 @@ struct KajiPopoverView: View {
         }
     }
 
-    private var fixedPlanGoalRow: some View {
-        let plan = fixedPlanStore.today
+    private func scheduleGoalRow(_ schedule: ScheduledGoal) -> some View {
+        let completed = fixedPlanStore.isCompleted(schedule)
         return Button {
-            fixedPlanStore.toggleTodayCompletion()
+            fixedPlanStore.toggleCompletion(schedule)
         } label: {
             HStack(spacing: 8) {
                 tagIcon(
-                    GoalTagLogic.resolve(plan.tag, title: plan.title),
-                    filled: fixedPlanStore.isTodayCompleted
+                    GoalTagLogic.resolve(schedule.tag, title: schedule.title),
+                    filled: completed
                 )
-                    .foregroundColor(fixedPlanStore.isTodayCompleted ? t.gold : t.mute)
-                Text(plan.title)
+                    .foregroundColor(completed ? t.gold : t.mute)
+                Text(schedule.title)
                     .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(fixedPlanStore.isTodayCompleted ? t.mute : t.cream)
-                    .strikethrough(fixedPlanStore.isTodayCompleted)
+                    .foregroundColor(completed ? t.mute : t.cream)
+                    .strikethrough(completed)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "sidebar.right")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(t.mute)
-                    .frame(width: 96, alignment: .trailing)
+                if !schedule.note.isEmpty {
+                    Image(systemName: "text.alignleft")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundColor(t.mute)
+                        .frame(width: 30, alignment: .trailing)
+                }
             }
             .padding(8)
             .background(RoundedRectangle(cornerRadius: 8).fill(t.panel.opacity(0.75)))
         }
         .buttonStyle(.plain)
         .onHover { inside in
-            updateFixedPlanHover(inside)
+            updateScheduleHover(schedule, inside: inside)
         }
-        .popover(isPresented: $showsFixedPlanDetails, arrowEdge: .trailing) {
-            fixedPlanDetails
+        .popover(isPresented: Binding(
+            get: { shownScheduleDetailsID == schedule.id && !schedule.note.isEmpty },
+            set: { if !$0 { shownScheduleDetailsID = nil } }
+        ), arrowEdge: .trailing) {
+            scheduleDetails(schedule)
                 .onHover { inside in
-                    updateFixedPlanHover(inside)
+                    updateScheduleHover(schedule, inside: inside)
                 }
         }
     }
 
-    private var fixedPlanDetails: some View {
-        let plan = fixedPlanStore.today
-        return VStack(alignment: .leading, spacing: 7) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(plan.title)
-                    .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                    .foregroundColor(t.cream)
-                Text("完整计划 · \(plan.items.count) 项")
-                    .font(.system(size: 9, weight: .medium, design: .rounded))
-                    .foregroundColor(t.mute)
-            }
+    private func scheduleDetails(_ schedule: ScheduledGoal) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Text(schedule.title)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundColor(t.cream)
             Divider().overlay(t.track.opacity(0.8))
-            ScrollView(.vertical, showsIndicators: true) {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(plan.items.enumerated()), id: \.element.id) { index, item in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("\(index + 1)")
-                                .font(.system(size: 8.5, weight: .bold, design: .monospaced))
-                                .foregroundColor(t.ash)
-                                .frame(width: 15, alignment: .trailing)
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(item.title)
-                                    .font(.system(size: 10, weight: .semibold, design: .rounded))
-                                    .foregroundColor(t.cream)
-                                if !item.dose.isEmpty {
-                                    Text(item.dose)
-                                        .font(.system(size: 8.5, weight: .medium, design: .rounded))
-                                        .foregroundColor(t.mute)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                        }
-                        .padding(5)
-                        .background(RoundedRectangle(cornerRadius: 6).fill(t.panel.opacity(0.7)))
-                    }
-                }
-                .padding(.trailing, 4)
-            }
-            .frame(height: min(300, CGFloat(max(plan.items.count, 1)) * 40))
+            Text(schedule.note)
+                .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                .foregroundColor(t.mute)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
         .frame(width: 250, alignment: .topLeading)
         .background(background)
     }
 
-    private func updateFixedPlanHover(_ inside: Bool) {
+    private func updateScheduleHover(_ schedule: ScheduledGoal, inside: Bool) {
+        guard !schedule.note.isEmpty else { return }
         fixedPlanHoverGeneration += 1
         let generation = fixedPlanHoverGeneration
         if inside {
-            showsFixedPlanDetails = true
+            shownScheduleDetailsID = schedule.id
             return
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
             guard generation == fixedPlanHoverGeneration else { return }
-            showsFixedPlanDetails = false
+            shownScheduleDetailsID = nil
         }
     }
 
@@ -412,25 +406,118 @@ struct KajiPopoverView: View {
 
     private var systemPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
-            systemPulse
-            systemMetrics
-            hotProcesses
-            cleanupReview
+            diskOverview
+            diskCategoryBreakdown
         }
         .onAppear {
-            systemMonitor.refresh()
-            systemMonitor.scanCleanables()
+            systemMonitor.scanDiskInsights()
         }
-        .confirmationDialog("永久删除所选缓存？",
-                            isPresented: $showCleanConfirmation,
-                            titleVisibility: .visible) {
-            Button("删除 \(bytes(systemMonitor.selectedCleanableBytes))", role: .destructive) {
-                systemMonitor.cleanKajiArtifacts()
+    }
+
+    private var diskOverview: some View {
+        let insight = systemMonitor.diskInsights
+        let used = max(0, insight.totalBytes - insight.availableBytes)
+        let ratio = insight.totalBytes > 0 ? Double(used) / Double(insight.totalBytes) : 0
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("磁盘空间")
+                        .font(.system(size: 16, weight: .bold, design: .rounded))
+                        .foregroundColor(t.cream)
+                    Text(insight.totalBytes > 0
+                         ? "已用 \(bytes(used)) · 可用 \(bytes(insight.availableBytes))"
+                         : "等待首次扫描")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.mute)
+                }
+                Spacer()
+                Button {
+                    systemMonitor.scanDiskInsights(force: true)
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(t.track.opacity(0.55)))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(t.mute)
+                .disabled(systemMonitor.isScanningDisk)
             }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("将删除所选缓存和构建产物。开发工具会按需重新生成；操作无法撤销。")
+            progressBar(ratio, color: ratio >= 0.85 ? t.amber : t.gold)
+                .frame(height: 8)
+            if systemMonitor.isScanningDisk {
+                Text("正在本机扫描文件元数据…")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+            } else if let error = systemMonitor.diskScanError {
+                Text("\(error) · 可点击刷新重试")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.amber)
+            } else if insight.restrictedCount > 0 {
+                Text("\(insight.restrictedCount) 个目录受系统权限限制；结果仅含当前可访问内容")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+            }
         }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(t.panel.opacity(0.78)))
+    }
+
+    private var diskCategoryBreakdown: some View {
+        let rows = DiskFileCategory.allCases
+            .map { ($0, systemMonitor.diskInsights.bytes(for: $0)) }
+            .filter { $0.1 > 0 }
+            .sorted { $0.1 > $1.1 }
+        let scannedBytes = max(rows.reduce(Int64(0)) { $0 + $1.1 }, 1)
+        return VStack(alignment: .leading, spacing: 7) {
+            sectionHeader("文件类型", detail: diskScanAge, image: "chart.bar.xaxis")
+            if rows.isEmpty {
+                Text(systemMonitor.isScanningDisk ? "正在归类文件…" : "没有可访问的分类数据")
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, minHeight: 34, alignment: .center)
+            } else {
+                ForEach(rows.prefix(6), id: \.0.rawValue) { category, value in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack {
+                            Circle()
+                                .fill(categoryColor(category))
+                                .frame(width: 6, height: 6)
+                            Text(category.label)
+                            Spacer()
+                            Text(bytes(value)).monospacedDigit()
+                        }
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.cream)
+                        progressBar(Double(value) / Double(scannedBytes), color: categoryColor(category))
+                            .frame(height: 4)
+                    }
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(t.panel.opacity(0.62)))
+    }
+
+    private var diskScanAge: String {
+        let date = systemMonitor.diskInsights.scannedAt
+        guard date != .distantPast else { return "未扫描" }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    }
+
+    private func categoryColor(_ category: DiskFileCategory) -> Color {
+        let opacity: Double
+        switch category {
+        case .appsDeveloper: opacity = 1
+        case .video: opacity = 0.88
+        case .images: opacity = 0.76
+        case .audio: opacity = 0.66
+        case .documents: opacity = 0.56
+        case .archives: opacity = 0.46
+        case .caches: opacity = 0.36
+        case .other: opacity = 0.26
+        }
+        return t.gold.opacity(opacity)
     }
 
     private var systemPulse: some View {
@@ -730,13 +817,6 @@ struct KajiPopoverView: View {
                     .font(.system(size: 13, weight: .bold, design: .rounded))
                     .foregroundColor(t.cream)
                 Spacer()
-                miniButton("plus") {
-                    navigation.goalHorizon = .longTerm
-                    let id = dailyGoals.addGoal(in: .longTerm)
-                    DispatchQueue.main.async {
-                        focusedGoalID = id
-                    }
-                }
             }
             ForEach(Array(visions.enumerated()), id: \.element.id) { index, vision in
                 HStack(spacing: 7) {
@@ -755,6 +835,17 @@ struct KajiPopoverView: View {
                         dailyGoals.removeIfBlank(vision, in: .longTerm)
                     }
                     HStack(spacing: 4) {
+                        if !vision.note.isEmpty {
+                            Button {
+                                shownGoalNoteID = vision.id
+                            } label: {
+                                Image(systemName: "text.alignleft")
+                                    .font(.system(size: 9, weight: .semibold))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(t.mute)
+                            .onHover { updateGoalNoteHover(vision, inside: $0) }
+                        }
                         if index > 0 {
                             miniButton("chevron.up") {
                                 dailyGoals.move(vision, in: .longTerm, offset: -1)
@@ -773,6 +864,18 @@ struct KajiPopoverView: View {
                 }
                 .padding(8)
                 .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
+                .contextMenu {
+                    Button(vision.note.isEmpty ? "添加说明" : "编辑说明") {
+                        shownGoalNoteID = vision.id
+                    }
+                }
+                .popover(isPresented: Binding(
+                    get: { shownGoalNoteID == vision.id },
+                    set: { if !$0 { shownGoalNoteID = nil } }
+                ), arrowEdge: .trailing) {
+                    goalNoteEditor(vision, horizon: .longTerm)
+                        .onHover { updateGoalNoteHover(vision, inside: $0) }
+                }
             }
         }
     }
@@ -815,9 +918,10 @@ struct KajiPopoverView: View {
     ) -> some View {
         let goals = dailyGoals.goals(for: horizon)
         let summary = dailyGoals.summary(for: horizon)
-        let includesFixedPlan = horizon == .today
-        let completed = summary.completed + (includesFixedPlan && fixedPlanStore.isTodayCompleted ? 1 : 0)
-        let total = summary.total + (includesFixedPlan ? 1 : 0)
+        let includesSchedules = horizon == .today
+        let schedules = includesSchedules ? fixedPlanStore.today : []
+        let completed = summary.completed + (includesSchedules ? fixedPlanStore.todayCompletedCount : 0)
+        let total = summary.total + schedules.count
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Text(title)
@@ -828,30 +932,148 @@ struct KajiPopoverView: View {
                     .foregroundColor(t.mute)
                     .monospacedDigit()
                 Spacer()
-                miniButton("plus") {
-                    navigation.goalHorizon = horizon
-                    let id = dailyGoals.addGoal(in: horizon)
-                    DispatchQueue.main.async {
-                        focusedGoalID = id
+                if horizon == .today {
+                    Button {
+                        beginGoalCreation(.today)
+                    } label: {
+                        Label("新建", systemImage: "plus")
+                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                            .foregroundColor(t.mute)
+                            .padding(.horizontal, 10)
+                            .frame(height: 26)
+                            .background(
+                                Capsule()
+                                    .fill(Color.clear)
+                                    .overlay(Capsule().stroke(t.track, lineWidth: 1))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .keyboardShortcut("n", modifiers: .command)
+                    .help("新建目标（⌘N）")
+                    .popover(isPresented: $showsGoalCreator, arrowEdge: .trailing) {
+                        goalCreationPopover
                     }
                 }
             }
             if showsHeatmap {
                 goalHeatmap
             }
-            if includesFixedPlan {
-                fixedPlanGoalRow
+            if includesSchedules {
+                ForEach(schedules) { schedule in
+                    scheduleGoalRow(schedule)
+                }
             }
             ForEach(goals) { goal in
                 goalRow(goal, horizon: horizon)
             }
-            if goals.isEmpty && !includesFixedPlan {
+            if goals.isEmpty && schedules.isEmpty {
                 Text("暂无目标")
                     .font(.system(size: 10.5, weight: .medium, design: .rounded))
                     .foregroundColor(t.mute)
                     .frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
             }
         }
+    }
+
+    private var goalCreationPopover: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("新建目标")
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+            Picker("类型", selection: $goalCreationKind) {
+                ForEach(GoalCreationKind.allCases, id: \.rawValue) { kind in
+                    Text(kind.rawValue).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+            if goalCreationKind == .fixed {
+                HStack(spacing: 5) {
+                    Text("星期")
+                    Spacer()
+                    ForEach(1...7, id: \.self) { day in
+                        Button {
+                            if goalCreationWeekdays.contains(day) {
+                                goalCreationWeekdays.remove(day)
+                            } else {
+                                goalCreationWeekdays.insert(day)
+                            }
+                        } label: {
+                            Text(["日", "一", "二", "三", "四", "五", "六"][day - 1])
+                                .frame(width: 22, height: 22)
+                                .background(
+                                    Circle().fill(goalCreationWeekdays.contains(day) ? t.gold : t.panel)
+                                )
+                                .foregroundColor(goalCreationWeekdays.contains(day) ? t.bg : t.mute)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            TextField(goalCreationKind == .vision ? "长期方向" : "标题", text: $goalCreationTitle)
+                .textFieldStyle(.roundedBorder)
+            Picker("标签", selection: $goalCreationTag) {
+                ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
+                    Image(systemName: tag.systemImage)
+                        .accessibilityLabel(tag.label)
+                        .tag(tag)
+                }
+            }
+            .pickerStyle(.menu)
+            .font(.system(size: 10, weight: .regular))
+            TextField("说明（可选）", text: $goalCreationNote, axis: .vertical)
+                .textFieldStyle(.roundedBorder)
+                .lineLimit(2...5)
+            HStack {
+                Button("取消") { showsGoalCreator = false }
+                Spacer()
+                Button("保存") { saveGoalCreation() }
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(
+                        goalCreationTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        || (goalCreationKind == .fixed && goalCreationWeekdays.isEmpty)
+                    )
+            }
+        }
+        .padding(16)
+        .frame(width: goalCreationKind == .fixed ? 360 : 320)
+        .background(t.bg)
+        .foregroundColor(t.cream)
+    }
+
+    private func beginGoalCreation(_ kind: GoalCreationKind) {
+        goalCreationKind = kind
+        goalCreationTitle = ""
+        goalCreationTag = .personal
+        goalCreationWeekdays = [Calendar.current.component(.weekday, from: Date())]
+        goalCreationNote = ""
+        showsGoalCreator = true
+    }
+
+    private func saveGoalCreation() {
+        let title = goalCreationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty else { return }
+        if goalCreationKind == .fixed {
+            _ = fixedPlanStore.add(
+                title: title,
+                tag: goalCreationTag.rawValue,
+                note: goalCreationNote,
+                weekdays: goalCreationWeekdays
+            )
+        } else {
+            let horizon: GoalHorizon
+            switch goalCreationKind {
+            case .today: horizon = .today
+            case .week: horizon = .week
+            case .vision: horizon = .longTerm
+            case .fixed: return
+            }
+            let id = dailyGoals.addGoal(in: horizon)
+            if let goal = dailyGoals.goals(for: horizon).first(where: { $0.id == id }) {
+                dailyGoals.updateTitle(goal, title: title, in: horizon)
+                dailyGoals.updateTag(goal, tag: goalCreationTag.rawValue, in: horizon)
+                dailyGoals.updateNote(goal, note: goalCreationNote, in: horizon)
+            }
+        }
+        showsGoalCreator = false
     }
 
     private func goalRow(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
@@ -881,6 +1103,17 @@ struct KajiPopoverView: View {
                 }
             }
             HStack(spacing: 4) {
+                if !goal.note.isEmpty {
+                    Button {
+                        shownGoalNoteID = goal.id
+                    } label: {
+                        Image(systemName: "text.alignleft")
+                            .font(.system(size: 9, weight: .semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(t.mute)
+                    .onHover { updateGoalNoteHover(goal, inside: $0) }
+                }
                 miniButton("trash") {
                     dailyGoals.delete(goal, in: horizon)
                 }
@@ -889,16 +1122,59 @@ struct KajiPopoverView: View {
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+        .contextMenu {
+            Button(goal.note.isEmpty ? "添加说明" : "编辑说明") {
+                shownGoalNoteID = goal.id
+            }
+        }
+        .popover(isPresented: Binding(
+            get: { shownGoalNoteID == goal.id },
+            set: { if !$0 { shownGoalNoteID = nil } }
+        ), arrowEdge: .trailing) {
+            goalNoteEditor(goal, horizon: horizon)
+                .onHover { updateGoalNoteHover(goal, inside: $0) }
+        }
+    }
+
+    private func goalNoteEditor(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(goal.title)
+                .font(.system(size: 12, weight: .bold, design: .rounded))
+            TextField("说明（可选）", text: Binding(
+                get: { dailyGoals.goals(for: horizon).first(where: { $0.id == goal.id })?.note ?? "" },
+                set: { dailyGoals.updateNote(goal, note: $0, in: horizon) }
+            ), axis: .vertical)
+            .textFieldStyle(.roundedBorder)
+            .lineLimit(3...8)
+        }
+        .padding(10)
+        .frame(width: 260)
+        .background(t.bg)
+        .foregroundColor(t.cream)
+    }
+
+    private func updateGoalNoteHover(_ goal: DailyGoal, inside: Bool) {
+        goalNoteHoverGeneration += 1
+        let generation = goalNoteHoverGeneration
+        if inside {
+            shownGoalNoteID = goal.id
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            guard generation == goalNoteHoverGeneration else { return }
+            shownGoalNoteID = nil
+        }
     }
 
     private func goalTagMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
         let selected = GoalTagLogic.resolve(goal.tag, title: goal.title)
         return Menu {
-            ForEach(GoalTag.allCases, id: \.rawValue) { tag in
+            ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
                 Button {
                     dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
                 } label: {
-                    Label(tag.label, systemImage: tag.systemImage)
+                    Image(systemName: tag.systemImage)
+                        .accessibilityLabel(tag.label)
                 }
             }
         } label: {
@@ -912,11 +1188,12 @@ struct KajiPopoverView: View {
     private func goalCompletionMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
         let selected = GoalTagLogic.resolve(goal.tag, title: goal.title)
         return Menu {
-            ForEach(GoalTag.allCases, id: \.rawValue) { tag in
+            ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
                 Button {
                     dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
                 } label: {
-                    Label(tag.label, systemImage: tag.systemImage)
+                    Image(systemName: tag.systemImage)
+                        .accessibilityLabel(tag.label)
                 }
             }
         } label: {
@@ -931,9 +1208,11 @@ struct KajiPopoverView: View {
     }
 
     private func tagIcon(_ tag: GoalTag, filled: Bool = false) -> some View {
-        Image(systemName: filled ? "\(tag.systemImage).fill" : tag.systemImage)
-            .font(.system(size: 10, weight: .regular))
-            .frame(width: 18, height: 18)
+        let style = GoalMarkLogic.style(for: tag)
+        return Image(systemName: style.systemImage)
+            .font(.system(size: 9.5, weight: .regular))
+            .foregroundColor(filled ? t.gold : t.mute)
+            .frame(width: 16, height: 16)
     }
 
     private var goalHeatmap: some View {
@@ -1190,9 +1469,7 @@ struct KajiPopoverView: View {
     }
 
     private func bytes(_ value: Int64) -> String {
-        if value <= 0 { return "0" }
-        if value < 1024 * 1024 { return "\(value / 1024)K" }
-        return "\(value / 1024 / 1024)M"
+        DiskSizeFormatter.string(bytes: value)
     }
 
     private func systemValue(_ value: Double) -> String {

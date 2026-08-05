@@ -52,7 +52,6 @@ public enum L10n {
         case refreshNow, quitApp, settings, advancedSettings, appearance, language, providers, show
         case hide, on, off
         case usage, showUsed, showRemaining
-        case panelSize, sizeSmall, sizeMedium
         case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
         case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
         case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
@@ -106,9 +105,6 @@ public enum L10n {
         .usage: .init(en: "Usage", zh: "用量", ptBR: "Uso", es: "Uso"),
         .showUsed: .init(en: "Used", zh: "已用", ptBR: "Usado", es: "Usado"),
         .showRemaining: .init(en: "Remaining", zh: "剩余", ptBR: "Restante", es: "Restante"),
-        .panelSize: .init(en: "Size", zh: "大小", ptBR: "Tamanho", es: "Tamaño"),
-        .sizeSmall: .init(en: "S", zh: "小", ptBR: "P", es: "P"),
-        .sizeMedium: .init(en: "M", zh: "中", ptBR: "M", es: "M"),
         .updateTo: .init(en: "Update to", zh: "更新到", ptBR: "Atualizar para", es: "Actualizar a"),
         .checkUpdates: .init(en: "Check for Updates…", zh: "检查更新…", ptBR: "Buscar atualizações…", es: "Buscar actualizaciones…"),
         .updateChecking: .init(en: "Checking…", zh: "检查中…", ptBR: "Verificando…", es: "Comprobando…"),
@@ -132,7 +128,7 @@ public enum L10n {
         .source: .init(en: "Source", zh: "来源", ptBR: "Fonte", es: "Fuente"),
         .defaultPet: .init(en: "Default pet:", zh: "默认宠物：", ptBR: "Pet padrão:", es: "Mascota predeterminada:"),
         .work: .init(en: "Work", zh: "工作", ptBR: "Trabalho", es: "Trabajo"),
-        .fixedPlan: .init(en: "Fixed Plan", zh: "固定计划", ptBR: "Plano fixo", es: "Plan fijo"),
+        .fixedPlan: .init(en: "Schedule", zh: "日程", ptBR: "Agenda", es: "Horario"),
         .focusLength: .init(en: "Focus", zh: "专注", ptBR: "Foco", es: "Enfoque"),
         .breakLength: .init(en: "Break", zh: "休息", ptBR: "Pausa", es: "Descanso"),
         .skipBreak: .init(en: "Allow Skip", zh: "允许跳过", ptBR: "Permitir pular", es: "Permitir omitir"),

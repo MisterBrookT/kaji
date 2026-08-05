@@ -14,19 +14,22 @@ public enum GoalTag: String, CaseIterable, Codable, Sendable {
     case admin
     case personal
 
+    public static let selectableCases: [GoalTag] = [.work, .home, .health, .personal]
+
+    public var selectableEquivalent: GoalTag {
+        switch self {
+        case .learn: .work
+        case .admin: .personal
+        default: self
+        }
+    }
+
     public var label: String {
         rawValue.prefix(1).uppercased() + rawValue.dropFirst()
     }
 
     public var systemImage: String {
-        switch self {
-        case .work: "square"
-        case .health: "circle"
-        case .home: "diamond"
-        case .learn: "triangle"
-        case .admin: "hexagon"
-        case .personal: "star"
-        }
+        GoalMarkLogic.style(for: self).systemImage
     }
 }
 
@@ -66,16 +69,18 @@ public struct GoalItem: Identifiable, Codable, Equatable, Sendable {
     public var title: String
     public var isDone: Bool
     public var tag: String
+    public var note: String
 
-    public init(id: UUID, title: String, isDone: Bool, tag: String = "") {
+    public init(id: UUID, title: String, isDone: Bool, tag: String = "", note: String = "") {
         self.id = id
         self.title = title
         self.isDone = isDone
         self.tag = tag
+        self.note = note
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, tag
+        case id, title, isDone, tag, note
     }
 
     public init(from decoder: Decoder) throws {
@@ -84,6 +89,7 @@ public struct GoalItem: Identifiable, Codable, Equatable, Sendable {
         title = try container.decode(String.self, forKey: .title)
         isDone = try container.decode(Bool.self, forKey: .isDone)
         tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? ""
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
 }
 
@@ -181,14 +187,14 @@ public enum GoalHorizonLogic {
             )
             result.yesterdayPending = valid.compactMap {
                 guard !$0.isDone else { return nil }
-                return GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag)
+                return GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag, note: $0.note)
             }
             result.today = []
             result.dayKey = dayKey
         }
         if result.weekKey != weekKey {
             result.week = result.week.map {
-                GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag)
+                GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag, note: $0.note)
             }
             result.weekKey = weekKey
         }
@@ -212,13 +218,15 @@ public enum MenuBarSlotLogic {
     public static func goalsLabel(
         enabled: Bool,
         goals: [GoalItem],
-        fixedPlanCompleted: Bool? = nil
+        fixedPlanCompleted: Bool? = nil,
+        scheduledCompleted: Int = 0,
+        scheduledTotal: Int = 0
     ) -> String? {
         guard enabled else { return nil }
         let summary = GoalHorizonLogic.summary(for: goals)
         let fixedTotal = fixedPlanCompleted == nil ? 0 : 1
         let fixedDone = fixedPlanCompleted == true ? 1 : 0
-        return "\(summary.completed + fixedDone)/\(summary.total + fixedTotal)"
+        return "\(summary.completed + fixedDone + scheduledCompleted)/\(summary.total + fixedTotal + scheduledTotal)"
     }
 
     public static func destination(for slot: MenuBarSlot) -> MenuBarDestination {

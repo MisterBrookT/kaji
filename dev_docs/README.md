@@ -30,6 +30,11 @@
 | **Approved** | [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) — Fixed 整体目标 + Vision |
 | **Approved** | [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) — 轻量分类符号与完成态 |
 | **Approved** | [specs/2026-08-03-goals-state-cleanup.md](specs/2026-08-03-goals-state-cleanup.md) — 单一状态、legacy 清理、损坏诊断 |
+| **Approved** | [specs/2026-08-04-goal-creation-and-settings-window.md](specs/2026-08-04-goal-creation-and-settings-window.md) — Goals 统一创建面板 + 分类设置窗口 |
+| **Approved** | [specs/2026-08-04-goals-entry-and-daily-disk-insights.md](specs/2026-08-04-goals-entry-and-daily-disk-insights.md) — Goals 入口收紧 + 每日文件类型磁盘洞察 |
+| **Approved** | [specs/2026-08-04-goals-schedule-notes-and-icons.md](specs/2026-08-04-goals-schedule-notes-and-icons.md) — Schedule 多星期 + 可选说明 + 三形图标 |
+| **Approved** | [specs/2026-08-04-disk-display-cleanup.md](specs/2026-08-04-disk-display-cleanup.md) — GB/MB 单位 + 删除建议区 |
+| **Approved** | [specs/2026-08-05-ai-news-module.md](specs/2026-08-05-ai-news-module.md) — AI HOT Top 10 第五模块 |
 | Optional | [design/palette.html](design/palette.html) |
 
 ## Catalog
@@ -40,6 +45,9 @@
 | --- | --- |
 | [product/lean-module-host.md](product/lean-module-host.md) | 小而美优先的模块化方向 |
 | [product/architecture-modules.md](product/architecture-modules.md) | 增量模块主机架构草图 |
+| [product/vision.md](product/vision.md) | 当前 Vision：AI 时代 Mac 上离个人最近的状态与控制层 |
+| [product/2026-08-05-popover-visualization-decision.md](product/2026-08-05-popover-visualization-decision.md) | Popover / 圆环方案讨论与“暂时不重构”决策 |
+| [product/2026-08-05-ai-news-prd.md](product/2026-08-05-ai-news-prd.md) | AI News 第五模块 PRD（Draft） |
 
 ### Design
 
@@ -78,6 +86,11 @@
 | [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) | 已通过：轻量分类符号与完成态 |
 | [specs/2026-08-03-goals-copy-cleanup.md](specs/2026-08-03-goals-copy-cleanup.md) | 已通过：Goals 解释文案减法 |
 | [specs/2026-08-03-goals-state-cleanup.md](specs/2026-08-03-goals-state-cleanup.md) | 已通过：单一状态、legacy 清理、损坏诊断 |
+| [specs/2026-08-04-goal-creation-and-settings-window.md](specs/2026-08-04-goal-creation-and-settings-window.md) | 已通过：Goals 统一创建面板 + 分类设置窗口 |
+| [specs/2026-08-04-goals-entry-and-daily-disk-insights.md](specs/2026-08-04-goals-entry-and-daily-disk-insights.md) | 已通过：Goals 入口收紧 + 每日文件类型磁盘洞察 |
+| [specs/2026-08-04-goals-schedule-notes-and-icons.md](specs/2026-08-04-goals-schedule-notes-and-icons.md) | 已通过：Schedule 多星期 + 可选说明 + 三形图标 |
+| [specs/2026-08-04-disk-display-cleanup.md](specs/2026-08-04-disk-display-cleanup.md) | 已通过：GB/MB 单位 + 删除建议区 |
+| [specs/2026-08-05-ai-news-module.md](specs/2026-08-05-ai-news-module.md) | 已通过：AI HOT Top 10、5h 刷新与 hover digest |
 | `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
 
 ### Assets

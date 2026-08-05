@@ -70,13 +70,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
-        // Popover size + visible-providers reactive: when the user flips
-        // S/M from the popover (or toggles a provider) while the
-        // popover is open, the host content rebuilds with the new size.
-        prefs.$panelSize
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.rebuildPopoverContentIfShown() }
-            .store(in: &cancellables)
         prefs.$visibleProviders
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildPopoverContentIfShown() }
@@ -125,15 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
-        prefs.$autoCleanEnabled
-            .receive(on: RunLoop.main)
-            .sink { [weak self] enabled in
-                guard let self else { return }
-                if enabled, self.prefs.isModuleEnabled(.system) {
-                    self.systemMonitor.runAutoMaintenanceIfNeeded()
-                }
-            }
-            .store(in: &cancellables)
         prefs.$launchAtLogin
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -153,15 +137,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     self.closeBreakOverlay()
                 }
-            }
-            .store(in: &cancellables)
-        systemMonitor.$snapshot
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                guard let self,
-                      self.prefs.autoCleanEnabled,
-                      self.prefs.isModuleEnabled(.system) else { return }
-                self.systemMonitor.runAutoMaintenanceIfNeeded()
             }
             .store(in: &cancellables)
         // Update availability re-renders the glyph (adds/removes the badge dot).
@@ -274,7 +249,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         MenuBarSlotLogic.goalsLabel(
             enabled: prefs.isModuleEnabled(.goals),
             goals: dailyGoals.goals,
-            fixedPlanCompleted: fixedPlanStore.isTodayCompleted
+            scheduledCompleted: fixedPlanStore.todayCompletedCount,
+            scheduledTotal: fixedPlanStore.today.count
         )
     }
 
@@ -319,7 +295,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyPopoverDestination(stagingDestination)
         let requestedDestination = destination
 
-        // Rebuild content each open. Width is pinned to `prefs.panelSize`
+        // Rebuild content each open. Width uses the single standard panel size.
         // so the popover follows S/M; height auto-fits since the popover
         // also shows the settings footer (which the HUD doesn't).
         let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: sender.window?.screen))
@@ -413,7 +389,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// after the width is fixed (settings footer rows extend the height by
     /// a variable amount per language).
     private func popoverFittingSize(for controller: NSHostingController<AnyView>) -> CGSize {
-        let width = prefs.panelSize.frameSize.width
+        let width = PanelSize.medium.frameSize.width
         controller.view.frame = NSRect(x: 0, y: 0, width: width, height: 1)
         controller.view.layoutSubtreeIfNeeded()
         let fittingHeight = controller.view.fittingSize.height
@@ -422,7 +398,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func resizePopoverContent(to measuredSize: CGSize) {
         guard popover != nil, popover.isShown else { return }
-        let width = prefs.panelSize.frameSize.width
+        let width = PanelSize.medium.frameSize.width
         let maxHeight = maxPopoverHeight(on: popover.contentViewController?.view.window?.screen ?? statusItem.button?.window?.screen)
         let target = CGSize(width: width, height: ceil(min(max(1, measuredSize.height), maxHeight)))
         let needsPopoverResize = abs(popover.contentSize.height - target.height) > 0.5 ||
@@ -480,28 +456,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = KajiHostingController(rootView: SettingsView(prefs: prefs,
                                                                        sleepController: sleepController,
                                                                        petCatalog: petCatalog,
-                                                                       fixedPlanStore: fixedPlanStore,
-                                                                       onFixedPlanEditorChange: { [weak self] shown in
-                                                                           self?.resizeSettingsWindow(showingDetail: shown)
-                                                                       }))
-        controller.view.configureKajiHost(cornerRadius: 12)
+                                                                       fixedPlanStore: fixedPlanStore))
+        controller.view.configureKajiHost()
         let window = NSWindow(contentViewController: controller)
         window.title = "Kaji Settings"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+        window.setContentSize(NSSize(width: 760, height: 560))
+        window.minSize = NSSize(width: 640, height: 460)
+        window.titlebarAppearsTransparent = false
+        window.isOpaque = true
+        window.backgroundColor = .windowBackgroundColor
         window.isReleasedWhenClosed = false
         window.center()
         window.delegate = self
         settingsWindow = window
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-    }
-
-    private func resizeSettingsWindow(showingDetail: Bool) {
-        guard let window = settingsWindow else { return }
-        let topLeft = NSPoint(x: window.frame.minX, y: window.frame.maxY)
-        let width: CGFloat = showingDetail ? 701 : 360
-        window.setContentSize(NSSize(width: width, height: window.contentLayoutRect.height))
-        window.setFrameTopLeftPoint(topLeft)
     }
 
     private func refreshPetCatalogSelection() {
