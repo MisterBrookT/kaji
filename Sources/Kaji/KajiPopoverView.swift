@@ -946,18 +946,24 @@ struct KajiPopoverView: View {
             ForEach(Array(visions.enumerated()), id: \.element.id) { index, vision in
                 HStack(spacing: 7) {
                     goalTagMenu(vision, horizon: .longTerm)
-                    TextField("写下一条长期方向", text: Binding(
-                        get: { vision.title },
-                        set: { dailyGoals.updateTitle(vision, title: $0, in: .longTerm) }
-                    ), axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .lineLimit(1...2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .focused($focusedGoalID, equals: vision.id)
-                    .onSubmit {
-                        dailyGoals.removeIfBlank(vision, in: .longTerm)
+                    if focusedGoalID == vision.id {
+                        TextField("写下一条长期方向", text: Binding(
+                            get: { vision.title },
+                            set: { dailyGoals.updateTitle(vision, title: $0, in: .longTerm) }
+                        ), axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.cream)
+                        .lineLimit(1...2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .focused($focusedGoalID, equals: vision.id)
+                        .onSubmit {
+                            dailyGoals.removeIfBlank(vision, in: .longTerm)
+                        }
+                    } else {
+                        goalTitleLabel(vision.title, size: 11) {
+                            focusedGoalID = vision.id
+                        }
                     }
                     HStack(spacing: 4) {
                         if !vision.note.isEmpty {
@@ -1213,18 +1219,24 @@ struct KajiPopoverView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                TextField("", text: Binding(
-                    get: { goal.title },
-                    set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
-                ), axis: .vertical)
-                .textFieldStyle(.plain)
-                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                .foregroundColor(t.cream)
-                .lineLimit(1...2)
-                .fixedSize(horizontal: false, vertical: true)
-                .focused($focusedGoalID, equals: goal.id)
-                .onSubmit {
-                    dailyGoals.removeIfBlank(goal, in: horizon)
+                if focusedGoalID == goal.id {
+                    TextField("", text: Binding(
+                        get: { goal.title },
+                        set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
+                    ), axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.cream)
+                    .lineLimit(1...2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .focused($focusedGoalID, equals: goal.id)
+                    .onSubmit {
+                        dailyGoals.removeIfBlank(goal, in: horizon)
+                    }
+                } else {
+                    goalTitleLabel(goal.title, size: 11.5) {
+                        focusedGoalID = goal.id
+                    }
                 }
             }
             HStack(spacing: 4) {
@@ -1259,6 +1271,21 @@ struct KajiPopoverView: View {
             goalNoteEditor(goal, horizon: horizon)
                 .onHover { updateGoalNoteHover(goal, inside: $0) }
         }
+    }
+
+    private func goalTitleLabel(
+        _ title: String,
+        size: CGFloat,
+        onEdit: @escaping () -> Void
+    ) -> some View {
+        Text(title.isEmpty ? " " : title)
+            .font(.system(size: size, weight: .semibold, design: .rounded))
+            .foregroundColor(t.cream)
+            .lineLimit(2)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onEdit)
     }
 
     private func goalNoteEditor(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
