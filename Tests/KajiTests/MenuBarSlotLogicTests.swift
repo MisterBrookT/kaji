@@ -49,5 +49,13 @@ final class MenuBarSlotLogicTests: XCTestCase {
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .goals), .goalsToday)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .background), .quota)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .aiNews), .aiNews)
+        XCTAssertEqual(MenuBarSlotLogic.destination(for: .mailBrief), .mailBrief)
+    }
+
+    func testMailBriefLabelShowsTrueActCountWithoutCap() {
+        XCTAssertNil(MenuBarSlotLogic.mailBriefLabel(enabled: false, actCount: 12))
+        XCTAssertNil(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: 0))
+        XCTAssertEqual(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: 4), "4")
+        XCTAssertEqual(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: 128), "128")
     }
 }

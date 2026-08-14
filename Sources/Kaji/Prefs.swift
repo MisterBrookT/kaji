@@ -73,6 +73,29 @@ final class Prefs: ObservableObject {
             UserDefaults.standard.set(normalized, forKey: Key.aiNewsRefreshHours)
         }
     }
+    @Published var mailBriefHour: Int {
+        didSet { UserDefaults.standard.set(min(23, max(0, mailBriefHour)), forKey: Key.mailBriefHour) }
+    }
+    @Published var mailBriefMinute: Int {
+        didSet { UserDefaults.standard.set(min(59, max(0, mailBriefMinute)), forKey: Key.mailBriefMinute) }
+    }
+    @Published var mailBriefBatchSize: Int {
+        didSet {
+            let value = MailBriefBatchPolicy.batchSize(mailBriefBatchSize)
+            if value != mailBriefBatchSize { mailBriefBatchSize = value; return }
+            UserDefaults.standard.set(value, forKey: Key.mailBriefBatchSize)
+        }
+    }
+    @Published var mailBriefConcurrency: Int {
+        didSet {
+            let value = MailBriefBatchPolicy.concurrency(mailBriefConcurrency)
+            if value != mailBriefConcurrency { mailBriefConcurrency = value; return }
+            UserDefaults.standard.set(value, forKey: Key.mailBriefConcurrency)
+        }
+    }
+    @Published var mailBriefModel: MailBriefModel {
+        didSet { UserDefaults.standard.set(mailBriefModel.rawValue, forKey: Key.mailBriefModel) }
+    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -94,13 +117,19 @@ final class Prefs: ObservableObject {
         static let mcpEnabled = "mcpEnabled"
         static let preferencesInitialized = "preferencesInitialized"
         static let aiNewsRefreshHours = "aiNewsRefreshHours"
+        static let mailBriefHour = "mailBriefHour"
+        static let mailBriefMinute = "mailBriefMinute"
+        static let mailBriefBatchSize = "mailBriefBatchSize"
+        static let mailBriefConcurrency = "mailBriefConcurrency"
+        static let mailBriefModel = "mailBriefModel"
 
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
             showRemaining, petId, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
-            aiNewsRefreshHours, mcpEnabled
+            aiNewsRefreshHours, mcpEnabled, mailBriefHour, mailBriefMinute,
+            mailBriefBatchSize, mailBriefConcurrency, mailBriefModel
         ]
     }
 
@@ -197,6 +226,12 @@ final class Prefs: ObservableObject {
             ? false
             : d.bool(forKey: Key.mcpEnabled)
         aiNewsRefreshHours = AIHotRefreshPolicy.normalize(hours: d.object(forKey: Key.aiNewsRefreshHours) == nil ? 5 : d.integer(forKey: Key.aiNewsRefreshHours))
+        mailBriefHour = d.object(forKey: Key.mailBriefHour) == nil ? 9 : min(23, max(0, d.integer(forKey: Key.mailBriefHour)))
+        mailBriefMinute = d.object(forKey: Key.mailBriefMinute) == nil ? 0 : min(59, max(0, d.integer(forKey: Key.mailBriefMinute)))
+        mailBriefBatchSize = MailBriefBatchPolicy.batchSize(d.object(forKey: Key.mailBriefBatchSize) == nil ? 10 : d.integer(forKey: Key.mailBriefBatchSize))
+        mailBriefConcurrency = MailBriefBatchPolicy.concurrency(d.object(forKey: Key.mailBriefConcurrency) == nil ? 2 : d.integer(forKey: Key.mailBriefConcurrency))
+        mailBriefModel = MailBriefModel.normalize(d.string(forKey: Key.mailBriefModel))
+        d.set(mailBriefModel.rawValue, forKey: Key.mailBriefModel)
         d.set(aiNewsRefreshHours, forKey: Key.aiNewsRefreshHours)
         d.set(true, forKey: Key.preferencesInitialized)
     }

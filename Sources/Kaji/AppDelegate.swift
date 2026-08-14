@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let fixedPlanStore = FixedPlanStore()
     private let popoverNavigation = PopoverNavigation()
     private let aiNewsStore = AIHotNewsStore()
+    private let mailBriefStore = MailBriefStore()
     private var breakWindows: [NSWindow] = []
     private var breakSceneSeed: UInt64?
     private var breakWatchdogTimer: Timer?
@@ -89,6 +90,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] hours in self?.aiNewsStore.updateRefreshHours(hours) }
+            .store(in: &cancellables)
+        Publishers.CombineLatest4(prefs.$mailBriefHour, prefs.$mailBriefMinute,
+                                  prefs.$mailBriefBatchSize, prefs.$mailBriefConcurrency)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] hour, minute, batchSize, concurrency in
+                guard let self else { return }
+                self.mailBriefStore.setEnabled(self.prefs.isModuleEnabled(.mailBrief), hour: hour, minute: minute,
+                                               batchSize: batchSize, concurrency: concurrency,
+                                               model: self.prefs.mailBriefModel)
+            }.store(in: &cancellables)
+        prefs.$mailBriefModel
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] model in
+                guard let self else { return }
+                self.mailBriefStore.setEnabled(self.prefs.isModuleEnabled(.mailBrief),
+                    hour: self.prefs.mailBriefHour, minute: self.prefs.mailBriefMinute,
+                    batchSize: self.prefs.mailBriefBatchSize, concurrency: self.prefs.mailBriefConcurrency,
+                    model: model)
+            }.store(in: &cancellables)
+        mailBriefStore.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
             .store(in: &cancellables)
         dailyGoals.objectWillChange
             .receive(on: RunLoop.main)
@@ -184,6 +208,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             systemMonitor.stop()
         }
         aiNewsStore.setEnabled(modules.contains(.aiNews), refreshHours: prefs.aiNewsRefreshHours)
+        mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
+                                  batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
+                                  model: prefs.mailBriefModel)
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -198,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         petStateTimer?.invalidate()
         closeBreakOverlay()
         aiNewsStore.stop()
+        mailBriefStore.stop()
         mcpServer.stop()
     }
 
@@ -209,6 +237,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if prefs.isModuleEnabled(.aiNews) {
             aiNewsStore.setEnabled(true, refreshHours: prefs.aiNewsRefreshHours)
         }
+        if prefs.isModuleEnabled(.mailBrief) { mailBriefStore.evaluateSchedule() }
     }
 
     // MARK: - Status item
@@ -223,10 +252,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   workSlotLabel: workStatusSlotLabel,
                                   goalsSlotLabel: goalsStatusSlotLabel,
                                   showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
+                                  mailBriefSlotLabel: MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount),
+                                  showsMailBriefSlot: prefs.isModuleEnabled(.mailBrief),
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
                                   onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                  onAINewsClick: { [weak self] in self?.showPopover(.aiNews) })
+                                  onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
+                                  onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -246,10 +278,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                workSlotLabel: workStatusSlotLabel,
                                                goalsSlotLabel: goalsStatusSlotLabel,
                                                showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
+                                               mailBriefSlotLabel: MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount),
+                                               showsMailBriefSlot: prefs.isModuleEnabled(.mailBrief),
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
                                                onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                               onAINewsClick: { [weak self] in self?.showPopover(.aiNews) })
+                                               onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
+                                               onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) })
         statusItem.length = statusItemLength
     }
 
@@ -290,6 +325,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
         }
         if prefs.isModuleEnabled(.aiNews) { length += 20 }
+        if prefs.isModuleEnabled(.mailBrief) {
+            length += 22 + CGFloat(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: mailBriefStore.actCount)?.count ?? 0) * 7
+        }
         return length
     }
 
@@ -348,7 +386,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .aiNews:
+        case .work, .goalsToday, .aiNews, .mailBrief:
             return .quota
         }
     }
@@ -363,6 +401,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .goals
         case .aiNews:
             return popoverNavigation.panel == .aiNews
+        case .mailBrief:
+            return popoverNavigation.panel == .mailBrief
         }
     }
 
@@ -385,6 +425,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popoverNavigation.goalHorizon = .today
         case .aiNews:
             popoverNavigation.panel = prefs.isModuleEnabled(.aiNews) ? .aiNews : .quota
+        case .mailBrief:
+            popoverNavigation.panel = prefs.isModuleEnabled(.mailBrief) ? .mailBrief : .quota
         }
     }
 
@@ -404,6 +446,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
                                       aiNewsStore: aiNewsStore,
+                                      mailBriefStore: mailBriefStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
@@ -488,7 +531,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                                        sleepController: sleepController,
                                                                        petCatalog: petCatalog,
                                                                        fixedPlanStore: fixedPlanStore,
-                                                                       mcpServer: mcpServer))
+                                                                       mcpServer: mcpServer,
+                                                                       mailBriefStore: mailBriefStore))
+
         controller.view.configureKajiHost()
         let window = NSWindow(contentViewController: controller)
         window.title = "Kaji Settings"

@@ -7,9 +7,10 @@ public enum KajiModuleID: String, CaseIterable, Codable, Sendable, Comparable {
     case system
     case goals
     case aiNews
+    case mailBrief
 
     /// Stable popover order. Unknown / disabled ids never appear here.
-    public static let stableOrder: [KajiModuleID] = [.quota, .work, .system, .goals, .aiNews]
+    public static let stableOrder: [KajiModuleID] = [.quota, .work, .system, .goals, .aiNews, .mailBrief]
 
     public static func < (lhs: KajiModuleID, rhs: KajiModuleID) -> Bool {
         let li = stableOrder.firstIndex(of: lhs) ?? Int.max

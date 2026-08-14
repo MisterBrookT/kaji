@@ -25,10 +25,13 @@ struct StatusItemView: View {
     /// Optional today's completion summary (`n/n`) when Goals is enabled.
     var goalsSlotLabel: String? = nil
     var showsAINewsSlot: Bool = false
+    var mailBriefSlotLabel: String? = nil
+    var showsMailBriefSlot: Bool = false
     var onQuotaClick: () -> Void = {}
     var onWorkClick: () -> Void = {}
     var onGoalsClick: () -> Void = {}
     var onAINewsClick: () -> Void = {}
+    var onMailBriefClick: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
@@ -68,6 +71,22 @@ struct StatusItemView: View {
                         .foregroundStyle(scheme == .dark ? .white : .black)
                         .frame(width: 15, height: 18)
                         .contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            }
+            if showsMailBriefSlot {
+                Button(action: onMailBriefClick) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "envelope")
+                            .font(.system(size: 10.5, weight: .medium))
+                        if let mailBriefSlotLabel {
+                            Text(mailBriefSlotLabel)
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .monospacedDigit()
+                        }
+                    }
+                    .foregroundStyle(scheme == .dark ? .white : .black)
+                    .fixedSize()
+                    .contentShape(Rectangle())
                 }.buttonStyle(.plain)
             }
         }

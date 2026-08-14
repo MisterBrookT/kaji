@@ -62,7 +62,7 @@ final class ModulePrefsLogicTests: XCTestCase {
 
     func testPopoverPages_allEnabled_fullOrder() {
         let pages = ModulePrefsLogic.popoverPages(
-            enabled: [.quota, .work, .system, .goals, .aiNews]
+            enabled: [.quota, .work, .system, .goals, .aiNews, .mailBrief]
         )
         XCTAssertEqual(pages, KajiModuleID.stableOrder)
     }
@@ -70,6 +70,14 @@ final class ModulePrefsLogicTests: XCTestCase {
     func testAIHotDefaultsOffAndAppearsAfterGoalsWhenEnabled() {
         XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.aiNews))
         XCTAssertEqual(ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .aiNews]), [.quota, .goals, .aiNews])
+    }
+
+    func testMailBriefDefaultsOffAndAppearsAfterAINewsWhenEnabled() {
+        XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.mailBrief))
+        XCTAssertEqual(
+            ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .aiNews, .mailBrief]),
+            [.quota, .goals, .aiNews, .mailBrief]
+        )
     }
 
     func testPopoverPages_ignoresQuotaMissingInSet_byCallerContract() {

@@ -32,6 +32,7 @@ struct KajiPopoverView: View {
     @ObservedObject var dailyGoals: DailyGoalStore
     @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var aiNewsStore: AIHotNewsStore
+    @ObservedObject var mailBriefStore: MailBriefStore
     @ObservedObject var navigation: PopoverNavigation
 
     let controls: GaugeRowView.Controls
@@ -60,6 +61,8 @@ struct KajiPopoverView: View {
     @State private var goalNoteHoverGeneration = 0
     @State private var hoveredNewsID: String?
     @State private var newsHoverGeneration = 0
+    @State private var hoveredMailID: String?
+    @State private var mailHoverGeneration = 0
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -167,6 +170,8 @@ struct KajiPopoverView: View {
             goalsPanel
         case .aiNews:
             aiNewsPanel
+        case .mailBrief:
+            mailBriefPanel
         }
     }
 
@@ -197,6 +202,208 @@ struct KajiPopoverView: View {
                 Link("\(L10n.t(.dataSource, prefs.language)): AI HOT", destination: URL(string: "https://aihot.virxact.com")!)
                     .font(.system(size: 9, weight: .medium)).foregroundColor(t.mute)
             }.padding(.top, 3)
+        }
+    }
+
+    private var mailBriefPanel: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            switch mailBriefStore.state {
+            case .disabled:
+                EmptyView()
+            case .disconnected:
+                VStack(spacing: 8) {
+                    Text("Connect Gmail to create one quiet brief each day.")
+                        .font(.system(size: 10.5, weight: .medium)).foregroundColor(t.mute)
+                    Button("Connect Gmail") { mailBriefStore.connect() }.buttonStyle(.bordered)
+                    if let error = mailBriefStore.lastError {
+                        Text(error)
+                            .font(.system(size: 9, weight: .medium))
+                            .foregroundColor(t.mute)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }.frame(maxWidth: .infinity).padding(22)
+            case .scheduled where mailBriefStore.generation == nil:
+                Text("Next brief \(mailBriefStore.nextDue?.formatted(date: .omitted, time: .shortened) ?? "09:00")")
+                    .font(.system(size: 10.5, weight: .medium)).foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity).padding(22)
+            case .failed where mailBriefStore.generation == nil:
+                VStack(spacing: 7) {
+                    Text(mailBriefStore.lastError ?? "Mail Brief failed").foregroundColor(t.mute)
+                    Button("Retry") { mailBriefStore.generateNow() }.buttonStyle(.plain)
+                }.frame(maxWidth: .infinity).padding(20)
+            default:
+                if mailBriefStore.state != .running && mailBriefStore.sections.filter({ $0.level > 0 }).isEmpty {
+                    Text("今天没有需要处理的邮件")
+                        .font(.system(size: 11, weight: .semibold)).foregroundColor(t.mute)
+                        .frame(maxWidth: .infinity).padding(20)
+                }
+                ForEach(mailBriefStore.sections.filter { $0.level > 0 }, id: \.level) { section in
+                    mailBriefSection(section)
+                }
+                if let quiet = mailBriefStore.sections.first(where: { $0.level == 0 }) {
+                    DisclosureGroup("Quiet  \(quiet.entries.count)") {
+                        ForEach(quiet.entries) { mailBriefRow($0) }
+                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
+                }
+                if !mailBriefStore.dismissedEntries.isEmpty {
+                    DisclosureGroup("已忽略  \(mailBriefStore.dismissedEntries.count)") {
+                        ForEach(mailBriefStore.dismissedEntries) { entry in
+                            HStack {
+                                Text(entry.subject).lineLimit(1).font(.system(size: 10.5, weight: .medium))
+                                Spacer()
+                                Button { mailBriefStore.restore(entry) } label: { Image(systemName: "arrow.uturn.backward") }
+                                    .buttonStyle(.plain).help("恢复")
+                            }.padding(.vertical, 5)
+                        }
+                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
+                }
+                if !mailBriefStore.archivedEntries.isEmpty {
+                    DisclosureGroup("已完成  \(mailBriefStore.archivedEntries.count)") {
+                        ForEach(mailBriefStore.archivedEntries) { entry in
+                            mailBriefUndoRow(entry, action: { mailBriefStore.unarchive(entry) }, help: "撤销归档")
+                        }
+                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
+                }
+                if !mailBriefStore.trashedEntries.isEmpty {
+                    DisclosureGroup("已删除  \(mailBriefStore.trashedEntries.count)") {
+                        ForEach(mailBriefStore.trashedEntries) { entry in
+                            mailBriefUndoRow(entry, action: { mailBriefStore.untrash(entry) }, help: "移出垃圾箱")
+                        }
+                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
+                }
+            }
+            HStack {
+                if mailBriefStore.state == .running {
+                    ProgressView().controlSize(.small)
+                    if let progress = mailBriefStore.syncProgress {
+                        Text("已分类 \(progress.completed) / Inbox \(progress.total)")
+                            .font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundColor(t.mute)
+                    } else {
+                        Text("正在读取 Inbox…").font(.system(size: 9, weight: .medium)).foregroundColor(t.mute)
+                    }
+                } else if let count = mailBriefStore.generation?.snapshotInboxThreadCount {
+                    Text("Inbox \(count)").font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundColor(t.mute)
+                }
+                if mailBriefStore.state == .stale { Text("上次生成失败，显示旧简报").font(.system(size: 9)).foregroundColor(t.mute) }
+                if let error = mailBriefStore.lastError, mailBriefStore.state != .stale {
+                    Text(error).font(.system(size: 9)).foregroundColor(t.mute).lineLimit(2)
+                }
+                Spacer()
+                Button { mailBriefStore.generateNow() } label: { Image(systemName: "arrow.clockwise") }
+                    .buttonStyle(.plain).disabled(!mailBriefStore.isConnected || mailBriefStore.state == .running)
+                    .help("立即生成")
+            }
+        }
+    }
+
+    private func mailBriefSection(_ section: MailBriefSection) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 7) {
+                levelBlocks(section.level)
+                Text(mailLevelTitle(section.level))
+                    .font(.system(size: 12, weight: .bold, design: .rounded)).foregroundColor(t.cream)
+                Text("\(section.entries.count)")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundColor(t.mute)
+            }.accessibilityElement(children: .ignore).accessibilityLabel("\(mailLevelTitle(section.level))，\(section.entries.count) 封")
+            ForEach(section.entries) { mailBriefRow($0) }
+        }
+    }
+
+    private func levelBlocks(_ level: Int) -> some View {
+        HStack(spacing: 2.5) {
+            ForEach(0..<3, id: \.self) { index in
+                RoundedRectangle(cornerRadius: 1.2)
+                    .fill(index < level ? t.cream.opacity(0.72) : t.ash.opacity(0.28))
+                    .frame(width: 5, height: 5)
+            }
+        }.accessibilityHidden(true)
+    }
+
+    private func mailLevelTitle(_ level: Int) -> String {
+        switch level { case 3: "优先处理"; case 2: "今天处理"; case 1: "留意"; default: "Quiet" }
+    }
+
+    private func mailBriefRow(_ entry: MailBriefEntry) -> some View {
+        HStack(spacing: 7) {
+            Button { if let url = entry.gmailURL { NSWorkspace.shared.open(url) } } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.subject).font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.cream).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                    if !entry.sender.isEmpty { Text(entry.sender).font(.system(size: 8.5)).foregroundColor(t.mute).lineLimit(1) }
+                }
+            }.buttonStyle(.plain)
+            if mailBriefStore.pendingThreadIDs.contains(entry.threadID) {
+                ProgressView().controlSize(.mini).frame(width: 50)
+            } else {
+                Button { mailBriefStore.archive(entry) } label: { Image(systemName: "archivebox") }
+                    .buttonStyle(.plain).help("完成并归档")
+                Button { mailBriefStore.toggleStar(entry) } label: {
+                    Image(systemName: (entry.isStarred ?? false) ? "star.fill" : "star")
+                }.buttonStyle(.plain).help((entry.isStarred ?? false) ? "取消 Flag" : "Flag")
+                Button { mailBriefStore.trash(entry) } label: { Image(systemName: "trash") }
+                    .buttonStyle(.plain).help("移到 Gmail 垃圾箱")
+                Button { convertMailToGoal(entry) } label: {
+                    Image(systemName: mailBriefStore.isConverted(entry) ? "checkmark.circle.fill" : "checkmark.circle")
+                }.buttonStyle(.plain).disabled(mailBriefStore.isConverted(entry)).help("转成 Today Goal")
+            }
+        }
+        .padding(7).background(RoundedRectangle(cornerRadius: 7).fill(t.panel.opacity(0.7)))
+        .onHover { inside in updateMailHover(entry, inside: inside) }
+        .popover(isPresented: Binding(get: { hoveredMailID == entry.threadID }, set: { if !$0 { hoveredMailID = nil } }), arrowEdge: .trailing) {
+            mailBriefDetail(entry).onHover { updateMailDetailHover(inside: $0) }
+        }
+        .contextMenu {
+            Button("忽略本次简报") { mailBriefStore.dismiss(entry) }
+        }
+    }
+
+    private func mailBriefUndoRow(_ entry: MailBriefEntry, action: @escaping () -> Void, help: String) -> some View {
+        HStack {
+            Text(entry.subject).lineLimit(1).font(.system(size: 10.5, weight: .medium))
+            Spacer()
+            if mailBriefStore.pendingThreadIDs.contains(entry.threadID) {
+                ProgressView().controlSize(.mini)
+            } else {
+                Button(action: action) { Image(systemName: "arrow.uturn.backward") }
+                    .buttonStyle(.plain).help(help)
+            }
+        }.padding(.vertical, 5)
+    }
+
+    private func mailBriefDetail(_ entry: MailBriefEntry) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(entry.subject).font(.system(size: 12, weight: .bold)).fixedSize(horizontal: false, vertical: true)
+            if !entry.sender.isEmpty { Text(entry.sender).font(.system(size: 9, weight: .medium)).foregroundColor(t.mute) }
+            Divider()
+            Text(entry.summaryZH).font(.system(size: 10.5)).fixedSize(horizontal: false, vertical: true)
+            Text(entry.reasonZH).font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute).fixedSize(horizontal: false, vertical: true)
+            if let deadline = entry.deadline { Text("截止：\(deadline.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 9.5, weight: .semibold)) }
+            if let url = entry.gmailURL { Link("在 Gmail 打开", destination: url).font(.system(size: 9.5, weight: .semibold)) }
+        }.padding(12).frame(width: 260, alignment: .leading)
+    }
+
+    private func convertMailToGoal(_ entry: MailBriefEntry) {
+        guard !mailBriefStore.isConverted(entry) else { return }
+        let note = [entry.summaryZH, entry.reasonZH, entry.gmailURL?.absoluteString].compactMap { $0 }.joined(separator: "\n\n")
+        if let goal = try? dailyGoals.addGoal(title: entry.goalTitleZH ?? entry.subject,
+                                              tag: GoalTag.work.rawValue, note: note, in: .today) {
+            mailBriefStore.markConverted(entry, goalID: goal.id)
+        }
+    }
+
+    private func updateMailHover(_ entry: MailBriefEntry, inside: Bool) {
+        let hadActive = hoveredMailID != nil; mailHoverGeneration += 1; let generation = mailHoverGeneration
+        let delay = inside ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActive) : HoverDisclosurePolicy.closeDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard generation == mailHoverGeneration else { return }
+            if inside { hoveredMailID = entry.threadID } else if hoveredMailID == entry.threadID { hoveredMailID = nil }
+        }
+    }
+    private func updateMailDetailHover(inside: Bool) {
+        mailHoverGeneration += 1; guard !inside else { return }; let generation = mailHoverGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
+            guard generation == mailHoverGeneration else { return }; hoveredMailID = nil
         }
     }
 
@@ -1444,6 +1651,7 @@ struct KajiPopoverView: View {
         case .system: return "System"
         case .goals: return "Goals"
         case .aiNews: return L10n.t(.aiNews, prefs.language)
+        case .mailBrief: return "Mail Brief"
         }
     }
 
@@ -1456,6 +1664,9 @@ struct KajiPopoverView: View {
         case .aiNews:
             guard let date = aiNewsStore.lastSuccessfulRefresh else { return L10n.t(.loading, prefs.language) }
             return "\(L10n.t(.updated, prefs.language)) \(date.formatted(.relative(presentation: .numeric)))"
+        case .mailBrief:
+            guard let date = mailBriefStore.generation?.createdAt else { return "Daily Gmail summary" }
+            return "\(mailBriefStore.actCount) Act · \(date.formatted(.relative(presentation: .numeric)))"
         }
     }
 

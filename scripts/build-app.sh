@@ -62,6 +62,25 @@ else
 PLIST
 fi
 
+# OAuth client IDs for installed apps are public identifiers, but they remain
+# release configuration rather than source defaults. Inject after the tracked
+# plist is copied so assembly cannot overwrite the configured value.
+INSTALLED_PLIST="/Applications/Kaji.app/Contents/Info.plist"
+if [[ -z "${KAJI_GOOGLE_OAUTH_CLIENT_ID:-}" && -f "${INSTALLED_PLIST}" ]]; then
+	KAJI_GOOGLE_OAUTH_CLIENT_ID=$(/usr/libexec/PlistBuddy -c "Print :KajiGoogleOAuthClientID" "${INSTALLED_PLIST}" 2>/dev/null || true)
+fi
+if [[ -z "${KAJI_GOOGLE_OAUTH_CLIENT_SECRET:-}" && -f "${INSTALLED_PLIST}" ]]; then
+	KAJI_GOOGLE_OAUTH_CLIENT_SECRET=$(/usr/libexec/PlistBuddy -c "Print :KajiGoogleOAuthClientSecret" "${INSTALLED_PLIST}" 2>/dev/null || true)
+fi
+if [[ -n "${KAJI_GOOGLE_OAUTH_CLIENT_ID:-}" ]]; then
+	/usr/libexec/PlistBuddy -c "Set :KajiGoogleOAuthClientID ${KAJI_GOOGLE_OAUTH_CLIENT_ID}" \
+		"${BUNDLE}/Contents/Info.plist"
+fi
+if [[ -n "${KAJI_GOOGLE_OAUTH_CLIENT_SECRET:-}" ]]; then
+	/usr/libexec/PlistBuddy -c "Set :KajiGoogleOAuthClientSecret ${KAJI_GOOGLE_OAUTH_CLIENT_SECRET}" \
+		"${BUNDLE}/Contents/Info.plist"
+fi
+
 # App icon (Finder / Applications / installer — the agent has no dock icon).
 if [[ -f "Resources/AppIcon.icns" ]]; then
 	cp "Resources/AppIcon.icns" "${BUNDLE}/Contents/Resources/AppIcon.icns"
@@ -88,13 +107,25 @@ done
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
 
-# SMAppService requires a sealed app bundle. Local source builds use ad-hoc
-# signing; release pipelines can replace "-" with an Apple Developer identity.
+# SMAppService requires a sealed app bundle. A stable local identity also keeps
+# the Keychain ACL stable across reinstallations. The machine-local file is
+# gitignored; release pipelines can provide KAJI_CODESIGN_IDENTITY directly.
+if [[ -z "${KAJI_CODESIGN_IDENTITY:-}" && -f ".kaji-codesign-identity" ]]; then
+	KAJI_CODESIGN_IDENTITY=$(<.kaji-codesign-identity)
+fi
+KAJI_CODESIGN_IDENTITY=${KAJI_CODESIGN_IDENTITY:--}
+if [[ -f ".kaji-codesign-keychain" ]]; then
+	KAJI_CODESIGN_KEYCHAIN=$(<.kaji-codesign-keychain)
+	KAJI_CODESIGN_KEYCHAIN_PASSWORD="$(dirname "${KAJI_CODESIGN_KEYCHAIN}")/keychain.password"
+	if [[ -f "${KAJI_CODESIGN_KEYCHAIN_PASSWORD}" ]]; then
+		security unlock-keychain -p "$(<"${KAJI_CODESIGN_KEYCHAIN_PASSWORD}")" "${KAJI_CODESIGN_KEYCHAIN}"
+	fi
+fi
 xattr -cr "${BUNDLE}"
-codesign --force --sign - --identifier dev.kaji.sleep-helper \
+codesign --force --sign "${KAJI_CODESIGN_IDENTITY}" --identifier dev.kaji.sleep-helper \
 	"${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
 xattr -cr "${BUNDLE}"
-codesign --force --sign - --identifier dev.kaji "${BUNDLE}"
+codesign --force --sign "${KAJI_CODESIGN_IDENTITY}" --identifier dev.kaji "${BUNDLE}"
 
 echo "==> done: ${BUNDLE}"
 echo "    run with: open ${BUNDLE}"

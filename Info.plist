@@ -22,6 +22,10 @@
 	<string>13.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>KajiGoogleOAuthClientID</key>
+	<string></string>
+	<key>KajiGoogleOAuthClientSecret</key>
+	<string></string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>

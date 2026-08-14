@@ -9,6 +9,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case goals = "Goals"
     case quota = "Quota"
     case aiNews = "AI News"
+    case mailBrief = "Mail Brief"
 
     var id: String { rawValue }
     var systemImage: String {
@@ -19,6 +20,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .goals: "checkmark.circle"
         case .quota: "gauge.with.dots.needle.67percent"
         case .aiNews: "newspaper"
+        case .mailBrief: "envelope"
         }
     }
 }
@@ -33,6 +35,7 @@ struct SettingsView: View {
     @ObservedObject var petCatalog: PetCatalogStore
     @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var mcpServer: KajiMCPServer
+    @ObservedObject var mailBriefStore: MailBriefStore
     var onFixedPlanEditorChange: ((Bool) -> Void)? = nil
 
     @State private var selectedScheduleID: UUID?
@@ -75,6 +78,7 @@ struct SettingsView: View {
                     moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
                     moduleRow(.aiNews, title: L10n.t(.moduleAINews, prefs.language), lockedOn: false)
+                    moduleRow(.mailBrief, title: "Mail Brief", lockedOn: false)
                 }
             }
             }
@@ -203,6 +207,59 @@ struct SettingsView: View {
                         }
                     }
                     .help("AI News uses AI HOT's anonymous read-only v1 API.")
+                }
+            }
+            if selection == .mailBrief {
+                settingBlock(title: "Mail Brief") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        settingRow(title: "Gmail") {
+                            if mailBriefStore.isConnected {
+                                Text(mailBriefStore.accountLabel ?? "Connected")
+                                    .font(.system(size: 10, weight: .medium)).foregroundColor(t.mute)
+                                Button("Disconnect") { mailBriefStore.disconnect() }.buttonStyle(.plain)
+                            } else {
+                                Button("Connect") { mailBriefStore.connect() }.buttonStyle(.plain)
+                            }
+                        }
+                        settingRow(title: "Daily") {
+                            Picker("Hour", selection: $prefs.mailBriefHour) {
+                                ForEach(0..<24, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
+                            }.labelsHidden().frame(width: 64)
+                            Text(":")
+                            Picker("Minute", selection: $prefs.mailBriefMinute) {
+                                ForEach([0, 15, 30, 45], id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
+                            }.labelsHidden().frame(width: 64)
+                        }
+                        settingRow(title: "Batch") {
+                            Picker("Batch", selection: $prefs.mailBriefBatchSize) {
+                                ForEach(MailBriefBatchPolicy.allowedBatchSizes, id: \.self) { Text("\($0)").tag($0) }
+                            }.labelsHidden().frame(width: 72)
+                            Text("threads / run").font(.system(size: 9.5)).foregroundColor(t.mute)
+                        }
+                        settingRow(title: "Concurrency") {
+                            Picker("Concurrency", selection: $prefs.mailBriefConcurrency) {
+                                ForEach(MailBriefBatchPolicy.allowedConcurrency, id: \.self) { Text("\($0)").tag($0) }
+                            }.labelsHidden().frame(width: 72)
+                            Text("parallel batches").font(.system(size: 9.5)).foregroundColor(t.mute)
+                        }
+                        settingRow(title: "Model") {
+                            Picker("Model", selection: $prefs.mailBriefModel) {
+                                ForEach(MailBriefModel.allCases, id: \.self) { model in
+                                    Text(model.displayName).tag(model)
+                                }
+                            }.labelsHidden().pickerStyle(.menu)
+                        }
+                        settingRow(title: "Run") {
+                            Button("Generate now") { mailBriefStore.generateNow() }
+                                .buttonStyle(.plain).disabled(!mailBriefStore.isConnected || mailBriefStore.state == .running)
+                        }
+                        if let error = mailBriefStore.lastError {
+                            Text(error).font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute)
+                        }
+                        Text("Email content is sent to your signed-in Codex service. Archive, Flag and Trash require Gmail modify permission.")
+                            .font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
             }
             }
