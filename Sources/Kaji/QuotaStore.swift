@@ -40,8 +40,6 @@ enum Config {
     static let kQuotaScriptPath = "quotaScriptPath"
     static let kPythonInterpreter = "pythonInterpreter" // user override (optional)
     static let kSparkHistory    = "sparklineHistory" // [providerKey: [Double]]
-    static let kTokenHistory    = "tokenHistory" // [providerKey: [Double]]
-    static let kTokenHistoryV2  = "tokenHistoryV2" // [providerKey: [TimedSample]]
 }
 
 // A single provider's view-ready data, decoupled from the raw Codable model.
@@ -51,14 +49,9 @@ struct ProviderView: Identifiable, Equatable {
     let displayName: String
     let fiveHourPercent: Double?   // nil -> render "—"
     let weekPercent: Double?
-    let tokensToday: Int?
     let resetDate: Date?           // five-hour reset
     let weekResetDate: Date?       // seven-day reset
-    let plan: String?
-    let costTodayUSD: Double?
-    let costIsEstimated: Bool
-    let history: [Double]          // rolling 5h used% samples for the sparkline
-    let tokenHistory: [Double]     // rolling tokens_today samples
+    let history: [Double]          // rolling 5h used% samples for Pet status trends
 
     /// 0...1 fraction for the 5h ring trim. Clamped. nil percent -> 0 (empty).
     var usedFraction: Double {
@@ -86,20 +79,11 @@ struct ProviderView: Identifiable, Equatable {
     var hasData: Bool { fiveHourPercent != nil }
 }
 
-private struct TimedSample: Codable, Equatable {
-    let date: Date
-    let value: Double
-}
 
 // MARK: - QuotaStore
 //
 // Runs quota.py on a timer, decodes the JSON, maintains a rolling per-provider
-// history of 5h used% for the sparkline, and publishes view-ready providers.
-//
-// SPARKLINE NOTE: quota.py exposes current usage, not a historical time series.
-// We persist sampled values locally and keep only recent points. Token history
-// is timestamped and pruned to a rolling 24h window so stale day-boundary data
-// cannot draw misleading trends.
+// history of 5h used% for Pet status trends, and publishes view-ready providers.
 @MainActor
 final class QuotaStore: ObservableObject {
     @Published private(set) var providers: [ProviderView] = []
@@ -108,7 +92,6 @@ final class QuotaStore: ObservableObject {
 
     private var timer: Timer?
     private var history: [String: [Double]] = [:]
-    private var tokenHistory: [String: [TimedSample]] = [:]
 
     init() {
         loadHistory()
@@ -293,7 +276,6 @@ final class QuotaStore: ObservableObject {
         // Visibility is a user preference applied by the views; filtering only
         // to default-visible providers here would hide Ark from the toggles.
         let keys = Providers.sorted(snap.keys.filter { Providers.isAvailable($0) })
-        let now = Date()
 
         var views: [ProviderView] = []
         for key in keys {
@@ -310,35 +292,15 @@ final class QuotaStore: ObservableObject {
                 }
                 history[key] = arr
             }
-            if let tokens = q.tokensToday {
-                var arr = tokenHistory[key] ?? []
-                let sample = Double(tokens)
-                arr = Self.prunedTokenHistory(arr, now: now)
-                if Self.shouldAppendTokenSample(arr, value: sample, now: now) {
-                    arr.append(TimedSample(date: now, value: sample))
-                    arr = Self.prunedTokenHistory(arr, now: now)
-                }
-                tokenHistory[key] = arr
-            }
-
-            let tokenValues = Self.prunedTokenHistory(tokenHistory[key] ?? [], now: now).map(\.value)
-            let localAPIEstimate = q.costTodayUSD == nil
-                ? Self.estimatedAPICostUSD(provider: key, tokens: q.tokensToday)
-                : nil
             views.append(ProviderView(
                 id: key,
                 mark: Providers.mark(for: key),
                 displayName: Providers.displayName(for: key),
                 fiveHourPercent: five,
                 weekPercent: limits?.sevenDayUsedPercent,
-                tokensToday: q.tokensToday,
                 resetDate: limits?.fiveHourResetsAt?.date,
                 weekResetDate: limits?.sevenDayResetsAt?.date,
-                plan: limits?.plan,
-                costTodayUSD: q.costTodayUSD ?? localAPIEstimate,
-                costIsEstimated: q.costIsEstimated ?? (localAPIEstimate != nil),
-                history: history[key] ?? [],
-                tokenHistory: tokenValues
+                history: history[key] ?? []
             ))
         }
 
@@ -361,42 +323,13 @@ final class QuotaStore: ObservableObject {
             as? [String: [Double]] {
             history = dict
         }
-        if let data = UserDefaults.standard.data(forKey: Config.kTokenHistoryV2),
-           let dict = try? JSONDecoder().decode([String: [TimedSample]].self, from: data) {
-            let now = Date()
-            tokenHistory = dict.mapValues { Self.prunedTokenHistory($0, now: now) }
-        }
-        UserDefaults.standard.removeObject(forKey: Config.kTokenHistory)
+        UserDefaults.standard.removeObject(forKey: "tokenHistory")
+        UserDefaults.standard.removeObject(forKey: "tokenHistoryV2")
     }
 
     private func saveHistory() {
         UserDefaults.standard.set(history, forKey: Config.kSparkHistory)
-        if let data = try? JSONEncoder().encode(tokenHistory) {
-            UserDefaults.standard.set(data, forKey: Config.kTokenHistoryV2)
-        }
-        UserDefaults.standard.removeObject(forKey: Config.kTokenHistory)
     }
 
-    private static func prunedTokenHistory(_ arr: [TimedSample], now: Date) -> [TimedSample] {
-        let cutoff = now.addingTimeInterval(-24 * 60 * 60)
-        let kept = arr.filter { $0.date >= cutoff }.sorted { $0.date < $1.date }
-        let maxSamples = 24 * 12 // 5-minute resolution over one day.
-        if kept.count > maxSamples {
-            return Array(kept.suffix(maxSamples))
-        }
-        return kept
-    }
-
-    private static func shouldAppendTokenSample(_ arr: [TimedSample], value: Double, now: Date) -> Bool {
-        guard let last = arr.last else { return true }
-        if last.value != value { return true }
-        return now.timeIntervalSince(last.date) >= 15 * 60
-    }
-
-    private static func estimatedAPICostUSD(provider: String, tokens: Int?) -> Double? {
-        guard provider == "claude", let tokens, tokens > 0 else { return nil }
-        // API-equivalent value of local Claude usage, not a subscription charge.
-        return Double(tokens) / 1_000_000 * 6.0
-    }
 
 }

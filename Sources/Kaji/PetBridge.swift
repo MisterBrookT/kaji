@@ -209,11 +209,6 @@ enum PetBridge {
     }
 
     private static func isRising(_ provider: ProviderView) -> Bool {
-        if provider.tokenHistory.count >= 2,
-           let last = provider.tokenHistory.last,
-           let prev = provider.tokenHistory.dropLast().last {
-            return last - prev >= 1_000
-        }
         guard provider.history.count >= 2,
               let last = provider.history.last,
               let prev = provider.history.dropLast().last else { return false }

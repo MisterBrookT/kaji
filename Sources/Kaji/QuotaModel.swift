@@ -85,29 +85,19 @@ struct ProviderLimits: Codable, Equatable {
     let fiveHourResetsAt: ResetTimestamp?
     let sevenDayUsedPercent: Double?
     let sevenDayResetsAt: ResetTimestamp?
-    let plan: String?
 
     enum CodingKeys: String, CodingKey {
         case fiveHourUsedPercent = "five_hour_used_percent"
         case fiveHourResetsAt    = "five_hour_resets_at"
         case sevenDayUsedPercent = "seven_day_used_percent"
         case sevenDayResetsAt    = "seven_day_resets_at"
-        case plan
     }
 }
 
 struct ProviderQuota: Codable, Equatable {
-    let tokensToday: Int?
-    let sessionsToday: Int?
-    let costTodayUSD: Double?
-    let costIsEstimated: Bool?
     let limits: ProviderLimits?
 
     enum CodingKeys: String, CodingKey {
-        case tokensToday   = "tokens_today"
-        case sessionsToday = "sessions_today"
-        case costTodayUSD  = "cost_today_usd"
-        case costIsEstimated = "cost_is_estimated"
         case limits
         // by_project / context intentionally omitted — not needed by the UI.
     }

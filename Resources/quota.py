@@ -680,30 +680,6 @@ def codex():
     return len(files_recent), (tokens_today or None), last, limits, by_project, context
 
 
-def codex_cost_today():
-    """Best-effort Codex USD estimate from last-24h token_count totals.
-
-    Codex sessions expose cumulative per-file input/cached/output tokens. Pricing
-    uses GPT-5.4 short-context API rates as an estimate; subscriptions remain
-    quota-based, not direct per-token billing.
-    """
-    input_rate = 1.25
-    cached_rate = 0.13
-    output_rate = 7.50
-    total = 0.0
-    found = False
-    for p in _codex_recent_rollout_files(hours=24):
-        info, _, _ = _codex_last_token_count(p)
-        usage = (info or {}).get("total_token_usage") or {}
-        if not usage:
-            continue
-        input_tokens = usage.get("input_tokens") or 0
-        cached_tokens = usage.get("cached_input_tokens") or 0
-        output_tokens = usage.get("output_tokens") or 0
-        uncached = max(input_tokens - cached_tokens, 0)
-        total += (uncached * input_rate + cached_tokens * cached_rate + output_tokens * output_rate) / 1_000_000
-        found = True
-    return total if found else None
 
 
 def fmt_tokens(n):
@@ -1110,11 +1086,6 @@ def emit_json():
             # Additive key — existing consumers (kaku.lua status bar) read
             # tokens_today/sessions_today only and are unaffected.
             out[name]["limits"] = limits
-        if name == "codex":
-            cost = codex_cost_today()
-            if cost is not None:
-                out[name]["cost_today_usd"] = round(cost, 4)
-                out[name]["cost_is_estimated"] = True
         if by_project:
             out[name]["by_project"] = by_project
         if context:

@@ -1,6 +1,6 @@
 name: Release
 
-# Tag a version (e.g. `git tag v0.8.0 && git push origin v0.8.0`) to publish
+# Tag a version (e.g. `git tag vX.Y.Z && git push origin vX.Y.Z`) to publish
 # a source release with generated notes. No .app.zip — install builds from
 # source (see install.sh).
 on:

@@ -47,7 +47,7 @@ sprites, Live2D motions, or pet states.
 | `animationState` | Meaning | Suggested Pet Behavior |
 | --- | --- | --- |
 | `idle` | Quota healthy and not rising | Calm idle |
-| `running` | Usage is increasing | Working / focused animation |
+| `running` | Recent quota percentage samples are increasing | Working / focused animation |
 | `review` | Quota pressure, usually >=80% | Attention / review animation |
 | `waiting` | Quota near limit or no provider data yet | Waiting / asking animation |
 | `failed` | Kaji could not refresh data | Failed / confused animation |

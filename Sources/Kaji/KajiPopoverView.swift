@@ -561,7 +561,6 @@ struct KajiPopoverView: View {
             if shown.isEmpty {
                 emptyQuota
             } else {
-                quotaSummary
                 ForEach(shown.prefix(4)) { provider in
                     quotaRow(provider)
                 }
@@ -570,64 +569,58 @@ struct KajiPopoverView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
-    private var quotaSummary: some View {
-        HStack(spacing: 8) {
-            miniStat("Today", totalTokensToday.map(tokenText) ?? "\u{2014}", "tokens")
-            miniStat("Cost", costText(totalCostToday, estimated: totalCostIsEstimated), "today")
-            miniStat("Pressure", percent(totalPressure), "5h max")
-        }
-    }
 
     private func quotaRow(_ provider: ProviderView) -> some View {
         let windows = CursorLimitsLogic.windowLabels(for: provider.id)
-        let secondary = provider.id == "cursor"
-            ? windows.secondary
-            : "7d"
-        return VStack(alignment: .leading, spacing: 5) {
+        let secondary = provider.id == "cursor" ? windows.secondary : "7d"
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 ProviderLogo(key: provider.id, color: provider.isNearLimit ? t.amber : t.gold, size: 12)
                 Text(provider.displayName)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(t.cream)
                     .lineLimit(1)
-                Spacer(minLength: 6)
-                Text(percent(provider.fiveHourPercent))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(provider.isNearLimit ? t.amber : t.gold)
             }
-            progressBar(provider.usedFraction, color: provider.isNearLimit ? t.amber : t.gold)
-            HStack(spacing: 6) {
-                Text(windows.primary)
-                Text(ResetFormat.short(provider.resetDate))
-                    .foregroundColor(t.gold.opacity(0.9))
-                Spacer(minLength: 6)
-                // Cursor is limits-only: omit today token/cost (spec §5.6).
-                if provider.id != "cursor" {
-                    if let tokens = provider.tokensToday {
-                        Text(tokenText(tokens))
-                            .foregroundColor(t.gold.opacity(0.9))
-                    }
-                    if let cost = provider.costTodayUSD {
-                        Text("·")
-                        Text(costText(cost, estimated: provider.costIsEstimated))
-                            .foregroundColor(t.gold.opacity(0.9))
-                    }
-                    Text("·")
-                }
-                Text(secondary)
-                Text(percent(provider.weekPercent))
-                    .foregroundColor(provider.weekNearLimit ? t.amber : t.gold.opacity(0.9))
+            if let value = provider.fiveHourPercent {
+                quotaWindowRow(
+                    label: windows.primary,
+                    value: value,
+                    resetDate: provider.resetDate,
+                    nearLimit: provider.isNearLimit
+                )
             }
-            .font(.system(size: 9.5, weight: .medium, design: .rounded))
-            .foregroundColor(t.mute)
-            if provider.id != "cursor", !provider.tokenHistory.isEmpty {
-                SparklineView(values: provider.tokenHistory, color: provider.isNearLimit ? t.amber : t.gold, track: t.track)
-                    .frame(height: 18)
+            if let value = provider.weekPercent {
+                quotaWindowRow(
+                    label: secondary,
+                    value: value,
+                    resetDate: provider.weekResetDate,
+                    nearLimit: provider.weekNearLimit
+                )
             }
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+    }
+
+    private func quotaWindowRow(label: String, value: Double, resetDate: Date?, nearLimit: Bool) -> some View {
+        let color = nearLimit ? t.amber : t.gold
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Text(label)
+                    .foregroundColor(t.mute)
+                Text("·")
+                    .foregroundColor(t.ash)
+                Text(ResetFormat.phrase(resetDate, prefs.language))
+                    .foregroundColor(t.gold.opacity(0.9))
+                Spacer(minLength: 6)
+                Text(percent(value))
+                    .fontWeight(.bold)
+                    .monospacedDigit()
+                    .foregroundColor(color)
+            }
+            .font(.system(size: 9.5, weight: .medium, design: .rounded))
+            progressBar(min(max(value / 100, 0), 1), color: color)
+        }
     }
 
     private var emptyQuota: some View {
@@ -652,19 +645,10 @@ struct KajiPopoverView: View {
                 .frame(maxWidth: .infinity, minHeight: 160, alignment: .center)
         } else {
             VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(workPrimaryClock)
-                        .font(.system(size: 30, weight: .bold, design: .rounded))
-                        .monospacedDigit()
-                        .foregroundColor(workSession.phase == .breakDue ? t.amber : t.cream)
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 3) {
-                        Text("\(prefs.focusMinutes)m / \(prefs.breakMinutes)m")
-                        Text("Skip \(workSession.skipCountToday)")
-                    }
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                }
+                Text(workPrimaryClock)
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(workSession.phase == .breakDue ? t.amber : t.cream)
                 progressBar(workSession.workProgress,
                             color: workSession.phase == .breakDue ? t.amber : t.gold)
                 rhythmControls
@@ -1776,27 +1760,6 @@ struct KajiPopoverView: View {
         .buttonStyle(.plain)
     }
 
-    private func miniStat(_ title: String, _ value: String, _ caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title)
-                .font(.system(size: 9, weight: .semibold, design: .rounded))
-                .foregroundColor(t.mute)
-            Text(value)
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundColor(t.cream)
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-            Text(caption)
-                .font(.system(size: 8.5, weight: .medium, design: .rounded))
-                .foregroundColor(t.ash)
-                .lineLimit(1)
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.62)))
-    }
 
     private func progressBar(_ value: Double, color: Color) -> some View {
         GeometryReader { geo in
@@ -1823,120 +1786,7 @@ struct KajiPopoverView: View {
         systemMonitor.snapshot.hasSample ? "\(Int(value.rounded()))%" : "..."
     }
 
-    private var totalTokensToday: Int? {
-        let vals = shown.compactMap(\.tokensToday)
-        guard !vals.isEmpty else { return nil }
-        return vals.reduce(0, +)
-    }
-
-    private var totalPressure: Double? {
-        shown.compactMap(\.fiveHourPercent).max()
-    }
-
-    private var totalCostToday: Double? {
-        let costs = shown.compactMap(\.costTodayUSD)
-        guard !costs.isEmpty else { return nil }
-        return costs.reduce(0, +)
-    }
-
-
-    private var totalCostIsEstimated: Bool {
-        shown.contains { $0.costTodayUSD != nil && $0.costIsEstimated }
-    }
-
-    private func tokenText(_ value: Int) -> String {
-        if value >= 1_000_000 {
-            return String(format: "%.1fM", Double(value) / 1_000_000)
-        }
-        if value >= 1_000 {
-            return String(format: "%.1fK", Double(value) / 1_000)
-        }
-        return "\(value)"
-    }
-
-    private func usdText(_ value: Double?) -> String {
-        guard let value else { return "\u{2014}" }
-        if value < 0.01 {
-            return String(format: "$%.3f", value)
-        }
-        return String(format: "$%.2f", value)
-    }
-    private func costText(_ value: Double?, estimated: Bool) -> String {
-        let value = usdText(value)
-        return estimated && value != "\u{2014}" ? "\u{2248}\(value)" : value
-    }
 
 
 }
 
-private struct SparklineView: View {
-    let values: [Double]
-    let color: Color
-    let track: Color
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .fill(track.opacity(0.35))
-                if normalizedSamples.count < 2 {
-                    dottedEmpty(in: geo.size)
-                        .fill(color.opacity(0.45))
-                } else {
-                    sparkPath(in: geo.size, filled: true)
-                        .fill(
-                            LinearGradient(colors: [color.opacity(0.22), color.opacity(0.02)],
-                                           startPoint: .top,
-                                           endPoint: .bottom)
-                        )
-                    sparkPath(in: geo.size, filled: false)
-                        .stroke(color, style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
-                }
-            }
-        }
-    }
-
-    private func sparkPath(in size: CGSize, filled: Bool) -> Path {
-        let samples = normalizedSamples
-        var path = Path()
-        guard !samples.isEmpty else { return path }
-        let step = samples.count <= 1 ? 0 : size.width / CGFloat(samples.count - 1)
-        if filled {
-            path.move(to: CGPoint(x: 0, y: size.height))
-        }
-        for (index, sample) in samples.enumerated() {
-            let x = CGFloat(index) * step
-            let y = size.height - CGFloat(sample) * size.height
-            if index == 0 && !filled {
-                path.move(to: CGPoint(x: x, y: y))
-            } else {
-                path.addLine(to: CGPoint(x: x, y: y))
-            }
-        }
-        if filled {
-            path.addLine(to: CGPoint(x: size.width, y: size.height))
-            path.closeSubpath()
-        }
-        return path
-    }
-
-    private var normalizedSamples: [Double] {
-        let raw = values.suffix(24)
-        guard raw.count >= 2 else { return [] }
-        let minValue = raw.min() ?? 0
-        let maxValue = raw.max() ?? 0
-        let span = max(maxValue - minValue, 1)
-        return raw.map { min(max(($0 - minValue) / span, 0.08), 1) }
-    }
-
-    private func dottedEmpty(in size: CGSize) -> Path {
-        var path = Path()
-        let count = 9
-        for index in 0..<count {
-            let x = CGFloat(index) * size.width / CGFloat(count - 1)
-            let y = size.height * 0.62
-            path.addEllipse(in: CGRect(x: x - 1.3, y: y - 1.3, width: 2.6, height: 2.6))
-        }
-        return path
-    }
-}
