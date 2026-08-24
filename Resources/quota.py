@@ -102,27 +102,44 @@ def ago(ts: float) -> str:
 
 # ── live account limits (claude oauth endpoint / codex app-server) ──────────
 # Both report SERVER-side window utilization: five_hour + seven_day, 0-100.
-# Cached on disk for LIMITS_TTL secs: the claude endpoint 429s under ~180s
-# polling, and spawning codex app-server per call is not free. Fetch failures
-# serve the stale cache (better an old number than none). Set
-# HELM_QUOTA_OFFLINE=1 to disable live calls entirely (tests, air-gapped).
+# Cached on disk to avoid polling provider endpoints on every 30-second UI
+# refresh. Fetch failures serve stale data; HTTP Retry-After is persisted so
+# app restarts do not keep a rate-limited OAuth token in a retry loop.
 CACHE_DIR = HOME / ".helm" / "sessions"
 LIMITS_TTL = 180
+CLAUDE_LIMITS_TTL = 3600
 
 
-def _limits_cached(name, fetch):
+def _limits_cached(name, fetch, ttl=LIMITS_TTL):
     path = CACHE_DIR / name
+    retry_path = path.with_name(path.name + ".retry-at")
     try:
-        if time.time() - path.stat().st_mtime < LIMITS_TTL:
+        if time.time() - path.stat().st_mtime < ttl:
             return json.loads(path.read_text())
     except Exception:
         pass
+    retry_at = 0
+    try:
+        retry_at = float(retry_path.read_text())
+    except Exception:
+        pass
     data = None
-    if not os.environ.get("HELM_QUOTA_OFFLINE"):
+    if not os.environ.get("HELM_QUOTA_OFFLINE") and time.time() >= retry_at:
         try:
             data = fetch()
-        except Exception:
-            data = None
+            retry_path.unlink(missing_ok=True)
+        except Exception as exc:
+            retry_after = None
+            try:
+                retry_after = float(exc.headers.get("Retry-After"))
+            except Exception:
+                pass
+            if retry_after is not None:
+                try:
+                    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+                    retry_path.write_text(str(time.time() + max(retry_after, ttl)))
+                except Exception:
+                    pass
     if data:
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -140,11 +157,25 @@ def _limits_cached(name, fetch):
         return None
 
 
+def _usable_claude_token(credentials):
+    """Return an unexpired access token from a Claude credential object."""
+    try:
+        oauth = credentials["claudeAiOauth"]
+        expires_at = float(oauth.get("expiresAt") or 0) / 1000.0
+        if expires_at <= time.time() + 60:
+            return None
+        return oauth.get("accessToken") or None
+    except Exception:
+        return None
+
+
 def _claude_oauth_token():
-    """Access token from ~/.claude/.credentials.json or the macOS keychain."""
+    """Prefer the first unexpired credential; legacy files can linger for months."""
     try:
         d = json.loads((HOME / ".claude" / ".credentials.json").read_text())
-        return d["claudeAiOauth"]["accessToken"]
+        token = _usable_claude_token(d)
+        if token:
+            return token
     except Exception:
         pass
     try:
@@ -152,10 +183,33 @@ def _claude_oauth_token():
             ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
             capture_output=True, text=True, timeout=5)
         if pr.returncode == 0 and pr.stdout.strip():
-            return json.loads(pr.stdout)["claudeAiOauth"]["accessToken"]
+            return _usable_claude_token(json.loads(pr.stdout))
     except Exception:
         pass
     return None
+
+
+def _claude_user_agent():
+    """Match the installed Claude Code version; stale versions are rate-limited."""
+    candidates = [
+        HOME / ".local" / "bin" / "claude",
+        HOME / ".claude" / "local" / "claude",
+        Path("/opt/homebrew/bin/claude"),
+        Path("/usr/local/bin/claude"),
+    ]
+    for executable in candidates:
+        if not executable.is_file():
+            continue
+        try:
+            pr = subprocess.run(
+                [str(executable), "--version"],
+                capture_output=True, text=True, timeout=5)
+            version = pr.stdout.strip().split()[0]
+            if pr.returncode == 0 and version:
+                return "claude-code/" + version
+        except Exception:
+            pass
+    return "claude-code/2.1.241"
 
 
 def _fetch_claude_limits():
@@ -168,8 +222,8 @@ def _fetch_claude_limits():
         headers={
             "Authorization": "Bearer " + token,
             "anthropic-beta": "oauth-2025-04-20",
-            # Omitting a claude-code UA gets a persistent 429.
-            "User-Agent": "claude-code/2.1.90",
+            # Anthropic rate-limits stale or missing claude-code user agents.
+            "User-Agent": _claude_user_agent(),
             "Content-Type": "application/json",
         })
     with urllib.request.urlopen(req, timeout=10) as r:
@@ -185,7 +239,11 @@ def _fetch_claude_limits():
 
 
 def claude_limits():
-    return _limits_cached("claude-limits-cache.json", _fetch_claude_limits)
+    return _limits_cached(
+        "claude-limits-cache.json",
+        _fetch_claude_limits,
+        ttl=CLAUDE_LIMITS_TTL,
+    )
 
 
 # ── Cursor account period usage (unofficial DashboardService) ───────────────

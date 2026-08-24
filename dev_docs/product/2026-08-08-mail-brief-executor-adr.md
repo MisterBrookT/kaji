@@ -2,7 +2,6 @@
 
 > 日期：2026-08-08  
 > 状态：Accepted（2026-08-08；同日增补 Inbox snapshot 与 Gmail triage actions）  
-> 关联 PRD：[2026-08-08-mail-brief-prd.md](./2026-08-08-mail-brief-prd.md)
 
 ## Context
 

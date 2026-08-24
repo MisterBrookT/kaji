@@ -35,7 +35,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let aiNewsStore = AIHotNewsStore()
     private let mailBriefStore = MailBriefStore()
     private var breakWindows: [NSWindow] = []
-    private var breakSceneSeed: UInt64?
     private var breakWatchdogTimer: Timer?
     private var petStateTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -617,14 +616,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let mainScreen = NSScreen.main
-        let sceneSeed = breakSceneSeed ?? UInt64.random(in: UInt64.min...UInt64.max)
-        breakSceneSeed = sceneSeed
-        let scene = BreakSceneModel.scene(sessionSeed: sceneSeed)
         breakWindows = NSScreen.screens.map { screen in
             let isPrimary = screen == mainScreen
-            let view = BreakOverlayView(prefs: prefs,
-                                        workSession: workSession,
-                                        scene: scene,
+            let view = BreakOverlayView(workSession: workSession,
+                                        prefs: prefs,
+                                        scene: .windowRain,
                                         isPrimary: isPrimary,
                                         onSkip: { [weak self] in self?.workSession.skipBreak() })
                 .ignoresSafeArea()
@@ -664,7 +660,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func closeBreakOverlay() {
         breakWindows.forEach { $0.close() }
         breakWindows.removeAll()
-        breakSceneSeed = nil
     }
 }
 

@@ -21,22 +21,33 @@ swiftc -O -parse-as-library Sources/KajiCore/*.swift \
   -emit-library -o /tmp/libKajiCore.dylib \
   -target "$TARGET"
 
+echo "==> compiling KajiSleepSupport module"
+swiftc -O -parse-as-library Sources/KajiSleepSupport/*.swift \
+  -module-name KajiSleepSupport \
+  -emit-module -emit-module-path "$MOD/KajiSleepSupport.swiftmodule" \
+  -emit-library -o /tmp/libKajiSleepSupport.dylib \
+  -target "$TARGET"
+
 # Compile every app source EXCEPT main.swift (its @main collides with the harness's).
 FILES=$(ls Sources/Kaji/*.swift | grep -v 'main.swift')
 
 echo "==> compiling snapshot harness"
 swiftc -O $FILES scripts/snapshot.swift \
-  -I "$MOD" -L /tmp -lKajiCore \
+  -I "$MOD" -L /tmp -lKajiCore -lKajiSleepSupport \
   -Xlinker -rpath -Xlinker /tmp \
   -framework AppKit -framework SwiftUI -framework ServiceManagement \
   -o /tmp/kaji-snap -target "$TARGET"
 
-echo "==> rendering (light + dark${LANG_ARG:+, $LANG_ARG})"
-/tmp/kaji-snap both $LANG_ARG
-
-cp /tmp/popover-light.png dev_docs/assets/gauge-light.png
-cp /tmp/popover-dark.png  dev_docs/assets/gauge-dark.png
-cp /tmp/status-light.png  dev_docs/assets/menubar-light.png
-cp /tmp/status-dark.png   dev_docs/assets/menubar-dark.png
-
-echo "==> wrote dev_docs/assets/{gauge,menubar}-{light,dark}.png"
+if [[ "$LANG_ARG" == "goals" || "$LANG_ARG" == "work" || "$LANG_ARG" == "break" ]]; then
+  echo "==> rendering $LANG_ARG dark verification"
+  /tmp/kaji-snap dark "$LANG_ARG" zh
+  echo "==> wrote /tmp/$LANG_ARG-dark.png"
+else
+  echo "==> rendering (light + dark${LANG_ARG:+, $LANG_ARG})"
+  /tmp/kaji-snap both $LANG_ARG
+  cp /tmp/popover-light.png dev_docs/assets/gauge-light.png
+  cp /tmp/popover-dark.png  dev_docs/assets/gauge-dark.png
+  cp /tmp/status-light.png  dev_docs/assets/menubar-light.png
+  cp /tmp/status-dark.png   dev_docs/assets/menubar-dark.png
+  echo "==> wrote dev_docs/assets/{gauge,menubar}-{light,dark}.png"
+fi

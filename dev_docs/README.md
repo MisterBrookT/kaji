@@ -1,113 +1,52 @@
 # Internal docs (`dev_docs`)
 
-维护者 / agent 的工作笔记。**不是**公开 GitHub 文档站。
+维护者与 agent 的长期决策库，不是功能流水账，也不是公开文档站。
 
-公开文档暂缓。方向约束：[AGENTS.md](../AGENTS.md)。
+只保留四类内容：
 
-文档不搞中英对照：一份就够，中英混用按写作者方便。
+- 产品方向与架构选择；
+- 稳定的设计语言；
+- 外部系统契约；
+- 发布与分发约束。
 
-## Review checklist
-
-| Status | Doc |
-| --- | --- |
-| Done | [design/design-language.md](design/design-language.md) |
-| Done | [design/homepage-shot-guide.zh.md](design/homepage-shot-guide.zh.md) |
-| Done | [product/lean-module-host.md](product/lean-module-host.md) |
-| Done | [product/architecture-modules.md](product/architecture-modules.md) |
-| Done | [integrate/pet-bridge.md](integrate/pet-bridge.md) |
-| Done | [integrate/sleep-helper.md](integrate/sleep-helper.md) |
-| Done | [integrate/localization.md](integrate/localization.md) |
-| Done | [ship/distribution.md](ship/distribution.md) |
-| **Approved** | [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) — 已落地 |
-| **Approved** | [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) — focus/break 剩余数字；无 BREAK 文案 |
-| **Draft** | [specs/2026-07-25-four-language-baseline.md](specs/2026-07-25-four-language-baseline.md) — English 默认；EN / 中文 / PT-BR / ES；保留老用户选择 |
-| **Approved** | [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) — 方案 B；已落地 |
-| **Approved** | [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) — Cursor 月度外 API / 内 Auto；v0.6.1 |
-| **Approved** | [specs/2026-07-31-calm-break.md](specs/2026-07-31-calm-break.md) — 日系自然动态休息页；无 Widget |
-| **Approved** | [specs/2026-08-01-three-horizon-goals.md](specs/2026-08-01-three-horizon-goals.md) — 今天 / 本周 / 长期三层计划 |
-| **Approved** | [specs/2026-08-01-interactive-menu-bar-slots.md](specs/2026-08-01-interactive-menu-bar-slots.md) — Goals 今日进度；Quota / Work / Goals 分区直达 |
-| **Approved** | [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) — 纯数字今日进度；三层同屏 |
-| **Approved** | [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) — Fixed 整体目标 + Vision |
-| **Approved** | [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) — 轻量分类符号与完成态 |
-| **Approved** | [specs/2026-08-03-goals-state-cleanup.md](specs/2026-08-03-goals-state-cleanup.md) — 单一状态、legacy 清理、损坏诊断 |
-| **Approved** | [specs/2026-08-04-goal-creation-and-settings-window.md](specs/2026-08-04-goal-creation-and-settings-window.md) — Goals 统一创建面板 + 分类设置窗口 |
-| **Approved** | [specs/2026-08-04-goals-entry-and-daily-disk-insights.md](specs/2026-08-04-goals-entry-and-daily-disk-insights.md) — Goals 入口收紧 + 每日文件类型磁盘洞察 |
-| **Approved** | [specs/2026-08-04-goals-schedule-notes-and-icons.md](specs/2026-08-04-goals-schedule-notes-and-icons.md) — Schedule 多星期 + 可选说明 + 三形图标 |
-| **Approved** | [specs/2026-08-04-disk-display-cleanup.md](specs/2026-08-04-disk-display-cleanup.md) — GB/MB 单位 + 删除建议区 |
-| **Approved** | [specs/2026-08-05-ai-news-module.md](specs/2026-08-05-ai-news-module.md) — AI HOT Top 10 第五模块 |
-| **Approved** | [specs/2026-08-05-ai-news-list-hover-polish.md](specs/2026-08-05-ai-news-list-hover-polish.md) — 一级信息减法 + 稳定 hover 切换 |
-| **Approved** | [specs/2026-08-05-settings-information-architecture-polish.md](specs/2026-08-05-settings-information-architecture-polish.md) — Quota / AI News 分栏；Goals 暂留空 |
-| **Approved** | [specs/2026-08-05-local-mcp.md](specs/2026-08-05-local-mcp.md) — v0.7 localhost MCP 读写 Goals |
-| **Approved** | [specs/2026-08-08-goal-title-two-line-layout.md](specs/2026-08-08-goal-title-two-line-layout.md) — Goal 标题未点击时也显示最多两行 |
-| **Approved** | [specs/2026-08-08-mail-brief-module.md](specs/2026-08-08-mail-brief-module.md) — Gmail 每日 AI 简报 |
-| Optional | [design/palette.html](design/palette.html) |
+已落地 feature、bug fix、单次 UI 调整和逐版本 release notes 不在这里存档；行为以代码与测试为准，版本变化由 GitHub Releases 自动生成。
 
 ## Catalog
 
 ### Product
 
-| Doc | Notes |
+| Doc | Decision |
 | --- | --- |
-| [product/lean-module-host.md](product/lean-module-host.md) | 小而美优先的模块化方向 |
-| [product/architecture-modules.md](product/architecture-modules.md) | 增量模块主机架构草图 |
-| [product/vision.md](product/vision.md) | 当前 Vision：AI 时代 Mac 上离个人最近的状态与控制层 |
-| [product/2026-08-05-popover-visualization-decision.md](product/2026-08-05-popover-visualization-decision.md) | Popover / 圆环方案讨论与“暂时不重构”决策 |
-| [product/2026-08-05-ai-news-prd.md](product/2026-08-05-ai-news-prd.md) | AI News 第五模块 PRD（Draft） |
-| [product/2026-08-08-mail-brief-prd.md](product/2026-08-08-mail-brief-prd.md) | Gmail 每日 AI Mail Brief PRD（Approved） |
-| [product/2026-08-08-mail-brief-executor-adr.md](product/2026-08-08-mail-brief-executor-adr.md) | Gmail OAuth、daily scheduler 与 Codex 隔离执行 ADR（Accepted） |
+| [product/vision.md](product/vision.md) | Kaji 在 AI 时代的长期位置 |
+| [product/lean-module-host.md](product/lean-module-host.md) | 小而美优先、能力可裁剪 |
+| [product/architecture-modules.md](product/architecture-modules.md) | 模块主机边界与增量演进 |
+| [product/2026-08-05-popover-visualization-decision.md](product/2026-08-05-popover-visualization-decision.md) | Popover 与圆环的可视化架构选择 |
+| [product/2026-08-08-mail-brief-executor-adr.md](product/2026-08-08-mail-brief-executor-adr.md) | Gmail、Codex 与本地数据的执行边界 |
 
 ### Design
 
-| Doc | Notes |
+| Doc | Decision |
 | --- | --- |
-| [design/design-language.md](design/design-language.md) | 黑白灰 Mono |
-| [design/homepage-shot-guide.zh.md](design/homepage-shot-guide.zh.md) | README 截图指南（内部） |
-| [design/palette.html](design/palette.html) | 色板页 |
+| [design/design-language.md](design/design-language.md) | 黑白灰 Mono 视觉语言 |
+| [design/palette.html](design/palette.html) | 视觉 token 参考 |
 
 ### Integrate
 
-| Doc | Notes |
+| Doc | Contract |
 | --- | --- |
-| [integrate/pet-bridge.md](integrate/pet-bridge.md) | `pet-state.json` contract |
+| [integrate/pet-bridge.md](integrate/pet-bridge.md) | `pet-state.json` bridge |
+| [integrate/sleep-helper.md](integrate/sleep-helper.md) | Sleep helper 边界 |
+| [integrate/localization.md](integrate/localization.md) | 本地化约束 |
 
 ### Ship
 
-| Doc | Notes |
+| Doc | Constraint |
 | --- | --- |
-| [ship/distribution.md](ship/distribution.md) | Unsigned / Gatekeeper / notarization; source-only releases |
-| [ship/releases/](ship/releases/) | Authored GitHub Release notes per tag (`vX.Y.Z.md`) |
-
-### Specs & plans
-
-| Doc | Notes |
-| --- | --- |
-| [specs/2026-07-24-lean-modules-v1.md](specs/2026-07-24-lean-modules-v1.md) | 已通过并落地 |
-| [specs/2026-07-24-work-status-slot.md](specs/2026-07-24-work-status-slot.md) | 已通过：focus/break 剩余 `MM:SS`，无 BREAK |
-| [specs/2026-07-24-mono-only.md](specs/2026-07-24-mono-only.md) | 已落地：方案 B，只留黑白灰 |
-| [specs/2026-07-24-cursor-quota.md](specs/2026-07-24-cursor-quota.md) | 已通过：外 API / 内 Auto；limits-only；默认可见 → v0.6.1 |
-| [specs/2026-07-31-calm-break.md](specs/2026-07-31-calm-break.md) | 已通过：日系自然动态休息页；无 Widget |
-| [specs/2026-08-01-three-horizon-goals.md](specs/2026-08-01-three-horizon-goals.md) | 已通过：今天 / 本周 / 长期三层计划 |
-| [specs/2026-08-01-interactive-menu-bar-slots.md](specs/2026-08-01-interactive-menu-bar-slots.md) | 已通过：Goals 今日进度；Quota / Work / Goals 分区直达 |
-| [specs/2026-08-01-goals-surface-v2.md](specs/2026-08-01-goals-surface-v2.md) | 已通过：纯数字今日进度；今天 / 本周 / 长期同屏 |
-| [specs/2026-08-03-goals-fixed-and-vision.md](specs/2026-08-03-goals-fixed-and-vision.md) | 已通过：Fixed 整体目标 + Vision |
-| [specs/2026-08-03-goal-tags.md](specs/2026-08-03-goal-tags.md) | 已通过：轻量分类符号与完成态 |
-| [specs/2026-08-03-goals-copy-cleanup.md](specs/2026-08-03-goals-copy-cleanup.md) | 已通过：Goals 解释文案减法 |
-| [specs/2026-08-03-goals-state-cleanup.md](specs/2026-08-03-goals-state-cleanup.md) | 已通过：单一状态、legacy 清理、损坏诊断 |
-| [specs/2026-08-04-goal-creation-and-settings-window.md](specs/2026-08-04-goal-creation-and-settings-window.md) | 已通过：Goals 统一创建面板 + 分类设置窗口 |
-| [specs/2026-08-04-goals-entry-and-daily-disk-insights.md](specs/2026-08-04-goals-entry-and-daily-disk-insights.md) | 已通过：Goals 入口收紧 + 每日文件类型磁盘洞察 |
-| [specs/2026-08-04-goals-schedule-notes-and-icons.md](specs/2026-08-04-goals-schedule-notes-and-icons.md) | 已通过：Schedule 多星期 + 可选说明 + 三形图标 |
-| [specs/2026-08-04-disk-display-cleanup.md](specs/2026-08-04-disk-display-cleanup.md) | 已通过：GB/MB 单位 + 删除建议区 |
-| [specs/2026-08-05-ai-news-module.md](specs/2026-08-05-ai-news-module.md) | 已通过：AI HOT Top 10、5h 刷新与 hover digest |
-| [specs/2026-08-05-ai-news-list-hover-polish.md](specs/2026-08-05-ai-news-list-hover-polish.md) | 已通过：来源移入详情、相邻 hover 即时切换 |
-| [specs/2026-08-05-settings-information-architecture-polish.md](specs/2026-08-05-settings-information-architecture-polish.md) | 已通过：Quota / AI News 职责拆分，Goals 只保留设置入口 |
-| [specs/2026-08-05-local-mcp.md](specs/2026-08-05-local-mcp.md) | 已通过：不改 v0.7 Goals UI，仅增加 localhost MCP |
-| [specs/2026-08-08-goal-title-two-line-layout.md](specs/2026-08-08-goal-title-two-line-layout.md) | 已通过：Goal 标题未点击时也显示最多两行 |
-| [specs/2026-08-08-mail-brief-module.md](specs/2026-08-08-mail-brief-module.md) | 已通过：Gmail 每日 AI 简报、Goal 转换与隔离执行 |
-| `plans/` | 可选；大任务 / 多 agent 零上下文时再用 |
+| [ship/distribution.md](ship/distribution.md) | 安装、签名、Gatekeeper 与发布链 |
 
 ### Assets
 
-[`assets/`](assets/)
+[`assets/`](assets/) 只存 README 与设计决策仍引用的图像资源。
 
 ## Layout
 
@@ -119,8 +58,6 @@ dev_docs/
   design/
   integrate/
   ship/
-  specs/
-  plans/
 ```
 
-No public Pages landing — README + Releases only.
+No public Pages landing — repo face is README + GitHub Releases.

@@ -4,6 +4,70 @@ public enum MailBriefBucket: String, Codable, Sendable { case act, watch, quiet 
 public enum MailBriefAction: String, Codable, Sendable { case reply, createGoal, watch, none }
 public enum MailBriefConfidence: String, Codable, Sendable { case low, medium, high }
 
+public enum MailBriefRunTrigger: String, Codable, Sendable { case automatic, manual, catchUp }
+public enum MailBriefRunStatus: String, Codable, Sendable { case running, succeeded, failed, cancelled }
+public enum MailBriefRunStage: String, Codable, Sendable {
+    case connecting, fetching, classifying, publishing, finished
+}
+
+public struct MailBriefRunRecord: Codable, Equatable, Identifiable, Sendable {
+    public static let currentSchemaVersion = 1
+    public let schemaVersion: Int
+    public let id: UUID
+    public let trigger: MailBriefRunTrigger
+    public let startedAt: Date
+    public var finishedAt: Date?
+    public var status: MailBriefRunStatus
+    public var stage: MailBriefRunStage
+    public let modelID: String
+    public let batchSize: Int
+    public let concurrency: Int
+    public var snapshotInboxCount: Int?
+    public var newOrChangedCount: Int?
+    public var reusedCount: Int?
+    public var classifiedCount: Int
+    public var publishedCount: Int?
+    public var safeErrorCode: String?
+
+    public init(id: UUID = UUID(), trigger: MailBriefRunTrigger, startedAt: Date = Date(),
+                finishedAt: Date? = nil, status: MailBriefRunStatus = .running,
+                stage: MailBriefRunStage = .connecting, modelID: String, batchSize: Int,
+                concurrency: Int, snapshotInboxCount: Int? = nil,
+                newOrChangedCount: Int? = nil, reusedCount: Int? = nil,
+                classifiedCount: Int = 0, publishedCount: Int? = nil,
+                safeErrorCode: String? = nil) {
+        self.schemaVersion = Self.currentSchemaVersion; self.id = id; self.trigger = trigger
+        self.startedAt = startedAt; self.finishedAt = finishedAt; self.status = status; self.stage = stage
+        self.modelID = modelID; self.batchSize = batchSize; self.concurrency = concurrency
+        self.snapshotInboxCount = snapshotInboxCount; self.newOrChangedCount = newOrChangedCount
+        self.reusedCount = reusedCount; self.classifiedCount = classifiedCount
+        self.publishedCount = publishedCount; self.safeErrorCode = safeErrorCode
+    }
+}
+
+public enum MailBriefRunHistory {
+    public static let limit = 7
+
+    public static func normalized(_ records: [MailBriefRunRecord], now: Date = Date()) -> [MailBriefRunRecord] {
+        var seen = Set<UUID>()
+        return records.sorted { $0.startedAt > $1.startedAt }.compactMap { value in
+            guard seen.insert(value.id).inserted else { return nil }
+            var record = value
+            if record.status == .running {
+                record.status = .cancelled; record.stage = .finished; record.finishedAt = now
+                record.safeErrorCode = "interrupted"
+            }
+            return record
+        }.prefix(limit).map { $0 }
+    }
+
+    public static func upserting(_ record: MailBriefRunRecord,
+                                 into records: [MailBriefRunRecord]) -> [MailBriefRunRecord] {
+        Array(([record] + records.filter { $0.id != record.id })
+            .sorted { $0.startedAt > $1.startedAt }.prefix(limit))
+    }
+}
+
 public enum MailBriefModel: String, Codable, CaseIterable, Sendable {
     case spark = "gpt-5.3-codex-spark"
     case luna = "gpt-5.6-luna"

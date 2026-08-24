@@ -14,8 +14,10 @@ final class MailBriefStore: ObservableObject {
     @Published private(set) var nextDue: Date?
     @Published private(set) var syncProgress: (completed: Int, total: Int)?
     @Published private(set) var pendingThreadIDs: Set<String> = []
+    @Published private(set) var runRecords: [MailBriefRunRecord] = []
 
     private let cacheURL: URL
+    private let runHistoryURL: URL
     private var enabled = false
     private var timer: Timer?
     private var runTask: Task<Void, Never>?
@@ -27,7 +29,10 @@ final class MailBriefStore: ObservableObject {
 
     init(cacheURL: URL? = nil) {
         self.cacheURL = cacheURL ?? Self.defaultCacheURL()
+        self.runHistoryURL = self.cacheURL.deletingLastPathComponent()
+            .appendingPathComponent("mail-brief-runs-v1.json")
         loadCache()
+        loadRunHistory()
     }
 
     var entries: [MailBriefEntry] { generation?.entries ?? [] }
@@ -88,6 +93,10 @@ final class MailBriefStore: ObservableObject {
         }
         state = .running; lastError = nil
         let generationModel = model
+        let runID = UUID()
+        updateRun(MailBriefRunRecord(id: runID, trigger: automatic ? .automatic : .manual,
+                                     modelID: generationModel.rawValue, batchSize: batchSize,
+                                     concurrency: concurrency))
         runTask = Task { [weak self] in
             guard let self else { return }
             do {
@@ -95,6 +104,7 @@ final class MailBriefStore: ObservableObject {
                       let clientSecret = Bundle.main.object(forInfoDictionaryKey: "KajiGoogleOAuthClientSecret") as? String,
                       !clientID.isEmpty, !clientSecret.isEmpty else { throw MailBriefError.oauth("Google OAuth client is not configured") }
                 let token = try await MailBriefCredentialStore.validAccessToken(clientID: clientID, clientSecret: clientSecret)
+                updateRun(id: runID) { $0.stage = .fetching }
                 let candidates = try await GmailMailBriefClient().fetchCandidates(accessToken: token)
                 syncProgress = (0, candidates.count)
                 let canReuse = generation?.classifierModelID == generationModel.rawValue
@@ -108,6 +118,12 @@ final class MailBriefStore: ObservableObject {
                     } else {
                         changed.append(candidate)
                     }
+                }
+                updateRun(id: runID) {
+                    $0.stage = .classifying
+                    $0.snapshotInboxCount = candidates.count
+                    $0.newOrChangedCount = changed.count
+                    $0.reusedCount = entries.count
                 }
                 syncProgress = (entries.count, candidates.count)
                 let day = MailBriefSchedulePolicy.decision(now: Date(), hour: hour, minute: minute,
@@ -127,6 +143,7 @@ final class MailBriefStore: ObservableObject {
                     for _ in 0..<min(concurrency, batches.count) { addNext() }
                     while let result = try await group.next() {
                         entries.append(contentsOf: result)
+                        updateRun(id: runID) { $0.classifiedCount += result.count }
                         syncProgress = (entries.count, candidates.count)
                         publishCheckpoint(day: day, inboxEntries: entries, inboxCount: candidates.count,
                                           model: generationModel)
@@ -134,16 +151,23 @@ final class MailBriefStore: ObservableObject {
                     }
                 }
                 guard !Task.isCancelled else { return }
+                updateRun(id: runID) { $0.stage = .publishing }
                 publishCheckpoint(day: day, inboxEntries: entries, inboxCount: candidates.count,
                                   model: generationModel, complete: true)
                 try saveCache()
+                updateRun(id: runID) {
+                    $0.status = .succeeded; $0.stage = .finished; $0.finishedAt = Date()
+                    $0.publishedCount = candidates.count
+                }
                 syncProgress = nil
                 state = .ready
             } catch is CancellationError {
+                finishRun(id: runID, status: .cancelled, errorCode: "cancelled")
                 state = generation == nil ? .scheduled : .ready
             } catch {
                 syncProgress = nil
                 lastError = Self.safeError(error)
+                finishRun(id: runID, status: .failed, errorCode: Self.safeErrorCode(error))
                 state = generation == nil ? .failed : .stale
             }
             runTask = nil
@@ -239,12 +263,18 @@ final class MailBriefStore: ObservableObject {
     }
 
     func disconnect(deleteBrief: Bool = false) {
-        MailBriefCredentialStore.delete(); timer?.invalidate(); runTask?.cancel(); runTask = nil
-        if deleteBrief { generation = nil; try? FileManager.default.removeItem(at: cacheURL) }
+        MailBriefCredentialStore.delete(); timer?.invalidate(); cancelActiveRun(); runTask?.cancel(); runTask = nil
+        if deleteBrief {
+            generation = nil; runRecords = []
+            try? FileManager.default.removeItem(at: cacheURL)
+            try? FileManager.default.removeItem(at: runHistoryURL)
+        }
         state = enabled ? .disconnected : .disabled
     }
 
-    func stop() { timer?.invalidate(); timer = nil; runTask?.cancel(); runTask = nil }
+    func stop() {
+        timer?.invalidate(); timer = nil; cancelActiveRun(); runTask?.cancel(); runTask = nil
+    }
 
     private func scheduleTimer(at date: Date) {
         timer?.invalidate()
@@ -265,6 +295,40 @@ final class MailBriefStore: ObservableObject {
         guard let generation else { return }
         try FileManager.default.createDirectory(at: cacheURL.deletingLastPathComponent(), withIntermediateDirectories: true)
         try JSONEncoder.mailBrief.encode(generation).write(to: cacheURL, options: .atomic)
+    }
+
+    private func loadRunHistory() {
+        guard let data = try? Data(contentsOf: runHistoryURL),
+              let stored = try? JSONDecoder.mailBrief.decode([MailBriefRunRecord].self, from: data) else { return }
+        runRecords = MailBriefRunHistory.normalized(stored)
+        try? saveRunHistory()
+    }
+
+    private func saveRunHistory() throws {
+        try FileManager.default.createDirectory(at: runHistoryURL.deletingLastPathComponent(),
+                                                withIntermediateDirectories: true)
+        try JSONEncoder.mailBrief.encode(runRecords).write(to: runHistoryURL, options: .atomic)
+    }
+
+    private func updateRun(_ record: MailBriefRunRecord) {
+        runRecords = MailBriefRunHistory.upserting(record, into: runRecords)
+        try? saveRunHistory()
+    }
+
+    private func updateRun(id: UUID, mutate: (inout MailBriefRunRecord) -> Void) {
+        guard var record = runRecords.first(where: { $0.id == id }), record.status == .running else { return }
+        mutate(&record); updateRun(record)
+    }
+
+    private func finishRun(id: UUID, status: MailBriefRunStatus, errorCode: String?) {
+        updateRun(id: id) {
+            $0.status = status; $0.stage = .finished; $0.finishedAt = Date(); $0.safeErrorCode = errorCode
+        }
+    }
+
+    private func cancelActiveRun() {
+        guard let active = runRecords.first(where: { $0.status == .running }) else { return }
+        finishRun(id: active.id, status: .cancelled, errorCode: "cancelled")
     }
 
     private func publishCheckpoint(day: String, inboxEntries: [MailBriefEntry], inboxCount: Int,
@@ -291,6 +355,15 @@ final class MailBriefStore: ObservableObject {
     private static func safeError(_ error: Error) -> String {
         if let value = error as? MailBriefError { return value.errorDescription }
         return "Mail Brief failed"
+    }
+    private static func safeErrorCode(_ error: Error) -> String {
+        guard let value = error as? MailBriefError else { return "unknown" }
+        return switch value {
+        case .notConnected, .oauth: "oauth"
+        case .invalidResponse: "gmail_invalid_response"
+        case .executorUnavailable: "codex_unavailable"
+        case .invalidOutput: "invalid_result"
+        }
     }
 }
 

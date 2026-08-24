@@ -135,18 +135,10 @@ struct KajiPopoverView: View {
             if pages.count > 1 {
                 arrow("chevron.left") { move(-1) }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(panelTitle)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .lineLimit(1)
-                if !panelSubtitle.isEmpty {
-                    Text(panelSubtitle)
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundColor(t.mute)
-                        .lineLimit(1)
-                }
-            }
+            Text(panelTitle)
+                .font(.system(size: 12.5, weight: .bold, design: .rounded))
+                .foregroundColor(t.cream)
+                .lineLimit(1)
             Spacer(minLength: 8)
             Text("\(pageIndex + 1)/\(max(pages.count, 1))")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -502,13 +494,9 @@ struct KajiPopoverView: View {
             fixedPlanStore.toggleCompletion(schedule)
         } label: {
             HStack(spacing: 8) {
-                tagIcon(
-                    GoalTagLogic.resolve(schedule.tag, title: schedule.title),
-                    filled: completed
-                )
-                    .foregroundColor(completed ? t.gold : t.mute)
+                completionIcon(isDone: completed)
                 Text(schedule.title)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .font(.system(size: 10.8, weight: .semibold, design: .rounded))
                     .foregroundColor(completed ? t.mute : t.cream)
                     .strikethrough(completed)
                     .lineLimit(2)
@@ -521,7 +509,7 @@ struct KajiPopoverView: View {
                 }
             }
             .padding(8)
-            .background(RoundedRectangle(cornerRadius: 8).fill(t.panel.opacity(0.75)))
+            .background(goalRowSurface(opacity: 0.92))
         }
         .buttonStyle(.plain)
         .onHover { inside in
@@ -585,7 +573,7 @@ struct KajiPopoverView: View {
     private var quotaSummary: some View {
         HStack(spacing: 8) {
             miniStat("Today", totalTokensToday.map(tokenText) ?? "\u{2014}", "tokens")
-            miniStat("Cost", usdText(totalCostToday), totalCostIsEstimated ? "est today" : "today")
+            miniStat("Cost", costText(totalCostToday, estimated: totalCostIsEstimated), "today")
             miniStat("Pressure", percent(totalPressure), "5h max")
         }
     }
@@ -622,7 +610,7 @@ struct KajiPopoverView: View {
                     }
                     if let cost = provider.costTodayUSD {
                         Text("·")
-                        Text(usdText(cost) + (provider.costIsEstimated ? " est" : ""))
+                        Text(costText(cost, estimated: provider.costIsEstimated))
                             .foregroundColor(t.gold.opacity(0.9))
                     }
                     Text("·")
@@ -654,45 +642,49 @@ struct KajiPopoverView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
     }
 
+    @ViewBuilder
     private var workPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(workPrimaryClock)
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundColor(workSession.phase == .breakDue ? t.amber : t.cream)
-                Spacer()
-                VStack(alignment: .trailing, spacing: 3) {
-                    Text("\(prefs.focusMinutes)m / \(prefs.breakMinutes)m")
-                    Text("Skip \(workSession.skipCountToday)")
-                }
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundColor(t.mute)
-            }
-            progressBar(workSession.phase == .breaking ? workSession.breakProgress : workSession.workProgress,
-                        color: workSession.phase == .breakDue ? t.amber : t.gold)
-            Text(workStatusText)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .foregroundColor(t.mute)
-                .lineLimit(2)
-                .frame(minHeight: 30, alignment: .topLeading)
-            rhythmControls
-            HStack(spacing: 8) {
-                chip(workSession.phase == .breaking ? "Break" : "Start Break", filled: true) {
-                    workSession.startBreak()
-                }
-                if prefs.allowBreakSkip {
-                    chip("Skip", filled: false) {
-                        workSession.skipBreak()
+        if workSession.phase == .breaking {
+            Text(workSession.breakClock)
+                .font(.system(size: 42, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(t.cream)
+                .frame(maxWidth: .infinity, minHeight: 160, alignment: .center)
+        } else {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(workPrimaryClock)
+                        .font(.system(size: 30, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(workSession.phase == .breakDue ? t.amber : t.cream)
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text("\(prefs.focusMinutes)m / \(prefs.breakMinutes)m")
+                        Text("Skip \(workSession.skipCountToday)")
                     }
-                    .disabled(workSession.phase == .working)
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
                 }
-                chip("Reset", filled: false) {
-                    workSession.resetWork()
+                progressBar(workSession.workProgress,
+                            color: workSession.phase == .breakDue ? t.amber : t.gold)
+                rhythmControls
+                HStack(spacing: 8) {
+                    chip("Start Break", filled: true) {
+                        workSession.startBreak()
+                    }
+                    if prefs.allowBreakSkip {
+                        chip("Skip", filled: false) {
+                            workSession.skipBreak()
+                        }
+                        .disabled(workSession.phase == .working)
+                    }
+                    chip("Reset", filled: false) {
+                        workSession.resetWork()
+                    }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
     private var rhythmControls: some View {
@@ -1146,7 +1138,7 @@ struct KajiPopoverView: View {
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Text("Vision")
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(t.cream)
                 Spacer()
             }
@@ -1201,7 +1193,7 @@ struct KajiPopoverView: View {
                     .frame(width: 96, alignment: .trailing)
                 }
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
+                .background(goalRowSurface(opacity: 0.82))
                 .contextMenu {
                     Button(vision.note.isEmpty ? "添加说明" : "编辑说明") {
                         shownGoalNoteID = vision.id
@@ -1244,7 +1236,7 @@ struct KajiPopoverView: View {
                     .frame(width: 96, alignment: .trailing)
                 }
                 .padding(8)
-                .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
+                .background(goalRowSurface(opacity: 0.82))
             }
         }
     }
@@ -1263,10 +1255,10 @@ struct KajiPopoverView: View {
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Text(title)
-                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
                     .foregroundColor(t.cream)
                 Text("\(completed)/\(total)")
-                    .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundColor(t.mute)
                     .monospacedDigit()
                 Spacer()
@@ -1274,15 +1266,14 @@ struct KajiPopoverView: View {
                     Button {
                         beginGoalCreation(.today)
                     } label: {
-                        Label("新建", systemImage: "plus")
-                            .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
                             .foregroundColor(t.mute)
-                            .padding(.horizontal, 10)
-                            .frame(height: 26)
+                            .frame(width: 26, height: 26)
                             .background(
-                                Capsule()
+                                Circle()
                                     .fill(Color.clear)
-                                    .overlay(Capsule().stroke(t.track, lineWidth: 1))
+                                    .overlay(Circle().stroke(t.track, lineWidth: 1))
                             )
                     }
                     .buttonStyle(.plain)
@@ -1416,10 +1407,10 @@ struct KajiPopoverView: View {
 
     private func goalRow(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
         HStack(spacing: 8) {
-            goalCompletionMenu(goal, horizon: horizon)
+            goalCompletionButton(goal, horizon: horizon)
             if goal.isDone {
                 Text(goal.title)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .font(.system(size: 10.8, weight: .semibold, design: .rounded))
                     .foregroundColor(t.mute)
                     .strikethrough()
                     .lineLimit(2)
@@ -1432,7 +1423,7 @@ struct KajiPopoverView: View {
                         set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
                     ), axis: .vertical)
                     .textFieldStyle(.plain)
-                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                    .font(.system(size: 10.8, weight: .semibold, design: .rounded))
                     .foregroundColor(t.cream)
                     .lineLimit(1...2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1441,7 +1432,7 @@ struct KajiPopoverView: View {
                         dailyGoals.removeIfBlank(goal, in: horizon)
                     }
                 } else {
-                    goalTitleLabel(goal.title, size: 11.5) {
+                    goalTitleLabel(goal.title, size: 10.8) {
                         focusedGoalID = goal.id
                     }
                 }
@@ -1465,10 +1456,19 @@ struct KajiPopoverView: View {
             .frame(width: 96, alignment: .trailing)
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+        .background(goalRowSurface(opacity: 0.92))
         .contextMenu {
             Button(goal.note.isEmpty ? "添加说明" : "编辑说明") {
                 shownGoalNoteID = goal.id
+            }
+            Menu("标签") {
+                ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
+                    Button {
+                        dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
+                    } label: {
+                        Label(tag.label, systemImage: tag.systemImage)
+                    }
+                }
             }
         }
         .popover(isPresented: Binding(
@@ -1548,33 +1548,29 @@ struct KajiPopoverView: View {
         .frame(width: 22, height: 22)
     }
 
-    private func goalCompletionMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
-        let selected = GoalTagLogic.resolve(goal.tag, title: goal.title)
-        return Menu {
-            ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
-                Button {
-                    dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
-                } label: {
-                    Image(systemName: tag.systemImage)
-                        .accessibilityLabel(tag.label)
-                }
-            }
-        } label: {
-            tagIcon(selected, filled: goal.isDone)
-                .foregroundColor(goal.isDone ? t.gold : t.mute)
-        } primaryAction: {
+    private func goalCompletionButton(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        Button {
             dailyGoals.toggle(goal, in: horizon)
+        } label: {
+            completionIcon(isDone: goal.isDone)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .frame(width: 22, height: 22)
+        .buttonStyle(.plain)
+        .help(goal.isDone ? "标记为未完成" : "标记为完成")
+        .accessibilityLabel(goal.isDone ? "标记为未完成" : "标记为完成")
     }
 
-    private func tagIcon(_ tag: GoalTag, filled: Bool = false) -> some View {
-        let style = GoalMarkLogic.style(for: tag)
-        return Image(systemName: style.systemImage)
-            .font(.system(size: 9.5, weight: .regular))
-            .foregroundColor(filled ? t.gold : t.mute)
+    private func completionIcon(isDone: Bool) -> some View {
+        Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+            .font(.system(size: 12, weight: .medium))
+            .foregroundColor(isDone ? t.gold : t.mute)
+            .frame(width: 22, height: 22)
+            .contentShape(Rectangle())
+    }
+
+    private func tagIcon(_ tag: GoalTag) -> some View {
+        Image(systemName: tag.systemImage)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(t.mute)
             .frame(width: 16, height: 16)
     }
 
@@ -1611,7 +1607,16 @@ struct KajiPopoverView: View {
             .frame(height: 14)
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.55)))
+        .background(goalRowSurface(opacity: 0.7))
+    }
+
+    private func goalRowSurface(opacity: Double) -> some View {
+        RoundedRectangle(cornerRadius: 8, style: .continuous)
+            .fill(t.panel.opacity(opacity))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(t.track.opacity(0.55), lineWidth: 0.6)
+            )
     }
 
     private func goalHeatColor(_ ratio: Double, empty: Bool) -> Color {
@@ -1655,20 +1660,6 @@ struct KajiPopoverView: View {
         }
     }
 
-    private var panelSubtitle: String {
-        switch panel {
-        case .quota: return "5h + 7d pressure"
-        case .work: return "45m work, hard break"
-        case .system: return "Health + hot processes + cleanup"
-        case .goals: return ""
-        case .aiNews:
-            guard let date = aiNewsStore.lastSuccessfulRefresh else { return L10n.t(.loading, prefs.language) }
-            return "\(L10n.t(.updated, prefs.language)) \(date.formatted(.relative(presentation: .numeric)))"
-        case .mailBrief:
-            guard let date = mailBriefStore.generation?.createdAt else { return "Daily Gmail summary" }
-            return "\(mailBriefStore.actCount) Act · \(date.formatted(.relative(presentation: .numeric)))"
-        }
-    }
 
     private var workPrimaryClock: String {
         switch workSession.phase {
@@ -1679,16 +1670,6 @@ struct KajiPopoverView: View {
         }
     }
 
-    private var workStatusText: String {
-        switch workSession.phase {
-        case .working:
-            return prefs.breakOverlayEnabled ? "工作中。到点后进入休息画面。" : "工作中。强制休息已关闭。"
-        case .breakDue:
-            return prefs.breakOverlayEnabled ? "休息时间到了。" : "该休息了。现在只记录倒计时。"
-        case .breaking:
-            return "休息中。离开屏幕片刻。"
-        }
-    }
 
     private var background: some View {
         LinearGradient(colors: [t.bgTop, t.bg],
@@ -1750,15 +1731,10 @@ struct KajiPopoverView: View {
     private func miniButton(_ systemName: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 8.5, weight: .bold))
-                .foregroundColor(t.mute)
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(t.ash)
                 .frame(width: 24, height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.clear)
-                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).stroke(t.track, lineWidth: 1))
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -1863,6 +1839,7 @@ struct KajiPopoverView: View {
         return costs.reduce(0, +)
     }
 
+
     private var totalCostIsEstimated: Bool {
         shown.contains { $0.costTodayUSD != nil && $0.costIsEstimated }
     }
@@ -1884,6 +1861,11 @@ struct KajiPopoverView: View {
         }
         return String(format: "$%.2f", value)
     }
+    private func costText(_ value: Double?, estimated: Bool) -> String {
+        let value = usdText(value)
+        return estimated && value != "\u{2014}" ? "\u{2248}\(value)" : value
+    }
+
 
 }
 

@@ -84,40 +84,6 @@ public enum ScheduleMigration {
     }
 }
 
-public enum GoalMarkBase: String, Codable, Sendable {
-    case circle
-    case rectangle
-}
-
-public enum GoalMarkFill: String, Codable, Sendable {
-    case outline
-    case half
-}
-
-public struct GoalMarkStyle: Equatable, Sendable {
-    public let base: GoalMarkBase
-    public let fill: GoalMarkFill
-
-    public var systemImage: String {
-        switch (base, fill) {
-        case (.circle, .outline): "circle"
-        case (.circle, .half): "circle.lefthalf.filled"
-        case (.rectangle, .outline): "rectangle"
-        case (.rectangle, .half): "rectangle.lefthalf.filled"
-        }
-    }
-}
-
-public enum GoalMarkLogic {
-    public static func style(for tag: GoalTag) -> GoalMarkStyle {
-        switch tag {
-        case .work, .learn: GoalMarkStyle(base: .rectangle, fill: .outline)
-        case .home: GoalMarkStyle(base: .rectangle, fill: .half)
-        case .health: GoalMarkStyle(base: .circle, fill: .outline)
-        case .admin, .personal: GoalMarkStyle(base: .circle, fill: .half)
-        }
-    }
-}
 
 public enum DiskSizeFormatter {
     public static func string(bytes: Int64) -> String {

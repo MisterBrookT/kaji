@@ -46,14 +46,15 @@ final class ScheduledGoalModelTests: XCTestCase {
         XCTAssertEqual(result.completedIDs, [result.schedules[0].id])
     }
 
-    func testSelectableGoalTagsUseFourCircleAndRectangleDesigns() {
-        let styles = GoalTag.selectableCases.map(GoalMarkLogic.style)
+    func testSelectableGoalTagsUseDistinctSemanticSFSymbols() {
         XCTAssertEqual(GoalTag.selectableCases, [.work, .home, .health, .personal])
-        XCTAssertEqual(Set(styles.map(\.base)), Set([.circle, .rectangle]))
-        XCTAssertEqual(Set(styles.map(\.fill)), Set([.outline, .half]))
-        XCTAssertEqual(Set(styles.map(\.systemImage)).count, GoalTag.selectableCases.count)
-        XCTAssertEqual(GoalMarkLogic.style(for: .learn), GoalMarkLogic.style(for: .work))
-        XCTAssertEqual(GoalMarkLogic.style(for: .admin), GoalMarkLogic.style(for: .personal))
+        XCTAssertEqual(GoalTag.work.systemImage, "briefcase")
+        XCTAssertEqual(GoalTag.home.systemImage, "house")
+        XCTAssertEqual(GoalTag.health.systemImage, "heart")
+        XCTAssertEqual(GoalTag.personal.systemImage, "person")
+        XCTAssertEqual(GoalTag.learn.systemImage, GoalTag.work.systemImage)
+        XCTAssertEqual(GoalTag.admin.systemImage, GoalTag.personal.systemImage)
+        XCTAssertEqual(Set(GoalTag.selectableCases.map(\.systemImage)).count, GoalTag.selectableCases.count)
     }
 
     func testDiskSizeFormatterUsesGBThenMB() {

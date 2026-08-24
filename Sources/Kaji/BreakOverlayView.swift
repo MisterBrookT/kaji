@@ -2,9 +2,37 @@ import AppKit
 import SwiftUI
 import KajiCore
 
+struct BreakSkipConfirmation: Equatable {
+    private(set) var remainingSeconds: Int?
+
+    var title: String {
+        guard let remainingSeconds else { return "Skip" }
+        return remainingSeconds > 0 ? "Sure?  \(remainingSeconds)" : "Sure?"
+    }
+
+    var isCoolingDown: Bool {
+        remainingSeconds.map { $0 > 0 } ?? false
+    }
+
+    var isArmed: Bool {
+        remainingSeconds != nil
+    }
+
+    mutating func request() -> Bool {
+        if remainingSeconds == 0 { return true }
+        if remainingSeconds == nil { remainingSeconds = 3 }
+        return false
+    }
+
+    mutating func tick() {
+        guard let remainingSeconds, remainingSeconds > 0 else { return }
+        self.remainingSeconds = remainingSeconds - 1
+    }
+}
+
 struct BreakOverlayView: View {
-    @ObservedObject var prefs: Prefs
     @ObservedObject var workSession: WorkSessionController
+    @ObservedObject var prefs: Prefs
 
     let scene: BreakSceneID
     let isPrimary: Bool
@@ -12,6 +40,8 @@ struct BreakOverlayView: View {
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var drifting = false
+    @State private var skipConfirmation = BreakSkipConfirmation()
+    @State private var skipConfirmationTask: Task<Void, Never>?
 
     var body: some View {
         ZStack {
@@ -26,6 +56,7 @@ struct BreakOverlayView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
             }
         }
+        .onExitCommand(perform: handleSkip)
         .background(Color.black)
         .task(id: reduceMotion) {
             drifting = false
@@ -33,6 +64,9 @@ struct BreakOverlayView: View {
             withAnimation(.easeInOut(duration: 28).repeatForever(autoreverses: true)) {
                 drifting = true
             }
+        }
+        .onDisappear {
+            skipConfirmationTask?.cancel()
         }
     }
 
@@ -57,18 +91,8 @@ struct BreakOverlayView: View {
         }
     }
 
-    @ViewBuilder
     private var atmosphere: some View {
-        switch scene {
-        case .windowRain:
-            WindowRainLayer(isPaused: reduceMotion)
-        case .rainField:
-            RainLayer(isPaused: reduceMotion)
-        case .mistHill:
-            MistLayer(isPaused: reduceMotion)
-        case .sunlitMeadow:
-            SunlightLayer(isPaused: reduceMotion)
-        }
+        WindowRainLayer(isPaused: reduceMotion)
     }
 
     private var readabilityGradient: some View {
@@ -87,41 +111,40 @@ struct BreakOverlayView: View {
 
     private var controls: some View {
         VStack(spacing: 12) {
-            Text("休息一下")
-                .font(.system(size: 34, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white)
-
-            Text("离开屏幕片刻。")
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundStyle(.white.opacity(0.7))
-
             Text(workSession.breakClock)
-                .font(.system(size: 68, weight: .semibold, design: .rounded))
+                .font(.system(size: 56, weight: .semibold, design: .rounded))
                 .foregroundStyle(.white)
                 .monospacedDigit()
-                .padding(.top, 4)
+                .accessibilityLabel("休息倒计时 \(workSession.breakClock)")
 
             if prefs.allowBreakSkip {
-                Button("Skip", action: onSkip)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.82))
-                    .padding(.horizontal, 22)
-                    .frame(height: 38)
-                    .background(.ultraThinMaterial, in: Capsule())
-                    .overlay(Capsule().stroke(.white.opacity(0.2), lineWidth: 1))
-                    .padding(.top, 6)
+                Button(action: handleSkip) {
+                    Text(skipConfirmation.title)
+                        .font(.system(size: 12, weight: .semibold, design: .rounded))
+                        .foregroundStyle(.white.opacity(skipConfirmation.isArmed ? 0.78 : 0.52))
+                        .frame(minWidth: 72, minHeight: 28)
+                }
+                .buttonStyle(.plain)
+                .disabled(skipConfirmation.isCoolingDown)
             }
         }
-        .padding(.horizontal, 38)
-        .padding(.vertical, 28)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 24, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.18), radius: 24, y: 12)
-        .accessibilityElement(children: .contain)
+    }
+
+
+    private func handleSkip() {
+        if skipConfirmation.request() {
+            skipConfirmationTask?.cancel()
+            onSkip()
+            return
+        }
+        guard skipConfirmation.remainingSeconds == 3 else { return }
+        skipConfirmationTask = Task { @MainActor in
+            for _ in 0..<3 {
+                try? await Task.sleep(for: .seconds(1))
+                guard !Task.isCancelled else { return }
+                skipConfirmation.tick()
+            }
+        }
     }
 }
 
@@ -198,120 +221,6 @@ private struct WindowRainLayer: View {
                         )
                     )
                 }
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct RainLayer: View {
-    let isPaused: Bool
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: isPaused)) { timeline in
-            Canvas { context, size in
-                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
-                for index in 0..<44 {
-                    let seed = Double((index * 37) % 101) / 101
-                    let x = size.width * seed
-                    let speed = 42 + Double(index % 5) * 9
-                    let travel = size.height + 90
-                    let y = (phase * speed + Double(index * 73))
-                        .truncatingRemainder(dividingBy: travel) - 45
-                    var path = Path()
-                    path.move(to: CGPoint(x: x, y: y))
-                    path.addLine(to: CGPoint(x: x - 4, y: y + 22))
-                    context.stroke(
-                        path,
-                        with: .color(.white.opacity(0.08 + Double(index % 3) * 0.025)),
-                        lineWidth: index % 4 == 0 ? 1.2 : 0.7
-                    )
-                }
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-}
-
-private struct MistLayer: View {
-    let isPaused: Bool
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 10.0, paused: isPaused)) { timeline in
-            GeometryReader { geo in
-                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
-                ZStack {
-                    mistBand(index: 0, phase: phase, size: geo.size)
-                    mistBand(index: 1, phase: phase, size: geo.size)
-                    mistBand(index: 2, phase: phase, size: geo.size)
-                }
-            }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
-
-    private func mistBand(index: Int, phase: TimeInterval, size: CGSize) -> some View {
-        let direction = index.isMultiple(of: 2) ? 1.0 : -1.0
-        let travel = size.width * 0.12
-        let offset = isPaused ? 0 : sin(phase / (13 + Double(index) * 4)) * travel * direction
-
-        return Ellipse()
-            .fill(.white.opacity(0.07 + Double(index) * 0.018))
-            .frame(width: size.width * (0.82 + Double(index) * 0.14), height: 150 + CGFloat(index) * 48)
-            .blur(radius: 34 + CGFloat(index) * 8)
-            .offset(x: offset, y: size.height * (0.02 + Double(index) * 0.18))
-    }
-}
-
-private struct SunlightLayer: View {
-    let isPaused: Bool
-
-    var body: some View {
-        TimelineView(.animation(minimumInterval: 1.0 / 10.0, paused: isPaused)) { timeline in
-            Canvas { context, size in
-                let phase = isPaused ? 0 : timeline.date.timeIntervalSinceReferenceDate
-
-                for index in 0..<20 {
-                    let seedX = Double((index * 47) % 103) / 103
-                    let seedY = Double((index * 71) % 109) / 109
-                    let driftX = isPaused ? 0 : sin(phase / 9 + Double(index)) * 9
-                    let driftY = isPaused ? 0 : -phase * (1.2 + Double(index % 4) * 0.45)
-                    let y = (size.height * seedY + driftY)
-                        .truncatingRemainder(dividingBy: size.height + 30)
-                    let radius = 1.2 + Double(index % 3) * 0.7
-                    let rect = CGRect(
-                        x: size.width * seedX + driftX,
-                        y: y < -10 ? y + size.height + 30 : y,
-                        width: radius * 2,
-                        height: radius * 2
-                    )
-                    context.fill(
-                        Path(ellipseIn: rect),
-                        with: .color(.white.opacity(0.11 + Double(index % 3) * 0.035))
-                    )
-                }
-
-                var ray = Path()
-                ray.move(to: CGPoint(x: size.width * 0.58, y: 0))
-                ray.addLine(to: CGPoint(x: size.width * 0.82, y: 0))
-                ray.addLine(to: CGPoint(x: size.width * 0.62, y: size.height))
-                ray.addLine(to: CGPoint(x: size.width * 0.35, y: size.height))
-                ray.closeSubpath()
-                let pulse = isPaused ? 0.055 : 0.045 + (sin(phase / 7) + 1) * 0.012
-                context.fill(
-                    ray,
-                    with: .linearGradient(
-                        Gradient(colors: [.white.opacity(pulse), .white.opacity(0.005)]),
-                        startPoint: CGPoint(x: size.width * 0.7, y: 0),
-                        endPoint: CGPoint(x: size.width * 0.5, y: size.height)
-                    )
-                )
             }
         }
         .ignoresSafeArea()

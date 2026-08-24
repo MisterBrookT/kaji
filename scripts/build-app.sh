@@ -52,8 +52,8 @@ else
 	<key>CFBundleExecutable</key><string>Kaji</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>0.7.0</string>
-	<key>CFBundleVersion</key><string>27</string>
+	<key>CFBundleShortVersionString</key><string>0.8.0</string>
+	<key>CFBundleVersion</key><string>28</string>
 	<key>LSMinimumSystemVersion</key><string>13.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
@@ -96,13 +96,11 @@ else
 	echo "warning: Resources/quota.py missing — app will fall back to a dev path" >&2
 fi
 
-for scene in break-window-rain break-rain-field break-mist-hill break-sunlit-meadow; do
-	if [[ ! -f "Resources/${scene}.png" ]]; then
-		echo "error: missing break scene Resources/${scene}.png" >&2
-		exit 1
-	fi
-	cp "Resources/${scene}.png" "${BUNDLE}/Contents/Resources/${scene}.png"
-done
+if [[ ! -f "Resources/break-window-rain.png" ]]; then
+	echo "error: missing break scene Resources/break-window-rain.png" >&2
+	exit 1
+fi
+cp "Resources/break-window-rain.png" "${BUNDLE}/Contents/Resources/break-window-rain.png"
 
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"

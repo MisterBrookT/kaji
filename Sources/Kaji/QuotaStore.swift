@@ -6,8 +6,12 @@ enum Config {
     /// Dev fallback ONLY (used by `swift run`, which has no app bundle). The
     /// shipped .app uses the self-contained copy bundled in Contents/Resources
     /// (see `QuotaStore.scriptPath`); end users never need this path.
-    static let defaultQuotaScriptPath =
-        "/Users/tangyinghao/workspace/kaji/tools/helm-quota/quota.py"
+    static let defaultQuotaScriptPath = URL(fileURLWithPath: #filePath)
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .deletingLastPathComponent()
+        .appendingPathComponent("Resources/quota.py")
+        .path
 
     /// Candidate python3 interpreters, probed in order. A .app launched from
     /// Finder inherits a MINIMAL PATH (/usr/bin:/bin:/usr/sbin:/sbin) — not the
@@ -318,6 +322,9 @@ final class QuotaStore: ObservableObject {
             }
 
             let tokenValues = Self.prunedTokenHistory(tokenHistory[key] ?? [], now: now).map(\.value)
+            let localAPIEstimate = q.costTodayUSD == nil
+                ? Self.estimatedAPICostUSD(provider: key, tokens: q.tokensToday)
+                : nil
             views.append(ProviderView(
                 id: key,
                 mark: Providers.mark(for: key),
@@ -328,8 +335,8 @@ final class QuotaStore: ObservableObject {
                 resetDate: limits?.fiveHourResetsAt?.date,
                 weekResetDate: limits?.sevenDayResetsAt?.date,
                 plan: limits?.plan,
-                costTodayUSD: q.costTodayUSD ?? Self.estimatedCostUSD(provider: key, tokens: q.tokensToday),
-                costIsEstimated: q.costIsEstimated ?? true,
+                costTodayUSD: q.costTodayUSD ?? localAPIEstimate,
+                costIsEstimated: q.costIsEstimated ?? (localAPIEstimate != nil),
                 history: history[key] ?? [],
                 tokenHistory: tokenValues
             ))
@@ -386,19 +393,10 @@ final class QuotaStore: ObservableObject {
         return now.timeIntervalSince(last.date) >= 15 * 60
     }
 
-    private static func estimatedCostUSD(provider: String, tokens: Int?) -> Double? {
-        guard let tokens, tokens > 0 else { return nil }
-        let perMillion: Double
-        switch provider {
-        case "codex":
-            // Rough blended GPT-5.4-family estimate. Codex subscriptions are quota-based.
-            perMillion = 2.0
-        case "claude":
-            // Rough blended Claude Sonnet-family estimate.
-            perMillion = 6.0
-        default:
-            return nil
-        }
-        return Double(tokens) / 1_000_000 * perMillion
+    private static func estimatedAPICostUSD(provider: String, tokens: Int?) -> Double? {
+        guard provider == "claude", let tokens, tokens > 0 else { return nil }
+        // API-equivalent value of local Claude usage, not a subscription charge.
+        return Double(tokens) / 1_000_000 * 6.0
     }
+
 }

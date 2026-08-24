@@ -14,7 +14,7 @@ curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh
 
 Browser `.app.zip` downloads used to show: `Kaji is damaged and can't be opened…` — Gatekeeper + unsigned binary. That asset is intentionally gone.
 
-Authored release notes live in `dev_docs/ship/releases/vX.Y.Z.md` and are attached by `.github/workflows/release.yml` when you push that tag.
+GitHub Release notes are generated from commits when a version tag is pushed; they are not duplicated under `dev_docs/`.
 
 ## Temporary Internal Fix
 

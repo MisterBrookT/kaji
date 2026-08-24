@@ -62,16 +62,16 @@ public enum ThemePrefsLogic {
 
     /// Strict mono dark palette (design-language).
     public static let monoDark = ThemeTokens(
-        bg: 0x121212,
-        bgTop: 0x191919,
-        panel: 0x202020,
-        cream: 0xF0F0EC,
-        mute: 0xA0A09A,
-        ash: 0x62625D,
-        track: 0x333330,
-        gold: 0xD2D2CC,
-        amber: 0xF0F0EC,
-        sun: 0xD2D2CC
+        bg: 0x161615,
+        bgTop: 0x1D1D1B,
+        panel: 0x2B2B29,
+        cream: 0xF4F4EF,
+        mute: 0xB5B5AE,
+        ash: 0x777772,
+        track: 0x484844,
+        gold: 0xD8D8D0,
+        amber: 0xF4F4EF,
+        sun: 0xD8D8D0
     )
 
     /// Normalize a stored `menubarStyle` raw value to mono-only.

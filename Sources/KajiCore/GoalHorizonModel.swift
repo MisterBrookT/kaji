@@ -29,7 +29,12 @@ public enum GoalTag: String, CaseIterable, Codable, Sendable {
     }
 
     public var systemImage: String {
-        GoalMarkLogic.style(for: self).systemImage
+        switch self {
+        case .work, .learn: "briefcase"
+        case .health: "heart"
+        case .home: "house"
+        case .admin, .personal: "person"
+        }
     }
 }
 

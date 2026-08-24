@@ -13,11 +13,10 @@ Kaji is a **truncatable macOS menu-bar module host**.
 - “All-in-one” means **one shell, assemble what you want** — not install-once-get-everything.
 - **Worth keeping ≠ kitchen sink.** Do not chase exclusivity by piling surfaces.
 
-Product drafts + shipped lean-modules specs:
+Product direction + architecture decisions:
 
 - [dev_docs/product/lean-module-host.md](dev_docs/product/lean-module-host.md)
 - [dev_docs/product/architecture-modules.md](dev_docs/product/architecture-modules.md)
-- [dev_docs/specs/](dev_docs/specs/)
 
 ## North star (read this first)
 
@@ -34,8 +33,8 @@ So:
 
 ## Current branch policy
 
-- Lean-modules v1 shipped on `main` (v0.6.0); Cursor quota rings on `v0.6.1`. New slices: side branch / worktree → approve spec → land.
-- WIP feature experiments (heavy break art, etc.) stay parked until they fit an opt-in module.
+- Lean-modules v1 shipped on `main`; new work stays incremental and reversible.
+- WIP feature experiments stay parked until they fit an opt-in module.
 
 ## Internal docs (`dev_docs/`)
 
@@ -46,12 +45,11 @@ Browse from [dev_docs/README.md](dev_docs/README.md).
 ```text
 dev_docs/
   README.md          # catalog
-  assets/            # images only
-  product/           # product direction & architecture drafts
-  design/            # visual language & shot guides
-  integrate/         # external contracts (pet bridge, …)
-  ship/              # distribution / release ops
-  specs/             # acceptable feature specs
+  assets/            # referenced images only
+  product/           # product direction, architecture, ADRs
+  design/            # durable visual language
+  integrate/         # external contracts
+  ship/              # distribution constraints
 ```
 
 **No public docs site / no GitHub Pages landing.** Repo face is README + Releases only — less is more for a menu-bar tool.
@@ -61,11 +59,9 @@ Rules:
 - **Internal prose → `dev_docs/`.** Do not recreate a `docs/` wiki or marketing site.
 - **One language per doc** — no EN/ZH duplicate pairs.
 - **Assets stay in `dev_docs/assets/`** (README images included).
-- New internal prose goes in the matching category folder; update the catalog.
-- After product direction is reviewed: write an **acceptable feature spec** under `dev_docs/specs/`.
-- **Plan docs are optional.** Use them when the work spans many files/sessions or another agent has zero context. If the spec already has clear acceptance cases and a small file touch list, go **tests → implement** and skip a separate plan.
+- New internal prose must record a durable product, architecture, design, integration, or distribution decision; update the catalog.
+- Do **not** archive feature specs, bug-fix notes, implementation plans, or per-release notes in `dev_docs/`; code, tests, issues, and GitHub Releases are their source of truth.
 - **Tests:** Prefer automating anything deterministic and cheap (`swift test`). Humans do a short UX smoke after green — not instead of unit tests during development.
-- Keep specs in `dev_docs/specs/` (repo truth for humans + agents). Do **not** put product specs under `.cursor/` (IDE chrome; easy to ignore or not share).
 - `AGENTS.md` (this file) stays at repo root so agents always see direction.
 
 ## Code touch rules (when implementing lean modules)

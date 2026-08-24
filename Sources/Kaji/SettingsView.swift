@@ -40,6 +40,7 @@ struct SettingsView: View {
 
     @State private var selectedScheduleID: UUID?
     @State private var selection: SettingsSection = .general
+    @State private var showsMailRunHistory = false
 
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
@@ -209,6 +210,7 @@ struct SettingsView: View {
                     .help("AI News uses AI HOT's anonymous read-only v1 API.")
                 }
             }
+            }
             if selection == .mailBrief {
                 settingBlock(title: "Mail Brief") {
                     VStack(alignment: .leading, spacing: 10) {
@@ -253,6 +255,7 @@ struct SettingsView: View {
                             Button("Generate now") { mailBriefStore.generateNow() }
                                 .buttonStyle(.plain).disabled(!mailBriefStore.isConnected || mailBriefStore.state == .running)
                         }
+                        mailRunActivity
                         if let error = mailBriefStore.lastError {
                             Text(error).font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute)
                         }
@@ -262,12 +265,119 @@ struct SettingsView: View {
                     }
                 }
             }
-            }
         }
         .padding(24)
         .onAppear {
             refreshPetCatalogSelection()
         }
+    }
+
+    private var mailRunActivity: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Divider().overlay(t.track)
+            HStack {
+                Text("Last run")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                Spacer()
+                if mailBriefStore.runRecords.count > 1 {
+                    Button(showsMailRunHistory ? "Hide history" : "Recent runs") {
+                        showsMailRunHistory.toggle()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                }
+            }
+            if let latest = mailBriefStore.runRecords.first {
+                mailRunRow(latest, detailed: true)
+                if showsMailRunHistory {
+                    ForEach(Array(mailBriefStore.runRecords.dropFirst())) { record in
+                        Divider().overlay(t.track.opacity(0.7))
+                        mailRunRow(record, detailed: false)
+                    }
+                }
+            } else {
+                Text("Not run yet")
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.ash)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 8).fill(t.panel.opacity(0.55)))
+    }
+
+    private func mailRunRow(_ record: MailBriefRunRecord, detailed: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(mailRunStatus(record))
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Text("· \(mailRunTrigger(record.trigger)) · \(mailRunTime(record))")
+                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.mute)
+                Spacer(minLength: 0)
+            }
+            if let summary = mailRunSummary(record) {
+                Text(summary)
+                    .font(.system(size: detailed ? 10 : 9.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .help(mailRunAbsoluteTime(record))
+    }
+
+    private func mailRunStatus(_ record: MailBriefRunRecord) -> String {
+        switch record.status {
+        case .running:
+            switch record.stage {
+            case .connecting: "Connecting"
+            case .fetching: "Fetching Inbox"
+            case .classifying: "Classifying"
+            case .publishing: "Publishing"
+            case .finished: "Running"
+            }
+        case .succeeded: "Succeeded"
+        case .failed: "Failed"
+        case .cancelled: record.safeErrorCode == "interrupted" ? "Interrupted" : "Cancelled"
+        }
+    }
+
+    private func mailRunTrigger(_ trigger: MailBriefRunTrigger) -> String {
+        switch trigger { case .automatic: "Automatic"; case .manual: "Manual"; case .catchUp: "Catch-up" }
+    }
+
+    private func mailRunSummary(_ record: MailBriefRunRecord) -> String? {
+        guard let inbox = record.snapshotInboxCount else {
+            return record.safeErrorCode.map { "Stopped before Inbox fetch · \($0.replacingOccurrences(of: "_", with: " "))" }
+        }
+        if record.status == .running {
+            let target = record.newOrChangedCount ?? inbox
+            return "Inbox \(inbox) · classified \(record.classifiedCount) / \(target)"
+        }
+        var values = ["Inbox \(inbox)"]
+        if let changed = record.newOrChangedCount { values.append("new/changed \(changed)") }
+        if let reused = record.reusedCount { values.append("reused \(reused)") }
+        if let published = record.publishedCount { values.append("published \(published)") }
+        if record.status == .failed, let error = record.safeErrorCode {
+            values.append(error.replacingOccurrences(of: "_", with: " "))
+        }
+        return values.joined(separator: " · ")
+    }
+
+    private func mailRunTime(_ record: MailBriefRunRecord) -> String {
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .abbreviated
+        return formatter.localizedString(for: record.finishedAt ?? record.startedAt, relativeTo: Date())
+    }
+
+    private func mailRunAbsoluteTime(_ record: MailBriefRunRecord) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium; formatter.timeStyle = .medium
+        let start = formatter.string(from: record.startedAt)
+        guard let end = record.finishedAt else { return "Started \(start)" }
+        return "Started \(start) · Finished \(formatter.string(from: end))"
     }
 
     private var mcpStatusText: String {
