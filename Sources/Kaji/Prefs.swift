@@ -39,9 +39,6 @@ final class Prefs: ObservableObject {
     @Published var showRemaining: Bool {
         didSet { UserDefaults.standard.set(showRemaining, forKey: Key.showRemaining) }
     }
-    @Published var petId: String {
-        didSet { UserDefaults.standard.set(petId, forKey: Key.petId) }
-    }
     @Published var focusMinutes: Int {
         didSet { UserDefaults.standard.set(focusMinutes, forKey: Key.focusMinutes) }
     }
@@ -103,7 +100,6 @@ final class Prefs: ObservableObject {
         static let language = "language"
         static let menubarStyle = "menubarStyle"
         static let showRemaining = "showRemaining"
-        static let petId = "petId"
         static let focusMinutes = "focusMinutes"
         static let breakMinutes = "breakMinutes"
         static let allowBreakSkip = "allowBreakSkip"
@@ -125,7 +121,7 @@ final class Prefs: ObservableObject {
 
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
-            showRemaining, petId, focusMinutes, breakMinutes,
+            showRemaining, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
             aiNewsRefreshHours, mcpEnabled, mailBriefHour, mailBriefMinute,
@@ -191,8 +187,6 @@ final class Prefs: ObservableObject {
         } else {
             showRemaining = false
         }
-        petId = "navi"
-        d.set("navi", forKey: Key.petId)
         let savedFocus = d.integer(forKey: Key.focusMinutes)
         focusMinutes = savedFocus > 0 ? savedFocus : 45
         let savedBreak = d.integer(forKey: Key.breakMinutes)

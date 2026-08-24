@@ -48,12 +48,11 @@ No `.app.zip` on Releases (unsigned browser downloads trip Gatekeeper). Or run `
 
 | Module | Default | What you get |
 | --- | --- | --- |
-| **Quota** | on | 5h / 7d usage, reset, token trend, cost estimate, providers |
+| **Quota** | on | 5h / 7d usage, reset timing, providers |
 | **Work / Break** | off | Focus timer, menu-bar countdown, break overlay |
 | **System** | off | CPU / memory, disk categories, top processes |
 | **Goals** | off | Today / Week / Vision / Schedule, notes, tags, heatmap |
 | **AI News** | off | AI HOT Top 10, hover summaries, source context |
-| **Pet** | bridge | Optional Navi via `~/Library/Application Support/Kaji/pet-state.json` |
 
 Theme: **Mono** only (black / white / gray, light & dark).
 

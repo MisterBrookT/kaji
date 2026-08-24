@@ -374,9 +374,6 @@ final class SystemMonitor: ObservableObject {
         if command == "Python" || command == "python3" {
             return args.contains("Kaji.app/Contents/Resources/quota.py")
         }
-        if command == "pethatch" {
-            return args.contains("--state-file") && args.contains("kaji")
-        }
         return false
     }
 
@@ -453,7 +450,6 @@ final class SystemMonitor: ObservableObject {
     nonisolated private static func cleanableURLs() -> [(title: String, url: URL, isAutoSafe: Bool)] {
         let home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
         return [
-            ("Pet log", URL(fileURLWithPath: "/tmp/kaji-pethatch.log"), true),
             ("Kaji cache", home.appendingPathComponent("Library/Caches/Kaji", isDirectory: true), true),
             ("Kaji cache", home.appendingPathComponent("Library/Caches/dev.kaji", isDirectory: true), true),
             ("Kaji logs", home.appendingPathComponent("Library/Logs/Kaji", isDirectory: true), true),

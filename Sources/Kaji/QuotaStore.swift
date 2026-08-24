@@ -33,13 +33,10 @@ enum Config {
     /// Poll interval, seconds.
     static let refreshInterval: TimeInterval = 30
 
-    /// Max sparkline history points kept per provider.
-    static let sparklineHistoryMax = 48
 
     // UserDefaults keys.
     static let kQuotaScriptPath = "quotaScriptPath"
     static let kPythonInterpreter = "pythonInterpreter" // user override (optional)
-    static let kSparkHistory    = "sparklineHistory" // [providerKey: [Double]]
 }
 
 // A single provider's view-ready data, decoupled from the raw Codable model.
@@ -51,7 +48,6 @@ struct ProviderView: Identifiable, Equatable {
     let weekPercent: Double?
     let resetDate: Date?           // five-hour reset
     let weekResetDate: Date?       // seven-day reset
-    let history: [Double]          // rolling 5h used% samples for Pet status trends
 
     /// 0...1 fraction for the 5h ring trim. Clamped. nil percent -> 0 (empty).
     var usedFraction: Double {
@@ -82,8 +78,7 @@ struct ProviderView: Identifiable, Equatable {
 
 // MARK: - QuotaStore
 //
-// Runs quota.py on a timer, decodes the JSON, maintains a rolling per-provider
-// history of 5h used% for Pet status trends, and publishes view-ready providers.
+// Runs quota.py on a timer, decodes the JSON, and publishes view-ready providers.
 @MainActor
 final class QuotaStore: ObservableObject {
     @Published private(set) var providers: [ProviderView] = []
@@ -91,10 +86,11 @@ final class QuotaStore: ObservableObject {
     @Published private(set) var lastUpdated: Date?
 
     private var timer: Timer?
-    private var history: [String: [Double]] = [:]
 
     init() {
-        loadHistory()
+        UserDefaults.standard.removeObject(forKey: "sparklineHistory")
+        UserDefaults.standard.removeObject(forKey: "tokenHistory")
+        UserDefaults.standard.removeObject(forKey: "tokenHistoryV2")
     }
 
     /// Seed a store with fixed data for previews / offscreen snapshots. Does not
@@ -261,7 +257,6 @@ final class QuotaStore: ObservableObject {
             // Raw error stays in the log for debugging even though the empty
             // state shows a friendlier message.
             NSLog("[Kaji] quota refresh failed: %@", msg)
-            PetBridge.write(providers: providers, lastError: msg)
             // Still bump the timestamp so the user sees we tried.
             return
         case .success(let snap):
@@ -283,15 +278,6 @@ final class QuotaStore: ObservableObject {
             let limits = q.limits
             let five = limits?.fiveHourUsedPercent
 
-            // Append to rolling history only when we have a real sample.
-            if let five = five {
-                var arr = history[key] ?? []
-                arr.append(five)
-                if arr.count > Config.sparklineHistoryMax {
-                    arr.removeFirst(arr.count - Config.sparklineHistoryMax)
-                }
-                history[key] = arr
-            }
             views.append(ProviderView(
                 id: key,
                 mark: Providers.mark(for: key),
@@ -299,14 +285,11 @@ final class QuotaStore: ObservableObject {
                 fiveHourPercent: five,
                 weekPercent: limits?.sevenDayUsedPercent,
                 resetDate: limits?.fiveHourResetsAt?.date,
-                weekResetDate: limits?.sevenDayResetsAt?.date,
-                history: history[key] ?? []
+                weekResetDate: limits?.sevenDayResetsAt?.date
             ))
         }
 
         providers = views
-        saveHistory()
-        PetBridge.write(providers: providers, lastError: lastError, generatedAt: lastUpdated ?? Date())
     }
 
     /// The provider closest to its limit — drives the menubar indicator.
@@ -316,20 +299,6 @@ final class QuotaStore: ObservableObject {
             .max { ($0.fiveHourPercent ?? 0) < ($1.fiveHourPercent ?? 0) }
     }
 
-    // MARK: - History persistence
-
-    private func loadHistory() {
-        if let dict = UserDefaults.standard.dictionary(forKey: Config.kSparkHistory)
-            as? [String: [Double]] {
-            history = dict
-        }
-        UserDefaults.standard.removeObject(forKey: "tokenHistory")
-        UserDefaults.standard.removeObject(forKey: "tokenHistoryV2")
-    }
-
-    private func saveHistory() {
-        UserDefaults.standard.set(history, forKey: Config.kSparkHistory)
-    }
 
 
 }

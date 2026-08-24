@@ -25,7 +25,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hostingView: KajiHostingView<StatusItemView>!
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
-    private let petCatalog = PetCatalogStore()
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     private let dailyGoals = DailyGoalStore()
@@ -36,7 +35,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let mailBriefStore = MailBriefStore()
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
-    private var petStateTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -47,7 +45,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         applyModuleLifecycle(prefs.enabledModules)
         mcpServer.setEnabled(prefs.mcpEnabled)
-        refreshPetCatalogSelection()
 
         setupStatusItem()
         setupPopover()
@@ -58,12 +55,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
                 self?.updateStatusItem()
-                self?.publishPetState()
             }
-            .store(in: &cancellables)
-        store.$lastError
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.publishPetState() }
             .store(in: &cancellables)
         prefs.$visibleProviders
             .receive(on: RunLoop.main)
@@ -129,10 +121,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
-        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didActivateApplicationNotification)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.publishPetState() }
-            .store(in: &cancellables)
         workSession.$phase
             .receive(on: RunLoop.main)
             .sink { [weak self] phase in
@@ -188,7 +176,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // to once per interval inside the checker).
         updateChecker.checkIfDue()
         startBreakWatchdog()
-        startPetStateTimer()
 
         updateStatusItem()
     }
@@ -221,7 +208,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         store.stop()
         breakWatchdogTimer?.invalidate()
-        petStateTimer?.invalidate()
         closeBreakOverlay()
         aiNewsStore.stop()
         mailBriefStore.stop()
@@ -430,11 +416,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makePopoverContentController(maxContentHeight: CGFloat? = nil) -> NSHostingController<AnyView> {
-        let controls = GaugeRowView.Controls(
-            onRefresh: { [weak self] in self?.store.refresh() },
-            onUpdate: { [weak self] in self?.handleUpdateAction() },
-            onToggleKeepAwake: { [weak self] in self?.sleepController.toggle() },
-            onTogglePet: {},
+        let controls = KajiPopoverControls(
             onOpenSettings: { [weak self] in self?.openSettings() },
             onQuit: { NSApp.terminate(nil) }
         )
@@ -519,7 +501,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func openSettings() {
-        refreshPetCatalogSelection()
         if let settingsWindow {
             settingsWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
@@ -528,7 +509,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let controller = KajiHostingController(rootView: SettingsView(prefs: prefs,
                                                                        sleepController: sleepController,
-                                                                       petCatalog: petCatalog,
                                                                        fixedPlanStore: fixedPlanStore,
                                                                        mcpServer: mcpServer,
                                                                        mailBriefStore: mailBriefStore))
@@ -550,26 +530,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    private func refreshPetCatalogSelection() {
-        let resolvedPetId = petCatalog.refresh(selectedPetId: prefs.petId)
-        guard !resolvedPetId.isEmpty, prefs.petId != resolvedPetId else { return }
-        prefs.petId = resolvedPetId
-    }
-
-    private func publishPetState() {
-        PetBridge.write(providers: store.providers,
-                        lastError: store.lastError,
-                        generatedAt: store.lastUpdated ?? Date())
-    }
-
-    private func startPetStateTimer() {
-        petStateTimer?.invalidate()
-        petStateTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.publishPetState()
-            }
-        }
-    }
 
     private func startBreakWatchdog() {
         breakWatchdogTimer?.invalidate()

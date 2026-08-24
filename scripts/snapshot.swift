@@ -31,23 +31,19 @@ struct Snap {
             ProviderView(id: "claude", mark: "", displayName: "Claude Code",
                          fiveHourPercent: 56, weekPercent: 36,
                          resetDate: Date(timeIntervalSinceNow: 72 * 60),
-                         weekResetDate: Date(timeIntervalSinceNow: 38 * 3600),
-                         history: [20, 28, 22, 40, 55, 48, 60, 52, 68, 56]),
+                         weekResetDate: Date(timeIntervalSinceNow: 38 * 3600)),
             ProviderView(id: "codex", mark: "", displayName: "Codex",
                          fiveHourPercent: 82, weekPercent: nil,
                          resetDate: Date(timeIntervalSinceNow: 47 * 60),
-                         weekResetDate: nil,
-                         history: [30, 45, 50, 62, 70, 75, 80, 78, 85, 82]),
+                         weekResetDate: nil),
             ProviderView(id: "ark-agent", mark: "", displayName: "Ark Agent",
                          fiveHourPercent: 0, weekPercent: 87,
                          resetDate: nil,
-                         weekResetDate: Date(timeIntervalSinceNow: 13 * 3600),
-                         history: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]),
+                         weekResetDate: Date(timeIntervalSinceNow: 13 * 3600)),
             ProviderView(id: "minimax", mark: "", displayName: "MiniMax",
                          fiveHourPercent: 69, weekPercent: 17,
                          resetDate: Date(timeIntervalSinceNow: 22 * 60),
-                         weekResetDate: Date(timeIntervalSinceNow: 14 * 3600),
-                         history: [10, 15, 20, 28, 38, 46, 54, 61, 66, 69]),
+                         weekResetDate: Date(timeIntervalSinceNow: 14 * 3600)),
         ]
     }
 
@@ -117,11 +113,7 @@ struct Snap {
             let navigation = PopoverNavigation()
             if goalsMode { navigation.panel = .goals }
             if workMode || breakMode { navigation.panel = .work }
-            let controls = GaugeRowView.Controls(
-                onRefresh: {},
-                onUpdate: {},
-                onToggleKeepAwake: {},
-                onTogglePet: {},
+            let controls = KajiPopoverControls(
                 onOpenSettings: {},
                 onQuit: {}
             )

@@ -8,6 +8,11 @@ final class PopoverNavigation: ObservableObject {
     @Published var goalHorizon: GoalHorizon = .today
 }
 
+struct KajiPopoverControls {
+    let onOpenSettings: () -> Void
+    let onQuit: () -> Void
+}
+
 private struct PopoverContentSizeKey: PreferenceKey {
     static let defaultValue: CGSize = .zero
 
@@ -35,7 +40,7 @@ struct KajiPopoverView: View {
     @ObservedObject var mailBriefStore: MailBriefStore
     @ObservedObject var navigation: PopoverNavigation
 
-    let controls: GaugeRowView.Controls
+    let controls: KajiPopoverControls
     let maxContentHeight: CGFloat
     let onContentSizeChange: ((CGSize) -> Void)?
     /// Offscreen snapshots (ImageRenderer) often paint ScrollView as empty —
@@ -573,33 +578,38 @@ struct KajiPopoverView: View {
     private func quotaRow(_ provider: ProviderView) -> some View {
         let windows = CursorLimitsLogic.windowLabels(for: provider.id)
         let secondary = provider.id == "cursor" ? windows.secondary : "7d"
-        return VStack(alignment: .leading, spacing: 7) {
+        return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 7) {
                 ProviderLogo(key: provider.id, color: provider.isNearLimit ? t.amber : t.gold, size: 12)
                 Text(provider.displayName)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .foregroundColor(t.cream)
                     .lineLimit(1)
+                Spacer(minLength: 6)
+                Text(percent(provider.fiveHourPercent))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(provider.isNearLimit ? t.amber : t.gold)
             }
-            if let value = provider.fiveHourPercent {
-                quotaWindowRow(
-                    label: windows.primary,
-                    value: value,
-                    resetDate: provider.resetDate,
-                    nearLimit: provider.isNearLimit
-                )
+            progressBar(provider.usedFraction, color: provider.isNearLimit ? t.amber : t.gold)
+            HStack(spacing: 6) {
+                Text(windows.primary)
+                Text(ResetFormat.short(provider.resetDate))
+                    .foregroundColor(t.gold.opacity(0.9))
+                Spacer(minLength: 6)
+                Text(secondary)
+                Text(percent(provider.weekPercent))
+                    .foregroundColor(provider.weekNearLimit ? t.amber : t.gold.opacity(0.9))
             }
-            if let value = provider.weekPercent {
-                quotaWindowRow(
-                    label: secondary,
-                    value: value,
-                    resetDate: provider.weekResetDate,
-                    nearLimit: provider.weekNearLimit
-                )
-            }
+            .font(.system(size: 9.5, weight: .medium, design: .rounded))
+            .foregroundColor(t.mute)
         }
         .padding(8)
-        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.75)))
+        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(t.cream.opacity(0.06), lineWidth: 0.5)
+        )
     }
 
     private func quotaWindowRow(label: String, value: Double, resetDate: Date?, nearLimit: Bool) -> some View {

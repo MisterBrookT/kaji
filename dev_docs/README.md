@@ -34,7 +34,6 @@
 
 | Doc | Contract |
 | --- | --- |
-| [integrate/pet-bridge.md](integrate/pet-bridge.md) | `pet-state.json` bridge |
 | [integrate/sleep-helper.md](integrate/sleep-helper.md) | Sleep helper 边界 |
 | [integrate/localization.md](integrate/localization.md) | 本地化约束 |
 

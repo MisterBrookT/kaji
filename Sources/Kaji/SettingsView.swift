@@ -32,7 +32,6 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
 struct SettingsView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var sleepController: SleepController
-    @ObservedObject var petCatalog: PetCatalogStore
     @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var mcpServer: KajiMCPServer
     @ObservedObject var mailBriefStore: MailBriefStore
@@ -267,9 +266,6 @@ struct SettingsView: View {
             }
         }
         .padding(24)
-        .onAppear {
-            refreshPetCatalogSelection()
-        }
     }
 
     private var mailRunActivity: some View {
@@ -581,28 +577,6 @@ struct SettingsView: View {
         schedule.weekdays.sorted().map(weekdayName).joined()
     }
 
-    private var selectedPetMeta: some View {
-        HStack(spacing: 7) {
-            Spacer()
-            if let pet = petCatalog.selectedPet(for: prefs.petId) {
-                Text("\(pet.displayName) \u{00B7} \(pet.licenseTitle)")
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute.opacity(0.82))
-                    .lineLimit(1)
-                if let sourceURL = pet.sourceURL {
-                    outlineButton(title: L10n.t(.source, prefs.language), systemImage: "link") {
-                        NSWorkspace.shared.open(sourceURL)
-                    }
-                }
-            }
-        }
-    }
-
-    private func refreshPetCatalogSelection() {
-        let resolvedPetId = petCatalog.refresh(selectedPetId: prefs.petId)
-        guard !resolvedPetId.isEmpty, prefs.petId != resolvedPetId else { return }
-        prefs.petId = resolvedPetId
-    }
 
     private var providerSettingsKeys: [String] {
         Providers.sorted(Array(Providers.available))

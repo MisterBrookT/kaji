@@ -54,8 +54,6 @@ public enum L10n {
         case usage, showUsed, showRemaining
         case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
         case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
-        case pet, petOn, petOff, petTurningOn, petTurningOff, petFailed, petChoice, petGallery, source
-        case defaultPet
         case work, focusLength, breakLength, skipBreak, breakOverlay
         case fixedPlan
         case launchAtLogin
@@ -118,16 +116,6 @@ public enum L10n {
         .keepAwakeTurningOn: .init(en: "Turning On…", zh: "开启中…", ptBR: "Ativando…", es: "Activando…"),
         .keepAwakeTurningOff: .init(en: "Turning Off…", zh: "关闭中…", ptBR: "Desativando…", es: "Desactivando…"),
         .keepAwakeFailed: .init(en: "Awake Failed", zh: "设置失败", ptBR: "Falha ao configurar", es: "Error de configuración"),
-        .pet: .init(en: "Pet", zh: "宠物", ptBR: "Pet", es: "Mascota"),
-        .petOn: .init(en: "Pet On", zh: "宠物已开", ptBR: "Pet ativo", es: "Mascota activa"),
-        .petOff: .init(en: "Pet Off", zh: "宠物关", ptBR: "Pet inativo", es: "Mascota inactiva"),
-        .petTurningOn: .init(en: "Opening…", zh: "开启中…", ptBR: "Abrindo…", es: "Abriendo…"),
-        .petTurningOff: .init(en: "Closing…", zh: "关闭中…", ptBR: "Fechando…", es: "Cerrando…"),
-        .petFailed: .init(en: "Pet Failed", zh: "宠物启动失败", ptBR: "Falha ao iniciar pet", es: "Error al iniciar mascota"),
-        .petChoice: .init(en: "Pet", zh: "宠物", ptBR: "Pet", es: "Mascota"),
-        .petGallery: .init(en: "Pet Details", zh: "宠物详情", ptBR: "Detalhes do pet", es: "Detalles de mascota"),
-        .source: .init(en: "Source", zh: "来源", ptBR: "Fonte", es: "Fuente"),
-        .defaultPet: .init(en: "Default pet:", zh: "默认宠物：", ptBR: "Pet padrão:", es: "Mascota predeterminada:"),
         .work: .init(en: "Work", zh: "工作", ptBR: "Trabalho", es: "Trabajo"),
         .fixedPlan: .init(en: "Schedule", zh: "日程", ptBR: "Agenda", es: "Horario"),
         .focusLength: .init(en: "Focus", zh: "专注", ptBR: "Foco", es: "Enfoque"),
