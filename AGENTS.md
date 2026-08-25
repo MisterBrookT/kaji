@@ -35,6 +35,9 @@ So:
 
 - Lean-modules v1 shipped on `main`; new work stays incremental and reversible.
 - WIP feature experiments stay parked until they fit an opt-in module.
+- Changes land through a feature branch and pull request; do not push work directly to `main`.
+- Before merging, wait for every required GitHub Actions check to complete successfully. A local build or test run does not replace CI.
+- Merge only after CI is green, then return to a fresh branch for further optimization.
 
 ## Internal docs (`dev_docs/`)
 
