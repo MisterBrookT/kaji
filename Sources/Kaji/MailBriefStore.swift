@@ -15,6 +15,8 @@ final class MailBriefStore: ObservableObject {
     @Published private(set) var syncProgress: (completed: Int, total: Int)?
     @Published private(set) var pendingThreadIDs: Set<String> = []
     @Published private(set) var runRecords: [MailBriefRunRecord] = []
+    @Published private(set) var replyDrafts: [String: String] = [:]
+    @Published private(set) var draftingThreadIDs: Set<String> = []
 
     private let cacheURL: URL
     private let runHistoryURL: URL
@@ -33,6 +35,13 @@ final class MailBriefStore: ObservableObject {
             .appendingPathComponent("mail-brief-runs-v1.json")
         loadCache()
         loadRunHistory()
+    }
+
+    init(previewGeneration: MailBriefGeneration) {
+        cacheURL = URL(fileURLWithPath: "/tmp/kaji-mail-preview.json")
+        runHistoryURL = URL(fileURLWithPath: "/tmp/kaji-mail-preview-runs.json")
+        generation = previewGeneration
+        state = .ready
     }
 
     var entries: [MailBriefEntry] { generation?.entries ?? [] }
@@ -161,17 +170,25 @@ final class MailBriefStore: ObservableObject {
                 }
                 syncProgress = nil
                 state = .ready
+                evaluateSchedule()
             } catch is CancellationError {
                 finishRun(id: runID, status: .cancelled, errorCode: "cancelled")
                 state = generation == nil ? .scheduled : .ready
             } catch {
                 syncProgress = nil
                 lastError = Self.safeError(error)
-                finishRun(id: runID, status: .failed, errorCode: Self.safeErrorCode(error))
-                state = generation == nil ? .failed : .stale
+                let errorCode = Self.safeErrorCode(error)
+                finishRun(id: runID, status: .failed, errorCode: errorCode)
+                if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
+                    MailBriefCredentialStore.delete()
+                    nextDue = nil
+                    state = .disconnected
+                } else {
+                    state = generation == nil ? .failed : .stale
+                    scheduleNextAutomaticAttempt()
+                }
             }
             runTask = nil
-            if automatic || generation != nil { evaluateSchedule() }
         }
     }
 
@@ -212,6 +229,46 @@ final class MailBriefStore: ObservableObject {
                 self?.state = .disconnected
             }
         }
+    }
+
+    func generateReplyDraft(for entry: MailBriefEntry) {
+        guard !draftingThreadIDs.contains(entry.threadID) else { return }
+        draftingThreadIDs.insert(entry.threadID)
+        lastError = nil
+        let generationModel = model
+        Task { [weak self] in
+            guard let self else { return }
+            defer { draftingThreadIDs.remove(entry.threadID) }
+            do {
+                guard let clientID = Bundle.main.object(forInfoDictionaryKey: "KajiGoogleOAuthClientID") as? String,
+                      let clientSecret = Bundle.main.object(forInfoDictionaryKey: "KajiGoogleOAuthClientSecret") as? String,
+                      !clientID.isEmpty, !clientSecret.isEmpty else {
+                    throw MailBriefError.oauth("Google OAuth client is not configured")
+                }
+                let token = try await MailBriefCredentialStore.validAccessToken(
+                    clientID: clientID,
+                    clientSecret: clientSecret
+                )
+                let candidate = try await GmailMailBriefClient().fetchCandidate(
+                    threadID: entry.threadID,
+                    accessToken: token
+                )
+                replyDrafts[entry.threadID] = try await CodexMailBriefExecutor()
+                    .draftReply(candidate, model: generationModel)
+            } catch {
+                lastError = Self.safeError(error)
+                let errorCode = Self.safeErrorCode(error)
+                if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
+                    MailBriefCredentialStore.delete()
+                    nextDue = nil
+                    state = .disconnected
+                }
+            }
+        }
+    }
+
+    func replyDraft(for entry: MailBriefEntry) -> String? {
+        replyDrafts[entry.threadID]
     }
 
     func archive(_ entry: MailBriefEntry) { mutate(entry, .archive) }
@@ -255,9 +312,14 @@ final class MailBriefStore: ObservableObject {
                         value.entries[index].isStarred = mutation == .star
                     }
                 }
-                generation = value; try saveCache()
             } catch {
                 lastError = Self.safeError(error)
+                let errorCode = Self.safeErrorCode(error)
+                if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
+                    MailBriefCredentialStore.delete()
+                    nextDue = nil
+                    state = .disconnected
+                }
             }
         }
     }
@@ -282,6 +344,17 @@ final class MailBriefStore: ObservableObject {
             Task { @MainActor in self?.evaluateSchedule() }
         }
         if let timer { RunLoop.main.add(timer, forMode: .common) }
+    }
+
+    private func scheduleNextAutomaticAttempt(now: Date = Date()) {
+        let nextAttempt = MailBriefSchedulePolicy.nextAttemptAfterFailure(
+            now: now,
+            hour: hour,
+            minute: minute,
+            calendar: .current
+        )
+        nextDue = nextAttempt
+        scheduleTimer(at: nextAttempt)
     }
 
     private func loadCache() {

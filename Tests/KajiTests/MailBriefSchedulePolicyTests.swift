@@ -29,6 +29,27 @@ final class MailBriefSchedulePolicyTests: XCTestCase {
                                                         lastAutomaticSuccess: recent).isDue)
     }
 
+    func testFailureWaitsUntilNextDailySchedule() {
+        let now = date(2026, 8, 8, 11, 0)
+        XCTAssertEqual(
+            MailBriefSchedulePolicy.nextAttemptAfterFailure(
+                now: now,
+                hour: 9,
+                minute: 0,
+                calendar: calendar
+            ),
+            date(2026, 8, 9, 9, 0)
+        )
+    }
+
+    func testOAuthFailureRequiresReconnect() {
+        XCTAssertEqual(MailBriefFailurePolicy.disposition(errorCode: "oauth"), .reconnect)
+        XCTAssertEqual(
+            MailBriefFailurePolicy.disposition(errorCode: "codex_unavailable"),
+            .waitUntilNextSchedule
+        )
+    }
+
     private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ minute: Int) -> Date {
         calendar.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: minute))!
     }

@@ -32,6 +32,10 @@ struct GmailMailBriefClient {
         return values
     }
 
+    func fetchCandidate(threadID: String, accessToken: String) async throws -> MailBriefCandidate {
+        try await fetchThread(threadID, accessToken: accessToken)
+    }
+
     func mutate(threadID: String, mutation: GmailThreadMutation, accessToken: String) async throws {
         let escaped = threadID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? threadID
         switch mutation {

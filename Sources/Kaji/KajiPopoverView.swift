@@ -67,7 +67,6 @@ struct KajiPopoverView: View {
     @State private var hoveredNewsID: String?
     @State private var newsHoverGeneration = 0
     @State private var hoveredMailID: String?
-    @State private var mailHoverGeneration = 0
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -130,7 +129,9 @@ struct KajiPopoverView: View {
             Divider().overlay(t.track.opacity(0.8))
             controlsFooter
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 12)
+        .padding(.top, panel == .mailBrief ? 4 : 12)
         .frame(width: PanelSize.medium.frameSize.width, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -230,44 +231,31 @@ struct KajiPopoverView: View {
                     Button("Retry") { mailBriefStore.generateNow() }.buttonStyle(.plain)
                 }.frame(maxWidth: .infinity).padding(20)
             default:
-                if mailBriefStore.state != .running && mailBriefStore.sections.filter({ $0.level > 0 }).isEmpty {
+                let attention = mailBriefStore.sections
+                    .filter { $0.level >= 2 }
+                    .flatMap(\.entries)
+                if mailBriefStore.state != .running && attention.isEmpty {
                     Text("今天没有需要处理的邮件")
                         .font(.system(size: 11, weight: .semibold)).foregroundColor(t.mute)
                         .frame(maxWidth: .infinity).padding(20)
+                } else if !attention.isEmpty {
+                    HStack {
+                        Text("需要处理")
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                        Spacer()
+                        Text("\(attention.count)")
+                            .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
+                            .foregroundColor(t.mute)
+                    }
+                    ForEach(attention) { mailBriefRow($0) }
                 }
-                ForEach(mailBriefStore.sections.filter { $0.level > 0 }, id: \.level) { section in
-                    mailBriefSection(section)
-                }
-                if let quiet = mailBriefStore.sections.first(where: { $0.level == 0 }) {
-                    DisclosureGroup("Quiet  \(quiet.entries.count)") {
-                        ForEach(quiet.entries) { mailBriefRow($0) }
-                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
-                }
-                if !mailBriefStore.dismissedEntries.isEmpty {
-                    DisclosureGroup("已忽略  \(mailBriefStore.dismissedEntries.count)") {
-                        ForEach(mailBriefStore.dismissedEntries) { entry in
-                            HStack {
-                                Text(entry.subject).lineLimit(1).font(.system(size: 10.5, weight: .medium))
-                                Spacer()
-                                Button { mailBriefStore.restore(entry) } label: { Image(systemName: "arrow.uturn.backward") }
-                                    .buttonStyle(.plain).help("恢复")
-                            }.padding(.vertical, 5)
-                        }
-                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
-                }
-                if !mailBriefStore.archivedEntries.isEmpty {
-                    DisclosureGroup("已完成  \(mailBriefStore.archivedEntries.count)") {
-                        ForEach(mailBriefStore.archivedEntries) { entry in
-                            mailBriefUndoRow(entry, action: { mailBriefStore.unarchive(entry) }, help: "撤销归档")
-                        }
-                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
-                }
-                if !mailBriefStore.trashedEntries.isEmpty {
-                    DisclosureGroup("已删除  \(mailBriefStore.trashedEntries.count)") {
-                        ForEach(mailBriefStore.trashedEntries) { entry in
-                            mailBriefUndoRow(entry, action: { mailBriefStore.untrash(entry) }, help: "移出垃圾箱")
-                        }
-                    }.font(.system(size: 10, weight: .semibold)).foregroundColor(t.mute)
+                let later = mailBriefStore.sections.filter { $0.level < 2 }.flatMap(\.entries)
+                if !later.isEmpty {
+                    DisclosureGroup("稍后查看  \(later.count)") {
+                        ForEach(later) { mailBriefRow($0) }
+                    }
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(t.mute)
                 }
             }
             HStack {
@@ -294,90 +282,133 @@ struct KajiPopoverView: View {
         }
     }
 
-    private func mailBriefSection(_ section: MailBriefSection) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 7) {
-                levelBlocks(section.level)
-                Text(mailLevelTitle(section.level))
-                    .font(.system(size: 12, weight: .bold, design: .rounded)).foregroundColor(t.cream)
-                Text("\(section.entries.count)")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced)).foregroundColor(t.mute)
-            }.accessibilityElement(children: .ignore).accessibilityLabel("\(mailLevelTitle(section.level))，\(section.entries.count) 封")
-            ForEach(section.entries) { mailBriefRow($0) }
-        }
-    }
-
-    private func levelBlocks(_ level: Int) -> some View {
-        HStack(spacing: 2.5) {
-            ForEach(0..<3, id: \.self) { index in
-                RoundedRectangle(cornerRadius: 1.2)
-                    .fill(index < level ? t.cream.opacity(0.72) : t.ash.opacity(0.28))
-                    .frame(width: 5, height: 5)
-            }
-        }.accessibilityHidden(true)
-    }
-
-    private func mailLevelTitle(_ level: Int) -> String {
-        switch level { case 3: "优先处理"; case 2: "今天处理"; case 1: "留意"; default: "Quiet" }
-    }
 
     private func mailBriefRow(_ entry: MailBriefEntry) -> some View {
-        HStack(spacing: 7) {
-            Button { if let url = entry.gmailURL { NSWorkspace.shared.open(url) } } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(entry.subject).font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(t.cream).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                    if !entry.sender.isEmpty { Text(entry.sender).font(.system(size: 8.5)).foregroundColor(t.mute).lineLimit(1) }
-                }
-            }.buttonStyle(.plain)
-            if mailBriefStore.pendingThreadIDs.contains(entry.threadID) {
-                ProgressView().controlSize(.mini).frame(width: 50)
-            } else {
-                Button { mailBriefStore.archive(entry) } label: { Image(systemName: "archivebox") }
-                    .buttonStyle(.plain).help("完成并归档")
-                Button { mailBriefStore.toggleStar(entry) } label: {
-                    Image(systemName: (entry.isStarred ?? false) ? "star.fill" : "star")
-                }.buttonStyle(.plain).help((entry.isStarred ?? false) ? "取消 Flag" : "Flag")
-                Button { mailBriefStore.trash(entry) } label: { Image(systemName: "trash") }
-                    .buttonStyle(.plain).help("移到 Gmail 垃圾箱")
-                Button { convertMailToGoal(entry) } label: {
-                    Image(systemName: mailBriefStore.isConverted(entry) ? "checkmark.circle.fill" : "checkmark.circle")
-                }.buttonStyle(.plain).disabled(mailBriefStore.isConverted(entry)).help("转成 Today Goal")
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(entry.summaryZH)
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.cream)
+                    .lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(entry.subject)
+                    .font(.system(size: 8.5, weight: .medium))
+                    .foregroundColor(t.mute)
+                    .lineLimit(1)
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 8, weight: .bold))
+                .foregroundColor(t.ash)
         }
-        .padding(7).background(RoundedRectangle(cornerRadius: 7).fill(t.panel.opacity(0.7)))
-        .onHover { inside in updateMailHover(entry, inside: inside) }
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .onTapGesture { hoveredMailID = entry.threadID }
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(t.track.opacity(0.55)).frame(height: 0.5)
+        }
         .popover(isPresented: Binding(get: { hoveredMailID == entry.threadID }, set: { if !$0 { hoveredMailID = nil } }), arrowEdge: .trailing) {
-            mailBriefDetail(entry).onHover { updateMailDetailHover(inside: $0) }
+            mailBriefDetail(entry)
         }
         .contextMenu {
-            Button("忽略本次简报") { mailBriefStore.dismiss(entry) }
+            if let url = entry.gmailURL { Button("在 Gmail 打开") { NSWorkspace.shared.open(url) } }
+            Button("完成并归档") { mailBriefStore.archive(entry) }
+            Button((entry.isStarred ?? false) ? "取消 Flag" : "Flag") { mailBriefStore.toggleStar(entry) }
+            Button("转成 Today Goal") { convertMailToGoal(entry) }
+                .disabled(mailBriefStore.isConverted(entry))
+            Divider()
+            Button("移到垃圾箱") { mailBriefStore.trash(entry) }
         }
     }
 
-    private func mailBriefUndoRow(_ entry: MailBriefEntry, action: @escaping () -> Void, help: String) -> some View {
-        HStack {
-            Text(entry.subject).lineLimit(1).font(.system(size: 10.5, weight: .medium))
-            Spacer()
-            if mailBriefStore.pendingThreadIDs.contains(entry.threadID) {
-                ProgressView().controlSize(.mini)
-            } else {
-                Button(action: action) { Image(systemName: "arrow.uturn.backward") }
-                    .buttonStyle(.plain).help(help)
-            }
-        }.padding(.vertical, 5)
-    }
 
     private func mailBriefDetail(_ entry: MailBriefEntry) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(entry.subject).font(.system(size: 12, weight: .bold)).fixedSize(horizontal: false, vertical: true)
-            if !entry.sender.isEmpty { Text(entry.sender).font(.system(size: 9, weight: .medium)).foregroundColor(t.mute) }
+        VStack(alignment: .leading, spacing: 9) {
+            Text(entry.subject)
+                .font(.system(size: 12, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
+            if !entry.sender.isEmpty {
+                Text(entry.sender)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(t.mute)
+            }
             Divider()
-            Text(entry.summaryZH).font(.system(size: 10.5)).fixedSize(horizontal: false, vertical: true)
-            Text(entry.reasonZH).font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute).fixedSize(horizontal: false, vertical: true)
-            if let deadline = entry.deadline { Text("截止：\(deadline.formatted(date: .abbreviated, time: .shortened))").font(.system(size: 9.5, weight: .semibold)) }
-            if let url = entry.gmailURL { Link("在 Gmail 打开", destination: url).font(.system(size: 9.5, weight: .semibold)) }
-        }.padding(12).frame(width: 260, alignment: .leading)
+            Text(entry.summaryZH)
+                .font(.system(size: 10.5, weight: .medium))
+                .fixedSize(horizontal: false, vertical: true)
+            Text(entry.reasonZH)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundColor(t.mute)
+                .fixedSize(horizontal: false, vertical: true)
+            if let deadline = entry.deadline {
+                Text("截止：\(deadline.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.system(size: 9.5, weight: .semibold))
+            }
+
+            if mailBriefStore.draftingThreadIDs.contains(entry.threadID) {
+                HStack(spacing: 7) {
+                    ProgressView().controlSize(.small)
+                    Text("AI 正在起草回复…")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundColor(t.mute)
+                }
+                .padding(.vertical, 5)
+            } else if let draft = mailBriefStore.replyDraft(for: entry) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text("回复草稿")
+                        .font(.system(size: 9.5, weight: .bold, design: .rounded))
+                    Text(draft)
+                        .font(.system(size: 10, weight: .regular))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 7).fill(t.panel.opacity(0.7)))
+                    HStack {
+                        Button("复制草稿") { copyMailDraft(draft) }
+                            .buttonStyle(.bordered)
+                        if let url = entry.gmailURL {
+                            Button("在 Gmail 回复") { NSWorkspace.shared.open(url) }
+                                .buttonStyle(.bordered)
+                        }
+                    }
+                }
+            } else {
+                Button("AI 起草回复") { mailBriefStore.generateReplyDraft(for: entry) }
+                    .buttonStyle(.bordered)
+                    .disabled(!mailBriefStore.isConnected)
+            }
+
+            Divider()
+            HStack {
+                Button("完成并归档") {
+                    mailBriefStore.archive(entry)
+                    hoveredMailID = nil
+                }
+                .buttonStyle(.borderedProminent)
+                Menu("更多") {
+                    if let url = entry.gmailURL {
+                        Button("在 Gmail 打开") { NSWorkspace.shared.open(url) }
+                    }
+                    Button((entry.isStarred ?? false) ? "取消 Flag" : "Flag") {
+                        mailBriefStore.toggleStar(entry)
+                    }
+                    Button("转成 Today Goal") { convertMailToGoal(entry) }
+                        .disabled(mailBriefStore.isConverted(entry))
+                    Divider()
+                    Button("移到垃圾箱") {
+                        mailBriefStore.trash(entry)
+                        hoveredMailID = nil
+                    }
+                }
+                .menuStyle(.borderlessButton)
+            }
+        }
+        .padding(12)
+        .frame(width: 300, alignment: .leading)
+    }
+
+    private func copyMailDraft(_ draft: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(draft, forType: .string)
     }
 
     private func convertMailToGoal(_ entry: MailBriefEntry) {
@@ -389,20 +420,6 @@ struct KajiPopoverView: View {
         }
     }
 
-    private func updateMailHover(_ entry: MailBriefEntry, inside: Bool) {
-        let hadActive = hoveredMailID != nil; mailHoverGeneration += 1; let generation = mailHoverGeneration
-        let delay = inside ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActive) : HoverDisclosurePolicy.closeDelay
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard generation == mailHoverGeneration else { return }
-            if inside { hoveredMailID = entry.threadID } else if hoveredMailID == entry.threadID { hoveredMailID = nil }
-        }
-    }
-    private func updateMailDetailHover(inside: Bool) {
-        mailHoverGeneration += 1; guard !inside else { return }; let generation = mailHoverGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
-            guard generation == mailHoverGeneration else { return }; hoveredMailID = nil
-        }
-    }
 
     private func aiNewsRow(_ topic: AIHotTopic) -> some View {
         Button {
@@ -605,11 +622,15 @@ struct KajiPopoverView: View {
             .foregroundColor(t.mute)
         }
         .padding(8)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(scheme == .light ? Color.white.opacity(0.92) : t.panel.opacity(0.75))
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(t.cream.opacity(0.06), lineWidth: 0.5)
+                .stroke(scheme == .light ? Color.black.opacity(0.08) : t.cream.opacity(0.06), lineWidth: 0.5)
         )
+        .shadow(color: scheme == .light ? Color.black.opacity(0.06) : .clear, radius: 4, y: 1)
     }
 
     private func quotaWindowRow(label: String, value: Double, resetDate: Date?, nearLimit: Bool) -> some View {

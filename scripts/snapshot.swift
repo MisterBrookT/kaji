@@ -88,6 +88,41 @@ struct Snap {
         return store
     }
 
+    static func makeMailGeneration() -> MailBriefGeneration {
+        let entries = [
+            MailBriefEntry(threadID: "1", subject: "Message to KDD 2026 Workshop Authors Accepted",
+                           sender: "AIDataSci 2026", gmailURL: nil, level: 3, bucket: .act,
+                           summaryZH: "KDD 2026 Workshop 投稿已接收，需要确认作者信息。",
+                           reasonZH: "录用通知，需要在截止日前完成确认。", suggestedAction: .reply,
+                           deadline: Date(timeIntervalSinceNow: 2 * 86_400), confidence: .high,
+                           goalTitleZH: "确认 KDD Workshop 作者信息"),
+            MailBriefEntry(threadID: "2", subject: "Tuesday Poster Session",
+                           sender: "KDD Events Team", gmailURL: nil, level: 3, bucket: .act,
+                           summaryZH: "周二 Poster Session 时间与展位安排已更新。",
+                           reasonZH: "行程发生变化。", suggestedAction: .createGoal,
+                           deadline: nil, confidence: .high, goalTitleZH: "更新 KDD Poster 行程"),
+            MailBriefEntry(threadID: "3", subject: "WISE 2026 Invitation Letter Request for Visa Support",
+                           sender: "Microsoft CMT", gmailURL: nil, level: 2, bucket: .act,
+                           summaryZH: "WISE 2026 签证邀请函需要补充护照信息。",
+                           reasonZH: "材料不完整会影响签证进度。", suggestedAction: .reply,
+                           deadline: Date(timeIntervalSinceNow: 5 * 86_400), confidence: .high,
+                           goalTitleZH: "补充 WISE 签证材料"),
+            MailBriefEntry(threadID: "4", subject: "AAAI 2027 revision received",
+                           sender: "OpenReview", gmailURL: nil, level: 2, bucket: .watch,
+                           summaryZH: "AAAI 2027 修订稿已成功提交，无需立即操作。",
+                           reasonZH: "系统回执。", suggestedAction: .none,
+                           deadline: nil, confidence: .high, goalTitleZH: nil),
+            MailBriefEntry(threadID: "5", subject: "Your Nexitaly service expires in 3 days",
+                           sender: "Nexitaly", gmailURL: nil, level: 1, bucket: .watch,
+                           summaryZH: "Nexitaly 服务将在 3 天后到期。",
+                           reasonZH: "可能需要续费。", suggestedAction: .watch,
+                           deadline: Date(timeIntervalSinceNow: 3 * 86_400), confidence: .medium,
+                           goalTitleZH: nil),
+        ]
+        return MailBriefGeneration(briefDay: "2026-08-25", entries: entries,
+                                   snapshotInboxThreadCount: 32, classifierModelID: MailBriefModel.defaultValue.rawValue)
+    }
+
     static func main() {
         MainActor.assumeIsolated {
             let mocks = makeMocks()
@@ -95,12 +130,14 @@ struct Snap {
             let goalsMode = args.contains("goals")
             let workMode = args.contains("work")
             let breakMode = args.contains("break")
+            let mailMode = args.contains("mail")
             let lang: Lang = args.contains("zh") ? .zh : .en
             let showRemaining = args.contains("remaining")
             let prefs = makePrefs(lang)
             prefs.showRemaining = showRemaining
             if goalsMode { prefs.enabledModules = [.quota, .goals] }
             if workMode || breakMode { prefs.enabledModules = [.quota, .work] }
+            if mailMode { prefs.enabledModules = [.quota, .mailBrief] }
 
             let store = QuotaStore(previewProviders: mocks, updated: Date())
             let workSession = WorkSessionController(prefs: prefs)
@@ -109,10 +146,13 @@ struct Snap {
             let dailyGoals = goalsMode ? makeGoalsStore() : DailyGoalStore()
             let fixedPlanStore = FixedPlanStore()
             let aiNewsStore = AIHotNewsStore()
-            let mailBriefStore = MailBriefStore(cacheURL: URL(fileURLWithPath: "/tmp/kaji-snapshot-mail.json"))
+            let mailBriefStore = mailMode
+                ? MailBriefStore(previewGeneration: makeMailGeneration())
+                : MailBriefStore(cacheURL: URL(fileURLWithPath: "/tmp/kaji-snapshot-mail.json"))
             let navigation = PopoverNavigation()
             if goalsMode { navigation.panel = .goals }
             if workMode || breakMode { navigation.panel = .work }
+            if mailMode { navigation.panel = .mailBrief }
             let controls = KajiPopoverControls(
                 onOpenSettings: {},
                 onQuit: {}
@@ -167,6 +207,11 @@ struct Snap {
             }
 
             let arg = args.first ?? "both"
+            if mailMode {
+                render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/mail-dark.png")
+                render(popover, appearance: .aqua, scheme: .light, to: "/tmp/mail-light.png")
+                return
+            }
             if goalsMode {
                 render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/goals-dark.png")
             } else if workMode {

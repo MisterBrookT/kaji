@@ -20,4 +20,30 @@ public enum MailBriefSchedulePolicy {
         let next = due ? todayDue : (now < todayDue ? todayDue : calendar.date(byAdding: .day, value: 1, to: todayDue) ?? todayDue)
         return Decision(isDue: due, nextDue: next, briefDay: formatter.string(from: now))
     }
+
+    public static func nextAttemptAfterFailure(
+        now: Date,
+        hour: Int,
+        minute: Int,
+        calendar: Calendar
+    ) -> Date {
+        decision(
+            now: now,
+            hour: hour,
+            minute: minute,
+            calendar: calendar,
+            lastAutomaticSuccess: now
+        ).nextDue
+    }
+}
+
+public enum MailBriefFailureDisposition: Equatable, Sendable {
+    case reconnect
+    case waitUntilNextSchedule
+}
+
+public enum MailBriefFailurePolicy {
+    public static func disposition(errorCode: String) -> MailBriefFailureDisposition {
+        errorCode == "oauth" ? .reconnect : .waitUntilNextSchedule
+    }
 }
