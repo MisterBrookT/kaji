@@ -3,6 +3,17 @@ import KajiCore
 
 enum GmailThreadMutation: Sendable {
     case archive, unarchive, star, unstar, trash, untrash
+
+    var inverse: Self {
+        switch self {
+        case .archive: .unarchive
+        case .unarchive: .archive
+        case .star: .unstar
+        case .unstar: .star
+        case .trash: .untrash
+        case .untrash: .trash
+        }
+    }
 }
 
 struct GmailMailBriefClient {

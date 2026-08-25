@@ -4,8 +4,8 @@ import KajiCore
 
 @MainActor
 final class KajiMCPServer: ObservableObject {
-    static let port: UInt16 = 37_841
-    static let endpoint = "http://127.0.0.1:\(port)/mcp"
+    nonisolated static let port: UInt16 = 37_841
+    nonisolated static let endpoint = "http://127.0.0.1:\(port)/mcp"
 
     enum Status: Equatable {
         case stopped
@@ -17,6 +17,7 @@ final class KajiMCPServer: ObservableObject {
     @Published private(set) var status: Status = .stopped
 
     private weak var goals: DailyGoalStore?
+    private let snapshotProvider: () -> [String: Any]
     private let host: NWEndpoint.Host
     private let port: NWEndpoint.Port
     private var listener: NWListener?
@@ -26,9 +27,11 @@ final class KajiMCPServer: ObservableObject {
     init(
         goals: DailyGoalStore,
         host: String = "127.0.0.1",
-        port: UInt16 = KajiMCPServer.port
+        port: UInt16 = KajiMCPServer.port,
+        snapshotProvider: @escaping () -> [String: Any] = { [:] }
     ) {
         self.goals = goals
+        self.snapshotProvider = snapshotProvider
         self.host = NWEndpoint.Host(host)
         self.port = NWEndpoint.Port(rawValue: port)!
     }
@@ -157,7 +160,7 @@ final class KajiMCPServer: ObservableObject {
             return rpcResult(id: id, result: [
                 "protocolVersion": params?["protocolVersion"] as? String ?? "2025-03-26",
                 "capabilities": ["tools": ["listChanged": false]],
-                "serverInfo": ["name": "Kaji", "version": "0.8.3"]
+                "serverInfo": ["name": "Kaji", "version": "0.9.0"]
             ])
         case "tools/list":
             return rpcResult(id: id, result: ["tools": Self.toolDefinitions])
@@ -181,32 +184,31 @@ final class KajiMCPServer: ObservableObject {
         do {
             let payload: Any
             switch name {
+            case "kaji_state":
+                payload = snapshotProvider()
             case "kaji_goals_list":
-                if let raw = arguments["horizon"] as? String {
-                    let horizon = try parseHorizon(raw)
-                    payload = [
-                        "horizon": horizonName(horizon),
-                        "goals": goals.goals(for: horizon).map(goalObject)
-                    ]
-                } else {
-                    payload = Dictionary(uniqueKeysWithValues: GoalHorizon.allCases.map {
-                        (horizonName($0), goals.goals(for: $0).map(goalObject))
-                    })
-                }
+                payload = [
+                    "goals": goals.goals(for: .today).map(goalObject),
+                    "tags": goals.tagDefinitions.map {
+                        ["name": $0.name, "colorHex": String(format: "%06X", $0.colorHex)]
+                    }
+                ]
             case "kaji_goal_add":
-                let horizon = try requiredHorizon(arguments)
                 guard let title = arguments["title"] as? String else {
                     throw MCPToolError.invalid("title is required")
                 }
+                let tag = goals.ensureTag(
+                    name: arguments["tag"] as? String ?? GoalTag.personal.rawValue,
+                    colorHex: 0x8E6AD8
+                )
                 let goal = try goals.addGoal(
                     title: title,
-                    tag: arguments["tag"] as? String ?? "personal",
+                    tag: tag,
                     note: arguments["note"] as? String ?? "",
-                    in: horizon
+                    in: .today
                 )
                 payload = goalObject(goal)
             case "kaji_goal_update":
-                let horizon = try requiredHorizon(arguments)
                 let goalID = try requiredID(arguments)
                 let title = arguments["title"] as? String
                 let tag = arguments["tag"] as? String
@@ -219,21 +221,19 @@ final class KajiMCPServer: ObservableObject {
                     title: title,
                     tag: tag,
                     note: note,
-                    in: horizon
+                    in: .today
                 )
-                payload = goalObject(try findGoal(goalID, in: horizon, store: goals))
+                payload = goalObject(try findGoal(goalID, store: goals))
             case "kaji_goal_complete":
-                let horizon = try requiredHorizon(arguments)
                 let goalID = try requiredID(arguments)
                 guard let isDone = arguments["isDone"] as? Bool else {
                     throw MCPToolError.invalid("isDone is required")
                 }
-                try goals.setGoalCompleted(id: goalID, isDone: isDone, in: horizon)
-                payload = goalObject(try findGoal(goalID, in: horizon, store: goals))
+                try goals.setGoalCompleted(id: goalID, isDone: isDone, in: .today)
+                payload = goalObject(try findGoal(goalID, store: goals))
             case "kaji_goal_delete":
-                let horizon = try requiredHorizon(arguments)
                 let goalID = try requiredID(arguments)
-                try goals.deleteGoal(id: goalID, in: horizon)
+                try goals.deleteGoal(id: goalID, in: .today)
                 payload = ["deleted": goalID.uuidString.lowercased()]
             default:
                 throw MCPToolError.invalid("Unknown tool: \(name)")
@@ -244,25 +244,6 @@ final class KajiMCPServer: ObservableObject {
         }
     }
 
-    private func requiredHorizon(_ arguments: [String: Any]) throws -> GoalHorizon {
-        guard let raw = arguments["horizon"] as? String else {
-            throw MCPToolError.invalid("horizon is required")
-        }
-        return try parseHorizon(raw)
-    }
-
-    private func parseHorizon(_ raw: String) throws -> GoalHorizon {
-        switch raw.lowercased() {
-        case "today": .today
-        case "week": .week
-        case "vision", "longterm", "long_term": .longTerm
-        default: throw MCPToolError.invalid("horizon must be today, week, or vision")
-        }
-    }
-
-    private func horizonName(_ horizon: GoalHorizon) -> String {
-        horizon == .longTerm ? "vision" : horizon.rawValue
-    }
 
     private func requiredID(_ arguments: [String: Any]) throws -> UUID {
         guard let raw = arguments["id"] as? String,
@@ -274,10 +255,9 @@ final class KajiMCPServer: ObservableObject {
 
     private func findGoal(
         _ id: UUID,
-        in horizon: GoalHorizon,
         store: DailyGoalStore
     ) throws -> DailyGoal {
-        guard let goal = store.goals(for: horizon).first(where: { $0.id == id }) else {
+        guard let goal = store.goals(for: .today).first(where: { $0.id == id }) else {
             throw GoalStoreMutationError.goalNotFound
         }
         return goal
@@ -335,58 +315,53 @@ final class KajiMCPServer: ObservableObject {
         case invalid(String)
     }
 
-    private static let horizonSchema: [String: Any] = [
-        "type": "string",
-        "enum": ["today", "week", "vision"]
-    ]
 
     private static let toolDefinitions: [[String: Any]] = [
         tool(
+            "kaji_state",
+            "Read the complete current Kaji state.",
+            properties: [:]
+        ),
+        tool(
             "kaji_goals_list",
-            "List Kaji goals. Omit horizon to list all horizons.",
-            properties: ["horizon": horizonSchema]
+            "List Kaji goals and their colored tags.",
+            properties: [:]
         ),
         tool(
             "kaji_goal_add",
-            "Add a Goal with an optional note.",
+            "Add a Goal with an optional tag and note.",
             properties: [
-                "horizon": horizonSchema,
                 "title": ["type": "string"],
                 "tag": ["type": "string"],
                 "note": ["type": "string"]
             ],
-            required: ["horizon", "title"]
+            required: ["title"]
         ),
         tool(
             "kaji_goal_update",
-            "Update a Goal title, Tag, and/or note.",
+            "Update a Goal title, tag, and/or note.",
             properties: [
-                "horizon": horizonSchema,
                 "id": ["type": "string"],
                 "title": ["type": "string"],
                 "tag": ["type": "string"],
                 "note": ["type": "string"]
             ],
-            required: ["horizon", "id"]
+            required: ["id"]
         ),
         tool(
             "kaji_goal_complete",
             "Set a Goal's completion state.",
             properties: [
-                "horizon": horizonSchema,
                 "id": ["type": "string"],
                 "isDone": ["type": "boolean"]
             ],
-            required: ["horizon", "id", "isDone"]
+            required: ["id", "isDone"]
         ),
         tool(
             "kaji_goal_delete",
             "Delete a Goal by ID.",
-            properties: [
-                "horizon": horizonSchema,
-                "id": ["type": "string"]
-            ],
-            required: ["horizon", "id"]
+            properties: ["id": ["type": "string"]],
+            required: ["id"]
         )
     ]
 

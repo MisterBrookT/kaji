@@ -4,25 +4,53 @@ import KajiCore
 typealias DailyGoal = GoalItem
 typealias DailyGoalHistoryDay = GoalHistoryDay
 
+struct GoalTagDefinition: Codable, Equatable, Identifiable {
+    let id: UUID
+    var name: String
+    var colorHex: UInt32
+
+    static let defaults: [GoalTagDefinition] = [
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000001")!, name: "Work", colorHex: 0x5B7CFA),
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000002")!, name: "Personal", colorHex: 0x8E6AD8),
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000003")!, name: "Health", colorHex: 0xE05D6F),
+        .init(id: UUID(uuidString: "10000000-0000-0000-0000-000000000004")!, name: "Home", colorHex: 0xD18A3C),
+    ]
+}
+
 @MainActor
 final class DailyGoalStore: ObservableObject {
     @Published private(set) var state: GoalHorizonState {
         didSet { save() }
     }
+    @Published private(set) var tagDefinitions: [GoalTagDefinition] {
+        didSet { saveTagDefinitions() }
+    }
 
     private let defaults: UserDefaults
     private var now: () -> Date
     private var calendar: Calendar
+    private let completionRemovalDelay: Duration
+    private var completionRemovalTasks: [UUID: Task<Void, Never>] = [:]
     private(set) var loadIssue: GoalStateLoadIssue?
+    private static let tagDefinitionsKey = "goalTagDefinitionsV1"
 
     init(
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        completionRemovalDelay: Duration = .seconds(5)
     ) {
         self.defaults = defaults
         self.now = now
         self.calendar = calendar
+        self.completionRemovalDelay = completionRemovalDelay
+        if let data = defaults.data(forKey: Self.tagDefinitionsKey),
+           let saved = try? JSONDecoder().decode([GoalTagDefinition].self, from: data),
+           !saved.isEmpty {
+            tagDefinitions = saved
+        } else {
+            tagDefinitions = GoalTagDefinition.defaults
+        }
 
         let date = now()
         let dayKey = Self.dayKey(for: date, calendar: calendar)
@@ -32,11 +60,17 @@ final class DailyGoalStore: ObservableObject {
             currentDayKey: dayKey,
             currentWeekKey: weekKey
         )
-        let refreshed = GoalHorizonLogic.refresh(
+        var refreshed = GoalHorizonLogic.refresh(
             loaded.state,
             dayKey: dayKey,
             weekKey: weekKey
         )
+        let merged = refreshed.today + refreshed.week + refreshed.longTerm + refreshed.yesterdayPending
+        var seen = Set<UUID>()
+        refreshed.today = merged.filter { seen.insert($0.id).inserted }
+        refreshed.week = []
+        refreshed.longTerm = []
+        refreshed.yesterdayPending = []
         state = refreshed
         loadIssue = loaded.issue
         if refreshed != loaded.state {
@@ -63,10 +97,13 @@ final class DailyGoalStore: ObservableObject {
     }
 
     func toggle(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
+        var isNowDone = false
         mutate(horizon) { goals in
             guard let index = goals.firstIndex(where: { $0.id == goal.id }) else { return }
             goals[index].isDone.toggle()
+            isNowDone = goals[index].isDone
         }
+        updateCompletionRemoval(for: goal.id, in: horizon, isDone: isNowDone)
     }
 
     func updateTitle(_ goal: DailyGoal, title: String, in horizon: GoalHorizon = .today) {
@@ -100,6 +137,7 @@ final class DailyGoalStore: ObservableObject {
     }
 
     func delete(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
+        completionRemovalTasks.removeValue(forKey: goal.id)?.cancel()
         mutate(horizon) { goals in
             goals.removeAll { $0.id == goal.id }
         }
@@ -116,11 +154,12 @@ final class DailyGoalStore: ObservableObject {
         guard !normalizedTitle.isEmpty else {
             throw GoalStoreMutationError.emptyTitle
         }
+        let normalizedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         let goal = DailyGoal(
             id: UUID(),
             title: normalizedTitle,
             isDone: false,
-            tag: GoalTagLogic.resolve(tag, title: normalizedTitle).rawValue,
+            tag: normalizedTag.isEmpty ? GoalTag.personal.rawValue : normalizedTag,
             note: note
         )
         mutate(horizon) { $0.append(goal) }
@@ -146,10 +185,8 @@ final class DailyGoalStore: ObservableObject {
             next[horizon][index].title = normalizedTitle
         }
         if let tag {
-            next[horizon][index].tag = GoalTagLogic.resolve(
-                tag,
-                title: next[horizon][index].title
-            ).rawValue
+            let normalizedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+            next[horizon][index].tag = normalizedTag.isEmpty ? GoalTag.personal.rawValue : normalizedTag
         }
         if let note {
             next[horizon][index].note = note
@@ -166,6 +203,7 @@ final class DailyGoalStore: ObservableObject {
         next[horizon][index].isDone = isDone
         state = next
         if horizon == .today { recordToday() }
+        updateCompletionRemoval(for: id, in: horizon, isDone: isDone)
     }
 
     func deleteGoal(id: UUID, in horizon: GoalHorizon) throws {
@@ -238,10 +276,47 @@ final class DailyGoalStore: ObservableObject {
 
     var heatmapDays: [DailyGoalHistoryDay] {
         let date = now()
-        return (0..<35).reversed().map { offset in
+        return (0..<30).reversed().map { offset in
             let value = calendar.date(byAdding: .day, value: -offset, to: date) ?? date
             let key = Self.dayKey(for: value, calendar: calendar)
             return state.history[key] ?? DailyGoalHistoryDay(day: key, completed: 0, total: 0)
+        }
+    }
+
+    @discardableResult
+    func ensureTag(name: String, colorHex: UInt32) -> String {
+        let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return GoalTag.personal.rawValue }
+        if let existing = tagDefinitions.first(where: {
+            $0.name.caseInsensitiveCompare(normalized) == .orderedSame
+        }) {
+            return existing.name
+        }
+        tagDefinitions.append(.init(id: UUID(), name: normalized, colorHex: colorHex))
+        return normalized
+    }
+
+    func tagDefinition(for rawValue: String) -> GoalTagDefinition {
+        if let existing = tagDefinitions.first(where: {
+            $0.name.caseInsensitiveCompare(rawValue) == .orderedSame
+        }) {
+            return existing
+        }
+        let legacy = GoalTagLogic.resolve(rawValue, title: "").selectableEquivalent.label
+        return tagDefinitions.first(where: { $0.name == legacy }) ?? GoalTagDefinition.defaults[1]
+    }
+
+    private func updateCompletionRemoval(for id: UUID, in horizon: GoalHorizon, isDone: Bool) {
+        completionRemovalTasks.removeValue(forKey: id)?.cancel()
+        guard isDone else { return }
+        completionRemovalTasks[id] = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: self.completionRemovalDelay)
+            guard !Task.isCancelled else { return }
+            self.completionRemovalTasks[id] = nil
+            self.mutate(horizon) { goals in
+                goals.removeAll { $0.id == id && $0.isDone }
+            }
         }
     }
 
@@ -269,6 +344,11 @@ final class DailyGoalStore: ObservableObject {
 
     private func save() {
         try? GoalStatePersistence.save(state, defaults: defaults)
+    }
+
+    private func saveTagDefinitions() {
+        guard let data = try? JSONEncoder().encode(tagDefinitions) else { return }
+        defaults.set(data, forKey: Self.tagDefinitionsKey)
     }
 
     private static func dayKey(for date: Date, calendar: Calendar) -> String {

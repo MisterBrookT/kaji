@@ -10,6 +10,17 @@ public enum HoverDisclosurePolicy {
     }
 }
 
+public enum HoverSelectionPolicy {
+    public static func dismissed<ID: Equatable>(current: ID?, dismissing: ID) -> ID? {
+        current == dismissing ? nil : current
+    }
+}
+
+public enum GoalControlMetrics {
+    public static let diameter: CGFloat = 9
+    public static let rowIsCompletionTarget = true
+}
+
 public enum AIHotRefreshPolicy {
     public static let allowedHours = [1, 3, 5, 12, 24]
     public static let defaultHours = 5

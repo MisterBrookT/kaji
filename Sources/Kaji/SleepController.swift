@@ -100,28 +100,25 @@ final class SleepController: ObservableObject {
             let connection = NSXPCConnection(machServiceName: kajiSleepHelperMachService)
             connection.remoteObjectInterface = NSXPCInterface(with: SleepHelperProtocol.self)
 
-            let lock = NSLock()
-            var resumed = false
-            let finish: (Bool) -> Void = { value in
-                lock.lock()
-                defer { lock.unlock() }
-                guard !resumed else { return }
-                resumed = true
-                connection.invalidate()
-                continuation.resume(returning: value)
-            }
+            let completion = SleepRequestCompletion(
+                connection: connection,
+                continuation: continuation
+            )
 
-            connection.interruptionHandler = { finish(false) }
-            connection.invalidationHandler = { finish(false) }
+            connection.interruptionHandler = { completion.finish(false) }
+            connection.invalidationHandler = { completion.finish(false) }
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 3) {
+                completion.finish(false)
+            }
             connection.resume()
 
             guard let helper = connection.remoteObjectProxyWithErrorHandler({ _ in
-                finish(false)
+                completion.finish(false)
             }) as? SleepHelperProtocol else {
-                finish(false)
+                completion.finish(false)
                 return
             }
-            helper.setSleepDisabled(disabled) { ok, _ in finish(ok) }
+            helper.setSleepDisabled(disabled) { ok, _ in completion.finish(ok) }
         }
     }
 
@@ -145,6 +142,38 @@ final class SleepController: ObservableObject {
 
     static func parseSleepDisabled(_ output: String) -> Bool {
         SleepControlLogic.parseSleepDisabled(output)
+    }
+}
+
+final class SleepRequestGate: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+
+    func claim() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished else { return false }
+        finished = true
+        return true
+    }
+}
+
+private final class SleepRequestCompletion: @unchecked Sendable {
+    private let gate = SleepRequestGate()
+    private let connection: NSXPCConnection
+    private let continuation: CheckedContinuation<Bool, Never>
+
+    init(connection: NSXPCConnection, continuation: CheckedContinuation<Bool, Never>) {
+        self.connection = connection
+        self.continuation = continuation
+    }
+
+    func finish(_ value: Bool) {
+        guard gate.claim() else { return }
+        connection.interruptionHandler = nil
+        connection.invalidationHandler = nil
+        continuation.resume(returning: value)
+        connection.invalidate()
     }
 }
 

@@ -139,8 +139,10 @@ final class MailBriefStore: ObservableObject {
                                                            calendar: .current, lastAutomaticSuccess: nil).briefDay
                 publishCheckpoint(day: day, inboxEntries: entries, inboxCount: candidates.count,
                                   model: generationModel)
-                let batches = stride(from: 0, to: changed.count, by: batchSize).map {
-                    Array(changed[$0..<min($0 + batchSize, changed.count)])
+                let selectedBatchSize = batchSize
+                let selectedConcurrency = concurrency
+                let batches = stride(from: 0, to: changed.count, by: selectedBatchSize).map {
+                    Array(changed[$0..<min($0 + selectedBatchSize, changed.count)])
                 }
                 var nextBatch = 0
                 try await withThrowingTaskGroup(of: [MailBriefEntry].self) { group in
@@ -149,13 +151,13 @@ final class MailBriefStore: ObservableObject {
                         let batch = batches[nextBatch]; nextBatch += 1
                         group.addTask { try await CodexMailBriefExecutor().summarize(batch, model: generationModel) }
                     }
-                    for _ in 0..<min(concurrency, batches.count) { addNext() }
+                    for _ in 0..<min(selectedConcurrency, batches.count) { addNext() }
                     while let result = try await group.next() {
                         entries.append(contentsOf: result)
-                        updateRun(id: runID) { $0.classifiedCount += result.count }
-                        syncProgress = (entries.count, candidates.count)
-                        publishCheckpoint(day: day, inboxEntries: entries, inboxCount: candidates.count,
-                                          model: generationModel)
+                        self.updateRun(id: runID) { $0.classifiedCount += result.count }
+                        self.syncProgress = (entries.count, candidates.count)
+                        self.publishCheckpoint(day: day, inboxEntries: entries, inboxCount: candidates.count,
+                                               model: generationModel)
                         addNext()
                     }
                 }
@@ -278,8 +280,11 @@ final class MailBriefStore: ObservableObject {
     func untrash(_ entry: MailBriefEntry) { mutate(entry, .untrash) }
 
     private func mutate(_ entry: MailBriefEntry, _ mutation: GmailThreadMutation) {
-        guard !pendingThreadIDs.contains(entry.threadID) else { return }
-        pendingThreadIDs.insert(entry.threadID); lastError = nil
+        guard !pendingThreadIDs.contains(entry.threadID), let current = generation else { return }
+        pendingThreadIDs.insert(entry.threadID)
+        lastError = nil
+        generation = Self.applying(mutation, entry: entry, to: current)
+        try? saveCache()
         Task { [weak self] in
             guard let self else { return }
             defer { pendingThreadIDs.remove(entry.threadID) }
@@ -290,29 +295,26 @@ final class MailBriefStore: ObservableObject {
                     throw MailBriefError.oauth("Google OAuth client is not configured")
                 }
                 if !MailBriefCredentialStore.canModify {
-                    try await MailBriefOAuthFlow(clientID: clientID, clientSecret: clientSecret,
-                                                 requestsModify: true).connect()
+                    try await MailBriefOAuthFlow(
+                        clientID: clientID,
+                        clientSecret: clientSecret,
+                        requestsModify: true
+                    ).connect()
                 }
-                let token = try await MailBriefCredentialStore.validAccessToken(clientID: clientID,
-                                                                                 clientSecret: clientSecret)
-                try await GmailMailBriefClient().mutate(threadID: entry.threadID, mutation: mutation,
-                                                        accessToken: token)
-                guard var value = generation else { return }
-                switch mutation {
-                case .archive:
-                    value.archivedThreadIDs.insert(entry.threadID); value.snapshotInboxThreadCount -= 1
-                case .unarchive:
-                    value.archivedThreadIDs.remove(entry.threadID); value.snapshotInboxThreadCount += 1
-                case .trash:
-                    value.trashedThreadIDs.insert(entry.threadID); value.snapshotInboxThreadCount -= 1
-                case .untrash:
-                    value.trashedThreadIDs.remove(entry.threadID); value.snapshotInboxThreadCount += 1
-                case .star, .unstar:
-                    if let index = value.entries.firstIndex(where: { $0.threadID == entry.threadID }) {
-                        value.entries[index].isStarred = mutation == .star
-                    }
-                }
+                let token = try await MailBriefCredentialStore.validAccessToken(
+                    clientID: clientID,
+                    clientSecret: clientSecret
+                )
+                try await GmailMailBriefClient().mutate(
+                    threadID: entry.threadID,
+                    mutation: mutation,
+                    accessToken: token
+                )
             } catch {
+                if let current = generation {
+                    generation = Self.applying(mutation.inverse, entry: entry, to: current)
+                    try? saveCache()
+                }
                 lastError = Self.safeError(error)
                 let errorCode = Self.safeErrorCode(error)
                 if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
@@ -322,6 +324,37 @@ final class MailBriefStore: ObservableObject {
                 }
             }
         }
+    }
+
+    nonisolated static func applying(
+        _ mutation: GmailThreadMutation,
+        entry: MailBriefEntry,
+        to generation: MailBriefGeneration
+    ) -> MailBriefGeneration {
+        var value = generation
+        switch mutation {
+        case .archive:
+            if value.archivedThreadIDs.insert(entry.threadID).inserted {
+                value.snapshotInboxThreadCount = max(0, value.snapshotInboxThreadCount - 1)
+            }
+        case .unarchive:
+            if value.archivedThreadIDs.remove(entry.threadID) != nil {
+                value.snapshotInboxThreadCount += 1
+            }
+        case .trash:
+            if value.trashedThreadIDs.insert(entry.threadID).inserted {
+                value.snapshotInboxThreadCount = max(0, value.snapshotInboxThreadCount - 1)
+            }
+        case .untrash:
+            if value.trashedThreadIDs.remove(entry.threadID) != nil {
+                value.snapshotInboxThreadCount += 1
+            }
+        case .star, .unstar:
+            if let index = value.entries.firstIndex(where: { $0.threadID == entry.threadID }) {
+                value.entries[index].isStarred = mutation == .star
+            }
+        }
+        return value
     }
 
     func disconnect(deleteBrief: Bool = false) {

@@ -26,7 +26,7 @@ final class GoalHorizonModelTests: XCTestCase {
             dayKey: "2026-8-2",
             weekKey: "2026-31"
         )
-        XCTAssertEqual(refreshed.yesterdayPending.first?.tag, "Health")
+        XCTAssertEqual(refreshed.today.first?.tag, "Health")
     }
 
     func testTagInferenceClassifiesCurrentTaskStyles() {
@@ -46,7 +46,7 @@ final class GoalHorizonModelTests: XCTestCase {
     private let weekID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
     private let longID = UUID(uuidString: "00000000-0000-0000-0000-000000000003")!
 
-    func testDayChangeArchivesPendingAndClearsToday() {
+    func testDayChangeRecordsActivityAndKeepsGoals() {
         let state = GoalHorizonState(
             today: [
                 GoalItem(id: todayID, title: "Done", isDone: true),
@@ -61,16 +61,14 @@ final class GoalHorizonModelTests: XCTestCase {
 
         let refreshed = GoalHorizonLogic.refresh(state, dayKey: "2026-8-2", weekKey: "2026-31")
 
-        XCTAssertTrue(refreshed.today.isEmpty)
-        XCTAssertEqual(refreshed.yesterdayPending, [
-            GoalItem(id: weekID, title: "Pending", isDone: false)
-        ])
+        XCTAssertEqual(refreshed.today, state.today)
+        XCTAssertTrue(refreshed.yesterdayPending.isEmpty)
         XCTAssertTrue(refreshed.week[0].isDone)
         XCTAssertTrue(refreshed.longTerm[0].isDone)
         XCTAssertEqual(refreshed.history["2026-8-1"], GoalHistoryDay(day: "2026-8-1", completed: 1, total: 2))
     }
 
-    func testWeekChangeClearsOnlyWeekCompletion() {
+    func testWeekChangeKeepsCompletionState() {
         let state = GoalHorizonState(
             today: [GoalItem(id: todayID, title: "Ship", isDone: true)],
             week: [GoalItem(id: weekID, title: "Draft", isDone: true)],
@@ -83,7 +81,7 @@ final class GoalHorizonModelTests: XCTestCase {
         let refreshed = GoalHorizonLogic.refresh(state, dayKey: "2026-8-1", weekKey: "2026-32")
 
         XCTAssertTrue(refreshed.today[0].isDone)
-        XCTAssertFalse(refreshed.week[0].isDone)
+        XCTAssertTrue(refreshed.week[0].isDone)
         XCTAssertTrue(refreshed.longTerm[0].isDone)
     }
 

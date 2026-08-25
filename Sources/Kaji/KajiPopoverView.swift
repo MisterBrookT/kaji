@@ -23,9 +23,7 @@ private struct PopoverContentSizeKey: PreferenceKey {
 }
 
 private enum GoalCreationKind: String, CaseIterable {
-    case today = "Today"
-    case week = "Week"
-    case vision = "Vision"
+    case goal = "Goal"
     case fixed = "Schedule"
 }
 
@@ -55,9 +53,10 @@ struct KajiPopoverView: View {
     @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
     @State private var showsGoalCreator = false
-    @State private var goalCreationKind: GoalCreationKind = .today
+    @State private var goalCreationKind: GoalCreationKind = .goal
     @State private var goalCreationTitle = ""
-    @State private var goalCreationTag: GoalTag = .personal
+    @State private var goalCreationTagName = GoalTag.personal.rawValue
+    @State private var goalCreationTagColor: UInt32 = 0x8E6AD8
     @State private var goalCreationWeekdays: Set<Int> = [
         Calendar.current.component(.weekday, from: Date())
     ]
@@ -67,6 +66,7 @@ struct KajiPopoverView: View {
     @State private var hoveredNewsID: String?
     @State private var newsHoverGeneration = 0
     @State private var hoveredMailID: String?
+    @State private var mailHoverGeneration = 0
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -131,7 +131,7 @@ struct KajiPopoverView: View {
         }
         .padding(.horizontal, 12)
         .padding(.bottom, 12)
-        .padding(.top, panel == .mailBrief ? 4 : 12)
+        .padding(.top, 12)
         .frame(width: PanelSize.medium.frameSize.width, alignment: .topLeading)
         .fixedSize(horizontal: false, vertical: true)
     }
@@ -283,6 +283,7 @@ struct KajiPopoverView: View {
     }
 
 
+
     private func mailBriefRow(_ entry: MailBriefEntry) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 3) {
@@ -302,12 +303,31 @@ struct KajiPopoverView: View {
         }
         .padding(.vertical, 7)
         .contentShape(Rectangle())
-        .onTapGesture { hoveredMailID = entry.threadID }
+        .onTapGesture {
+            mailHoverGeneration += 1
+            hoveredMailID = entry.threadID
+        }
+        .onHover { inside in updateMailHover(entry, inside: inside) }
         .overlay(alignment: .bottom) {
             Rectangle().fill(t.track.opacity(0.55)).frame(height: 0.5)
         }
-        .popover(isPresented: Binding(get: { hoveredMailID == entry.threadID }, set: { if !$0 { hoveredMailID = nil } }), arrowEdge: .trailing) {
+        .popover(
+            isPresented: Binding(
+                get: { hoveredMailID == entry.threadID },
+                set: {
+                    if !$0 {
+                        mailHoverGeneration += 1
+                        hoveredMailID = HoverSelectionPolicy.dismissed(
+                            current: hoveredMailID,
+                            dismissing: entry.threadID
+                        )
+                    }
+                }
+            ),
+            arrowEdge: .trailing
+        ) {
             mailBriefDetail(entry)
+                .onHover { updateMailDetailHover(entry, inside: $0) }
         }
         .contextMenu {
             if let url = entry.gmailURL { Button("在 Gmail 打开") { NSWorkspace.shared.open(url) } }
@@ -378,32 +398,42 @@ struct KajiPopoverView: View {
             }
 
             Divider()
-            HStack {
+            HStack(spacing: 9) {
                 Button("完成并归档") {
                     mailBriefStore.archive(entry)
                     hoveredMailID = nil
                 }
                 .buttonStyle(.borderedProminent)
-                Menu("更多") {
-                    if let url = entry.gmailURL {
-                        Button("在 Gmail 打开") { NSWorkspace.shared.open(url) }
-                    }
-                    Button((entry.isStarred ?? false) ? "取消 Flag" : "Flag") {
-                        mailBriefStore.toggleStar(entry)
-                    }
-                    Button("转成 Today Goal") { convertMailToGoal(entry) }
-                        .disabled(mailBriefStore.isConverted(entry))
-                    Divider()
-                    Button("移到垃圾箱") {
-                        mailBriefStore.trash(entry)
-                        hoveredMailID = nil
+                if let url = entry.gmailURL {
+                    mailDetailAction("envelope.open", help: "在 Gmail 打开") {
+                        NSWorkspace.shared.open(url)
                     }
                 }
-                .menuStyle(.borderlessButton)
+                mailDetailAction((entry.isStarred ?? false) ? "star.fill" : "star", help: (entry.isStarred ?? false) ? "取消 Flag" : "Flag") {
+                    mailBriefStore.toggleStar(entry)
+                }
+                mailDetailAction(mailBriefStore.isConverted(entry) ? "checkmark.circle.fill" : "checkmark.circle", help: "转成 Goal") {
+                    convertMailToGoal(entry)
+                }
+                .disabled(mailBriefStore.isConverted(entry))
+                mailDetailAction("trash", help: "移到垃圾箱") {
+                    mailBriefStore.trash(entry)
+                    hoveredMailID = nil
+                }
             }
         }
         .padding(12)
         .frame(width: 300, alignment: .leading)
+    }
+
+    private func mailDetailAction(_ systemName: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 24, height: 24)
+        }
+        .buttonStyle(.plain)
+        .help(help)
     }
 
     private func copyMailDraft(_ draft: String) {
@@ -417,6 +447,39 @@ struct KajiPopoverView: View {
         if let goal = try? dailyGoals.addGoal(title: entry.goalTitleZH ?? entry.subject,
                                               tag: GoalTag.work.rawValue, note: note, in: .today) {
             mailBriefStore.markConverted(entry, goalID: goal.id)
+        }
+    }
+
+    private func updateMailHover(_ entry: MailBriefEntry, inside: Bool) {
+        mailHoverGeneration += 1
+        let generation = mailHoverGeneration
+        if inside {
+            if hoveredMailID != nil {
+                hoveredMailID = entry.threadID
+            } else {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    guard generation == mailHoverGeneration else { return }
+                    hoveredMailID = entry.threadID
+                }
+            }
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
+            guard generation == mailHoverGeneration, hoveredMailID == entry.threadID else { return }
+            hoveredMailID = nil
+        }
+    }
+
+    private func updateMailDetailHover(_ entry: MailBriefEntry, inside: Bool) {
+        mailHoverGeneration += 1
+        guard !inside else { return }
+        let generation = mailHoverGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
+            guard generation == mailHoverGeneration else { return }
+            hoveredMailID = HoverSelectionPolicy.dismissed(
+                current: hoveredMailID,
+                dismissing: entry.threadID
+            )
         }
     }
 
@@ -1136,16 +1199,7 @@ struct KajiPopoverView: View {
     }
 
     private var goalsPanel: some View {
-        VStack(alignment: .leading, spacing: 13) {
-            goalSection(.today, title: "今天", showsHeatmap: true)
-            if !dailyGoals.yesterdayPending.isEmpty {
-                yesterdayPendingSection
-            }
-            Divider().overlay(t.track.opacity(0.7))
-            goalSection(.week, title: "本周", showsHeatmap: false)
-            Divider().overlay(t.track.opacity(0.7))
-            visionSection
-        }
+        goalSection(.today, title: "Goals", showsHeatmap: true)
     }
 
     private var visionSection: some View {
@@ -1279,7 +1333,7 @@ struct KajiPopoverView: View {
                 Spacer()
                 if horizon == .today {
                     Button {
-                        beginGoalCreation(.today)
+                        beginGoalCreation(.goal)
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 11, weight: .semibold))
@@ -1352,17 +1406,44 @@ struct KajiPopoverView: View {
                     }
                 }
             }
-            TextField(goalCreationKind == .vision ? "长期方向" : "标题", text: $goalCreationTitle)
+            TextField("标题", text: $goalCreationTitle)
                 .textFieldStyle(.roundedBorder)
-            Picker("标签", selection: $goalCreationTag) {
-                ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
-                    Image(systemName: tag.systemImage)
-                        .accessibilityLabel(tag.label)
-                        .tag(tag)
+            HStack(spacing: 8) {
+                Menu {
+                    ForEach(dailyGoals.tagDefinitions) { tag in
+                        Button(tag.name) {
+                            goalCreationTagName = tag.name
+                            goalCreationTagColor = tag.colorHex
+                        }
+                    }
+                } label: {
+                    Circle()
+                        .fill(Color(hex: goalCreationTagColor))
+                        .frame(width: 14, height: 14)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                TextField("标签", text: $goalCreationTagName)
+                    .textFieldStyle(.roundedBorder)
+                HStack(spacing: 5) {
+                    ForEach([0xE05D6F, 0xD18A3C, 0x4F9D69, 0x5B7CFA, 0x8E6AD8] as [UInt32], id: \.self) { hex in
+                        Button {
+                            goalCreationTagColor = hex
+                        } label: {
+                            Circle()
+                                .fill(Color(hex: hex))
+                                .frame(width: 13, height: 13)
+                                .overlay(
+                                    Circle().stroke(
+                                        goalCreationTagColor == hex ? t.cream : Color.clear,
+                                        lineWidth: 1.5
+                                    )
+                                )
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
-            .pickerStyle(.menu)
-            .font(.system(size: 10, weight: .regular))
             TextField("说明（可选）", text: $goalCreationNote, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(2...5)
@@ -1386,7 +1467,10 @@ struct KajiPopoverView: View {
     private func beginGoalCreation(_ kind: GoalCreationKind) {
         goalCreationKind = kind
         goalCreationTitle = ""
-        goalCreationTag = .personal
+        let defaultTag = dailyGoals.tagDefinitions.first(where: { $0.name == GoalTag.personal.rawValue })
+            ?? dailyGoals.tagDefinitions.first
+        goalCreationTagName = defaultTag?.name ?? GoalTag.personal.rawValue
+        goalCreationTagColor = defaultTag?.colorHex ?? 0x8E6AD8
         goalCreationWeekdays = [Calendar.current.component(.weekday, from: Date())]
         goalCreationNote = ""
         showsGoalCreator = true
@@ -1395,26 +1479,20 @@ struct KajiPopoverView: View {
     private func saveGoalCreation() {
         let title = goalCreationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
+        let tag = dailyGoals.ensureTag(name: goalCreationTagName, colorHex: goalCreationTagColor)
         if goalCreationKind == .fixed {
             _ = fixedPlanStore.add(
                 title: title,
-                tag: goalCreationTag.rawValue,
+                tag: tag,
                 note: goalCreationNote,
                 weekdays: goalCreationWeekdays
             )
         } else {
-            let horizon: GoalHorizon
-            switch goalCreationKind {
-            case .today: horizon = .today
-            case .week: horizon = .week
-            case .vision: horizon = .longTerm
-            case .fixed: return
-            }
-            let id = dailyGoals.addGoal(in: horizon)
-            if let goal = dailyGoals.goals(for: horizon).first(where: { $0.id == id }) {
-                dailyGoals.updateTitle(goal, title: title, in: horizon)
-                dailyGoals.updateTag(goal, tag: goalCreationTag.rawValue, in: horizon)
-                dailyGoals.updateNote(goal, note: goalCreationNote, in: horizon)
+            let id = dailyGoals.addGoal(in: .today)
+            if let goal = dailyGoals.goals(for: .today).first(where: { $0.id == id }) {
+                dailyGoals.updateTitle(goal, title: title, in: .today)
+                dailyGoals.updateTag(goal, tag: tag, in: .today)
+                dailyGoals.updateNote(goal, note: goalCreationNote, in: .today)
             }
         }
         showsGoalCreator = false
@@ -1422,36 +1500,24 @@ struct KajiPopoverView: View {
 
     private func goalRow(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
         HStack(spacing: 8) {
-            goalCompletionButton(goal, horizon: horizon)
-            if goal.isDone {
-                Text(goal.title)
-                    .font(.system(size: 10.8, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .strikethrough()
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            } else {
-                if focusedGoalID == goal.id {
-                    TextField("", text: Binding(
-                        get: { goal.title },
-                        set: { dailyGoals.updateTitle(goal, title: $0, in: horizon) }
-                    ), axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 10.8, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .lineLimit(1...2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .focused($focusedGoalID, equals: goal.id)
-                    .onSubmit {
-                        dailyGoals.removeIfBlank(goal, in: horizon)
-                    }
-                } else {
-                    goalTitleLabel(goal.title, size: 10.8) {
-                        focusedGoalID = goal.id
-                    }
+            Button {
+                dailyGoals.toggle(goal, in: horizon)
+            } label: {
+                HStack(spacing: 8) {
+                    goalStateIndicator(goal)
+                    Text(goal.title)
+                        .font(.system(size: 10.8, weight: .semibold, design: .rounded))
+                        .foregroundColor(goal.isDone ? t.mute : t.cream)
+                        .strikethrough(goal.isDone)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .help(goal.isDone ? "撤回完成" : "完成")
+            .accessibilityLabel(goal.isDone ? "撤回完成" : "完成")
             HStack(spacing: 4) {
                 if !goal.note.isEmpty {
                     Button {
@@ -1472,16 +1538,17 @@ struct KajiPopoverView: View {
         }
         .padding(8)
         .background(goalRowSurface(opacity: 0.92))
+        .compositingGroup()
+        .opacity(goal.isDone ? 0.18 : 1)
+        .animation(.easeOut(duration: goal.isDone ? 5 : 0.18), value: goal.isDone)
         .contextMenu {
             Button(goal.note.isEmpty ? "添加说明" : "编辑说明") {
                 shownGoalNoteID = goal.id
             }
             Menu("标签") {
-                ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
-                    Button {
-                        dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
-                    } label: {
-                        Label(tag.label, systemImage: tag.systemImage)
+                ForEach(dailyGoals.tagDefinitions) { tag in
+                    Button(tag.name) {
+                        dailyGoals.updateTag(goal, tag: tag.name, in: horizon)
                     }
                 }
             }
@@ -1543,35 +1610,35 @@ struct KajiPopoverView: View {
             }
         }
     }
-
     private func goalTagMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
-        let selected = GoalTagLogic.resolve(goal.tag, title: goal.title)
-        return Menu {
-            ForEach(GoalTag.selectableCases, id: \.rawValue) { tag in
-                Button {
-                    dailyGoals.updateTag(goal, tag: tag.rawValue, in: horizon)
-                } label: {
-                    Image(systemName: tag.systemImage)
-                        .accessibilityLabel(tag.label)
+        let selected = dailyGoals.tagDefinition(for: goal.tag)
+        return Circle()
+            .fill(Color(hex: selected.colorHex))
+            .frame(width: 9, height: 9)
+            .frame(width: 18, height: 22)
+            .help(selected.name)
+            .contextMenu {
+                ForEach(dailyGoals.tagDefinitions) { tag in
+                    Button(tag.name) {
+                        dailyGoals.updateTag(goal, tag: tag.name, in: horizon)
+                    }
                 }
             }
-        } label: {
-            tagIcon(selected)
-        }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .frame(width: 22, height: 22)
     }
 
-    private func goalCompletionButton(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
-        Button {
-            dailyGoals.toggle(goal, in: horizon)
-        } label: {
-            completionIcon(isDone: goal.isDone)
+    private func goalStateIndicator(_ goal: DailyGoal) -> some View {
+        let selected = dailyGoals.tagDefinition(for: goal.tag)
+        return ZStack {
+            Circle()
+                .fill(Color(hex: selected.colorHex))
+            if goal.isDone {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 5, weight: .bold))
+                    .foregroundColor(.white)
+            }
         }
-        .buttonStyle(.plain)
-        .help(goal.isDone ? "标记为未完成" : "标记为完成")
-        .accessibilityLabel(goal.isDone ? "标记为未完成" : "标记为完成")
+        .frame(width: GoalControlMetrics.diameter, height: GoalControlMetrics.diameter)
+        .frame(width: 16, height: 16)
     }
 
     private func completionIcon(isDone: Bool) -> some View {
@@ -1590,39 +1657,29 @@ struct KajiPopoverView: View {
     }
 
     private var goalHeatmap: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text("35d")
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(t.mute)
-                Spacer()
-                Text(goalHeatmapCaption)
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.ash)
-            }
-            GeometryReader { geo in
-                let spacing: CGFloat = 3
-                let side = max(5, (geo.size.width - spacing * 34) / 35)
-                HStack(spacing: spacing) {
-                    ForEach(dailyGoals.heatmapDays) { day in
-                        RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                            .fill(goalHeatColor(day.ratio, empty: day.total == 0))
-                            .frame(width: side, height: side)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 2.5, style: .continuous)
-                                    .stroke(hoveredGoalDay?.day == day.day ? t.cream.opacity(0.75) : Color.clear, lineWidth: 1)
-                            )
-                            .onHover { hovering in
-                                hoveredGoalDay = hovering ? day : nil
-                            }
-                            .help(goalHeatDescription(day))
-                    }
+        GeometryReader { geo in
+            let spacing: CGFloat = 3
+            let side = max(5, (geo.size.width - spacing * 29) / 30)
+            HStack(spacing: spacing) {
+                ForEach(dailyGoals.heatmapDays) { day in
+                    Circle()
+                        .fill(goalHeatColor(day.ratio, empty: day.total == 0))
+                        .frame(width: side, height: side)
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    hoveredGoalDay?.day == day.day ? t.cream.opacity(0.75) : Color.clear,
+                                    lineWidth: 1
+                                )
+                        )
+                        .onHover { hovering in
+                            hoveredGoalDay = hovering ? day : nil
+                        }
+                        .help(goalHeatDescription(day))
                 }
             }
-            .frame(height: 14)
         }
-        .padding(8)
-        .background(goalRowSurface(opacity: 0.7))
+        .frame(height: 12)
     }
 
     private func goalRowSurface(opacity: Double) -> some View {
@@ -1642,13 +1699,6 @@ struct KajiPopoverView: View {
         return t.track.opacity(0.9)
     }
 
-    private var goalHeatmapCaption: String {
-        if let hoveredGoalDay {
-            return goalHeatDescription(hoveredGoalDay)
-        }
-        let today = dailyGoals.heatmapDays.last ?? DailyGoalHistoryDay(day: "", completed: 0, total: 0)
-        return "\(Int(today.ratio * 100))% today"
-    }
 
     private func goalHeatDescription(_ day: DailyGoalHistoryDay) -> String {
         if day.total == 0 { return "\(day.day) no goals" }

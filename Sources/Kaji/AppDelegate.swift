@@ -28,7 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     private let dailyGoals = DailyGoalStore()
-    private lazy var mcpServer = KajiMCPServer(goals: dailyGoals)
+    private lazy var mcpServer = KajiMCPServer(
+        goals: dailyGoals,
+        snapshotProvider: { [weak self] in self?.mcpSnapshot() ?? [:] }
+    )
     private let fixedPlanStore = FixedPlanStore()
     private let popoverNavigation = PopoverNavigation()
     private let aiNewsStore = AIHotNewsStore()
@@ -468,7 +471,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func maxPopoverHeight(on screen: NSScreen?) -> CGFloat {
         let visibleHeight = (screen ?? NSScreen.main)?.visibleFrame.height ?? 760
-        return max(360, visibleHeight - 28)
+        // Leave room for NSPopover's arrow, border and AppKit's placement inset.
+        // Filling the entire visible frame makes the chrome cross the screen edge,
+        // where macOS clips it into a false top padding strip.
+        return max(240, visibleHeight - 64)
     }
 
     /// Rebuild only when layout dimensions change. Normal ObservableObject
@@ -498,6 +504,112 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } catch {
             NSWorkspace.shared.open(rel.url)
         }
+    }
+
+    private func mcpSnapshot() -> [String: Any] {
+        let snapshot = systemMonitor.snapshot
+        return [
+            "settings": [
+                "enabledModules": prefs.enabledModules.map(\.rawValue).sorted(),
+                "visibleProviders": prefs.visibleProviders.sorted(),
+                "showRemaining": prefs.showRemaining,
+                "focusMinutes": prefs.focusMinutes,
+                "breakMinutes": prefs.breakMinutes,
+                "allowBreakSkip": prefs.allowBreakSkip,
+                "breakOverlayEnabled": prefs.breakOverlayEnabled,
+                "autoCleanEnabled": prefs.autoCleanEnabled,
+                "launchAtLogin": prefs.launchAtLogin,
+                "preventSleep": prefs.preventSleep,
+                "aiNewsRefreshHours": prefs.aiNewsRefreshHours,
+                "mailBriefHour": prefs.mailBriefHour,
+                "mailBriefMinute": prefs.mailBriefMinute,
+                "mailBriefBatchSize": prefs.mailBriefBatchSize,
+                "mailBriefConcurrency": prefs.mailBriefConcurrency,
+                "mailBriefModel": prefs.mailBriefModel.rawValue,
+            ],
+            "quota": [
+                "providers": store.providers.map {
+                    [
+                        "id": $0.id,
+                        "name": $0.displayName,
+                        "fiveHourPercent": jsonOptional($0.fiveHourPercent),
+                        "weekPercent": jsonOptional($0.weekPercent),
+                        "resetAt": jsonOptional($0.resetDate?.timeIntervalSince1970),
+                        "weekResetAt": jsonOptional($0.weekResetDate?.timeIntervalSince1970),
+                    ]
+                },
+                "lastUpdated": jsonOptional(store.lastUpdated?.timeIntervalSince1970),
+                "error": jsonOptional(store.lastError),
+            ],
+            "work": [
+                "phase": workSession.phase.rawValue,
+                "workElapsed": workSession.workElapsed,
+                "breakRemaining": workSession.breakRemaining,
+                "skipCountToday": workSession.skipCountToday,
+                "completedBreaksToday": workSession.completedBreaksToday,
+            ],
+            "system": [
+                "cpuPercent": snapshot.cpuPercent,
+                "memoryPercent": snapshot.memoryPercent,
+                "diskPercent": snapshot.diskPercent,
+                "processCount": snapshot.processCount,
+                "sampledAt": snapshot.sampledAt.timeIntervalSince1970,
+                "topProcesses": snapshot.topProcesses.map {
+                    ["pid": $0.pid, "cpu": $0.cpu, "memory": $0.memory, "command": $0.command]
+                },
+                "cleanableItems": systemMonitor.cleanableItems.map {
+                    ["id": $0.id, "title": $0.title, "path": $0.path, "bytes": $0.bytes]
+                },
+                "orphanProcesses": systemMonitor.orphanProcesses.map {
+                    ["pid": $0.pid, "ageSeconds": $0.ageSeconds, "command": $0.command]
+                },
+                "diskInsights": jsonValue(systemMonitor.diskInsights),
+            ],
+            "goals": [
+                "items": dailyGoals.goals(for: .today).map {
+                    [
+                        "id": $0.id.uuidString.lowercased(),
+                        "title": $0.title,
+                        "isDone": $0.isDone,
+                        "tag": $0.tag,
+                        "note": $0.note,
+                    ]
+                },
+                "tags": dailyGoals.tagDefinitions.map {
+                    ["name": $0.name, "colorHex": String(format: "%06X", $0.colorHex)]
+                },
+                "activity": jsonValue(dailyGoals.heatmapDays),
+                "schedules": jsonValue(fixedPlanStore.schedules),
+            ],
+            "aiNews": [
+                "state": String(describing: aiNewsStore.state),
+                "topics": jsonValue(aiNewsStore.topics),
+                "readTopicIDs": aiNewsStore.readTopicIDs.sorted(),
+                "lastSuccessfulRefresh": jsonOptional(aiNewsStore.lastSuccessfulRefresh?.timeIntervalSince1970),
+            ],
+            "mailBrief": [
+                "state": String(describing: mailBriefStore.state),
+                "connected": mailBriefStore.isConnected,
+                "canModify": mailBriefStore.canModify,
+                "nextDue": jsonOptional(mailBriefStore.nextDue?.timeIntervalSince1970),
+                "generation": jsonValue(mailBriefStore.generation),
+                "replyDrafts": mailBriefStore.replyDrafts,
+                "runRecords": jsonValue(mailBriefStore.runRecords),
+            ],
+        ]
+    }
+
+    private func jsonValue<T: Encodable>(_ value: T) -> Any {
+        guard let data = try? JSONEncoder().encode(value),
+              let object = try? JSONSerialization.jsonObject(with: data) else {
+            return NSNull()
+        }
+        return object
+    }
+
+    private func jsonOptional<T>(_ value: T?) -> Any {
+        if let value { return value }
+        return NSNull()
     }
 
     private func openSettings() {

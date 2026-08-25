@@ -23,6 +23,41 @@ func render(_ view: some View, appearance name: NSAppearance.Name,
     print("wrote \(path) size=\(img.size)")
 }
 
+@MainActor
+func renderHosting(
+    _ view: some View,
+    appearance name: NSAppearance.Name,
+    scheme: ColorScheme,
+    size: NSSize,
+    to path: String
+) {
+    let host = NSHostingView(rootView: view.environment(\.colorScheme, scheme))
+    host.appearance = NSAppearance(named: name)
+    host.frame = NSRect(origin: .zero, size: size)
+    let window = NSWindow(
+        contentRect: host.frame,
+        styleMask: [.titled],
+        backing: .buffered,
+        defer: false
+    )
+    window.contentView = host
+    window.orderFrontRegardless()
+    RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.2))
+    host.layoutSubtreeIfNeeded()
+    guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else {
+        print("render failed: \(path)")
+        return
+    }
+    host.cacheDisplay(in: host.bounds, to: rep)
+    guard let png = rep.representation(using: .png, properties: [:]) else {
+        print("render failed: \(path)")
+        return
+    }
+    try? png.write(to: URL(fileURLWithPath: path))
+    window.orderOut(nil)
+    print("wrote \(path) size=\(size)")
+}
+
 @main
 struct Snap {
     @MainActor
@@ -131,6 +166,7 @@ struct Snap {
             let workMode = args.contains("work")
             let breakMode = args.contains("break")
             let mailMode = args.contains("mail")
+            let settingsMode = args.contains("settings")
             let lang: Lang = args.contains("zh") ? .zh : .en
             let showRemaining = args.contains("remaining")
             let prefs = makePrefs(lang)
@@ -206,7 +242,22 @@ struct Snap {
                 )
             }
 
+            let settings = SettingsView(
+                prefs: prefs,
+                sleepController: SleepController(previewEnabled: false),
+                fixedPlanStore: fixedPlanStore,
+                mcpServer: KajiMCPServer(goals: dailyGoals),
+                mailBriefStore: mailBriefStore
+            )
+            .frame(width: 760, height: 560)
+
             let arg = args.first ?? "both"
+            if settingsMode {
+                let size = NSSize(width: 760, height: 560)
+                renderHosting(settings, appearance: .darkAqua, scheme: .dark, size: size, to: "/tmp/settings-dark.png")
+                renderHosting(settings, appearance: .aqua, scheme: .light, size: size, to: "/tmp/settings-light.png")
+                return
+            }
             if mailMode {
                 render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/mail-dark.png")
                 render(popover, appearance: .aqua, scheme: .light, to: "/tmp/mail-light.png")

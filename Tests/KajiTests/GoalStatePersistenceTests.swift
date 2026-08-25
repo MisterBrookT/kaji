@@ -1,5 +1,6 @@
 import XCTest
 import KajiCore
+@testable import Kaji
 
 final class GoalStatePersistenceTests: XCTestCase {
     private var defaults: UserDefaults!
@@ -121,7 +122,7 @@ final class GoalStatePersistenceTests: XCTestCase {
         XCTAssertNil(defaults.object(forKey: "dailyGoals"))
     }
 
-    func testCrossDayRefreshPersistsHistoryAndYesterdayPending() throws {
+    func testCrossDayRefreshPersistsHistoryAndGoals() throws {
         let openID = UUID()
         let doneID = UUID()
         var state = GoalHorizonState(
@@ -149,12 +150,45 @@ final class GoalStatePersistenceTests: XCTestCase {
             currentWeekKey: "2026-31"
         ).state
 
-        XCTAssertTrue(reloaded.today.isEmpty)
-        XCTAssertEqual(reloaded.yesterdayPending.map(\.id), [openID])
+        XCTAssertEqual(reloaded.today.map(\.id), [openID, doneID])
+        XCTAssertTrue(reloaded.yesterdayPending.isEmpty)
         XCTAssertEqual(
             reloaded.history["2026-8-2"],
             GoalHistoryDay(day: "2026-8-2", completed: 1, total: 2)
         )
+    }
+
+    @MainActor
+    func testCompletedGoalCanBeUndoneBeforeDelayedRemoval() async throws {
+        let store = DailyGoalStore(
+            defaults: defaults,
+            completionRemovalDelay: .milliseconds(30)
+        )
+        let goal = try store.addGoal(title: "Undo me", tag: "Work", note: "", in: .today)
+
+        store.toggle(goal)
+        XCTAssertTrue(store.goals.first?.isDone == true)
+        try await Task.sleep(for: .milliseconds(10))
+        let completed = try XCTUnwrap(store.goals.first)
+        store.toggle(completed)
+        try await Task.sleep(for: .milliseconds(40))
+
+        XCTAssertEqual(store.goals.map(\.id), [goal.id])
+        XCTAssertFalse(store.goals[0].isDone)
+    }
+
+    @MainActor
+    func testCompletedGoalIsRemovedAfterDelay() async throws {
+        let store = DailyGoalStore(
+            defaults: defaults,
+            completionRemovalDelay: .milliseconds(20)
+        )
+        let goal = try store.addGoal(title: "Finish me", tag: "Work", note: "", in: .today)
+
+        store.toggle(goal)
+        try await Task.sleep(for: .milliseconds(40))
+
+        XCTAssertTrue(store.goals.isEmpty)
     }
 
     private func fixtureState() -> GoalHorizonState {

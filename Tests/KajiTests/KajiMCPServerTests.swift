@@ -16,7 +16,11 @@ final class KajiMCPServerTests: XCTestCase {
         store = DailyGoalStore(defaults: defaults)
         let port = UInt16.random(in: 40_000...60_000)
         endpoint = URL(string: "http://127.0.0.1:\(port)/mcp")!
-        server = KajiMCPServer(goals: store, port: port)
+        server = KajiMCPServer(
+            goals: store,
+            port: port,
+            snapshotProvider: { ["quota": ["sample": true]] }
+        )
         server.start()
         try await waitUntilRunning()
     }
@@ -45,12 +49,15 @@ final class KajiMCPServerTests: XCTestCase {
         let listedTools = try await rpc(method: "tools/list")
         let tools = (listedTools["result"] as? [String: Any])?["tools"] as? [[String: Any]]
         XCTAssertEqual(Set(tools?.compactMap { $0["name"] as? String } ?? []), [
-            "kaji_goals_list", "kaji_goal_add", "kaji_goal_update",
+            "kaji_state", "kaji_goals_list", "kaji_goal_add", "kaji_goal_update",
             "kaji_goal_complete", "kaji_goal_delete"
         ])
+        let snapshot = try await callTool("kaji_state", arguments: [:])
+        let state = try XCTUnwrap(snapshot["structuredContent"] as? [String: Any])
+        XCTAssertEqual((state["quota"] as? [String: Any])?["sample"] as? Bool, true)
 
         let added = try await callTool("kaji_goal_add", arguments: [
-            "horizon": "today", "title": "Ship local MCP", "tag": "work",
+            "title": "Ship local MCP", "tag": "Custom",
             "note": "Round-trip note"
         ])
         let goal = try XCTUnwrap(added["structuredContent"] as? [String: Any])
@@ -58,8 +65,7 @@ final class KajiMCPServerTests: XCTestCase {
         XCTAssertEqual(goal["note"] as? String, "Round-trip note")
 
         let updated = try await callTool("kaji_goal_update", arguments: [
-            "horizon": "today", "id": id, "title": "Ship Kaji MCP",
-            "note": "Updated note"
+            "id": id, "title": "Ship Kaji MCP", "note": "Updated note"
         ])
         XCTAssertEqual(
             (updated["structuredContent"] as? [String: Any])?["note"] as? String,
@@ -67,7 +73,7 @@ final class KajiMCPServerTests: XCTestCase {
         )
 
         let completed = try await callTool("kaji_goal_complete", arguments: [
-            "horizon": "today", "id": id, "isDone": true
+            "id": id, "isDone": true
         ])
         XCTAssertEqual(
             (completed["structuredContent"] as? [String: Any])?["isDone"] as? Bool,
@@ -80,7 +86,7 @@ final class KajiMCPServerTests: XCTestCase {
         XCTAssertEqual(reloaded.goals.first?.isDone, true)
 
         let deleted = try await callTool("kaji_goal_delete", arguments: [
-            "horizon": "today", "id": id
+            "id": id
         ])
         XCTAssertEqual(
             (deleted["structuredContent"] as? [String: Any])?["deleted"] as? String,
@@ -90,15 +96,12 @@ final class KajiMCPServerTests: XCTestCase {
     }
 
     func testInvalidArgumentsReturnStructuredToolErrors() async throws {
-        let invalidHorizon = try await callTool("kaji_goals_list", arguments: [
-            "horizon": "later"
-        ])
-        XCTAssertEqual(invalidHorizon["isError"] as? Bool, true)
-        let content = invalidHorizon["content"] as? [[String: Any]]
-        XCTAssertTrue((content?.first?["text"] as? String)?.contains("horizon") == true)
-
+        let missingTitle = try await callTool("kaji_goal_add", arguments: [:])
+        XCTAssertEqual(missingTitle["isError"] as? Bool, true)
+        let content = missingTitle["content"] as? [[String: Any]]
+        XCTAssertTrue((content?.first?["text"] as? String)?.contains("title") == true)
         let missingID = try await callTool("kaji_goal_update", arguments: [
-            "horizon": "week", "id": UUID().uuidString, "note": "missing"
+            "id": UUID().uuidString, "note": "missing"
         ])
         XCTAssertEqual(missingID["isError"] as? Bool, true)
         XCTAssertEqual(

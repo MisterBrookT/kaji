@@ -1,5 +1,6 @@
 import XCTest
 @testable import KajiCore
+@testable import Kaji
 
 final class SleepControlLogicTests: XCTestCase {
     func testParsesEnabledState() {
@@ -48,4 +49,11 @@ final class SleepControlLogicTests: XCTestCase {
             XCTAssertEqual(error as? SleepControlError, .stateMismatch(observed: false))
         }
     }
+    func testSleepRequestGateCompletesOnlyOnce() {
+        let gate = SleepRequestGate()
+        XCTAssertTrue(gate.claim())
+        XCTAssertFalse(gate.claim())
+        XCTAssertFalse(gate.claim())
+    }
+
 }

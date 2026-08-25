@@ -1,5 +1,6 @@
 import XCTest
 import KajiCore
+@testable import Kaji
 
 final class MailBriefModelsTests: XCTestCase {
     func testEntriesGroupIntoNonEmptyLevelSectionsDescending() {
@@ -91,6 +92,35 @@ final class MailBriefModelsTests: XCTestCase {
         XCTAssertEqual(MailBriefModel.normalize("gpt-5.6-luna"), .luna)
         XCTAssertEqual(MailBriefModel.normalize("arbitrary-model"), .spark)
     }
+    func testEveryGmailMutationUpdatesLocalGeneration() {
+        var entry = MailBriefEntry.fixture(id: "mail", level: 3)
+        entry.isStarred = false
+        let generation = MailBriefGeneration(
+            briefDay: "2026-08-25",
+            entries: [entry],
+            snapshotInboxThreadCount: 1
+        )
+
+        let archived = MailBriefStore.applying(.archive, entry: entry, to: generation)
+        XCTAssertEqual(archived.archivedThreadIDs, ["mail"])
+        XCTAssertEqual(archived.snapshotInboxThreadCount, 0)
+        let unarchived = MailBriefStore.applying(.unarchive, entry: entry, to: archived)
+        XCTAssertTrue(unarchived.archivedThreadIDs.isEmpty)
+        XCTAssertEqual(unarchived.snapshotInboxThreadCount, 1)
+
+        let starred = MailBriefStore.applying(.star, entry: entry, to: generation)
+        XCTAssertEqual(starred.entries[0].isStarred, true)
+        let unstarred = MailBriefStore.applying(.unstar, entry: entry, to: starred)
+        XCTAssertEqual(unstarred.entries[0].isStarred, false)
+
+        let trashed = MailBriefStore.applying(.trash, entry: entry, to: generation)
+        XCTAssertEqual(trashed.trashedThreadIDs, ["mail"])
+        XCTAssertEqual(trashed.snapshotInboxThreadCount, 0)
+        let untrashed = MailBriefStore.applying(.untrash, entry: entry, to: trashed)
+        XCTAssertTrue(untrashed.trashedThreadIDs.isEmpty)
+        XCTAssertEqual(untrashed.snapshotInboxThreadCount, 1)
+    }
+
 }
 
 private extension MailBriefEntry {

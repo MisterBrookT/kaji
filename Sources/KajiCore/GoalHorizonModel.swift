@@ -190,17 +190,10 @@ public enum GoalHorizonLogic {
                 completed: valid.filter(\.isDone).count,
                 total: valid.count
             )
-            result.yesterdayPending = valid.compactMap {
-                guard !$0.isDone else { return nil }
-                return GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag, note: $0.note)
-            }
-            result.today = []
+            result.yesterdayPending = []
             result.dayKey = dayKey
         }
         if result.weekKey != weekKey {
-            result.week = result.week.map {
-                GoalItem(id: $0.id, title: $0.title, isDone: false, tag: $0.tag, note: $0.note)
-            }
             result.weekKey = weekKey
         }
         return result

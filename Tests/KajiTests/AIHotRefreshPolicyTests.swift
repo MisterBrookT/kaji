@@ -8,6 +8,19 @@ final class AIHotRefreshPolicyTests: XCTestCase {
         XCTAssertGreaterThan(HoverDisclosurePolicy.closeDelay, HoverDisclosurePolicy.initialOpenDelay)
     }
 
+    func testDismissingOldHoverCannotClearNewSelection() {
+        XCTAssertEqual(
+            HoverSelectionPolicy.dismissed(current: "new", dismissing: "old"),
+            "new"
+        )
+        XCTAssertNil(HoverSelectionPolicy.dismissed(current: "old", dismissing: "old"))
+    }
+
+    func testGoalCompletionControlStaysCompactAndUsesWholeRow() {
+        XCTAssertEqual(GoalControlMetrics.diameter, 9)
+        XCTAssertTrue(GoalControlMetrics.rowIsCompletionTarget)
+    }
+
     func testRefreshHoursNormalizeAndDuePolicy() {
         XCTAssertEqual(AIHotRefreshPolicy.normalize(hours: 7), 5)
         XCTAssertEqual(AIHotRefreshPolicy.allowedHours, [1, 3, 5, 12, 24])

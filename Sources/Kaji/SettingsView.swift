@@ -10,6 +10,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case quota = "Quota"
     case aiNews = "AI News"
     case mailBrief = "Mail Brief"
+    case mcp = "MCP"
 
     var id: String { rawValue }
     var systemImage: String {
@@ -21,6 +22,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .quota: "gauge.with.dots.needle.67percent"
         case .aiNews: "newspaper"
         case .mailBrief: "envelope"
+        case .mcp: "link"
         }
     }
 }
@@ -123,42 +125,37 @@ struct SettingsView: View {
                     }
                 }
             }
-            settingBlock(title: "Local MCP") {
-                VStack(alignment: .leading, spacing: 8) {
-                    settingRow(title: "AI access") {
-                        segment(L10n.t(.on, prefs.language), on: prefs.mcpEnabled) {
-                            prefs.mcpEnabled = true
-                        }
-                        segment(L10n.t(.off, prefs.language), on: !prefs.mcpEnabled) {
-                            prefs.mcpEnabled = false
-                        }
-                    }
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(mcpStatusColor)
-                            .frame(width: 6, height: 6)
-                        Text(mcpStatusText)
-                            .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                            .foregroundColor(t.mute)
-                            .lineLimit(1)
-                        Spacer()
-                        Button("Copy endpoint") {
-                            NSPasteboard.general.clearContents()
-                            NSPasteboard.general.setString(
-                                KajiMCPServer.endpoint,
-                                forType: .string
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                        .foregroundColor(t.cream)
-                    }
-                    Text("Localhost only. While enabled, local AI tools can read and edit Goals.")
-                        .font(.system(size: 9.5, weight: .medium, design: .rounded))
-                        .foregroundColor(t.mute)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
+            if selection == .mcp {
+                settingBlock(title: "MCP") {
+                    VStack(alignment: .leading, spacing: 8) {
+                        settingRow(title: "Access") {
+                            segment(L10n.t(.on, prefs.language), on: prefs.mcpEnabled) {
+                                prefs.mcpEnabled = true
+                            }
+                            segment(L10n.t(.off, prefs.language), on: !prefs.mcpEnabled) {
+                                prefs.mcpEnabled = false
+                            }
+                        }
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(mcpStatusColor)
+                                .frame(width: 6, height: 6)
+                            Text(mcpStatusText)
+                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                                .foregroundColor(t.mute)
+                                .lineLimit(1)
+                            Spacer()
+                            Button("Copy endpoint") {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(KajiMCPServer.endpoint, forType: .string)
+                            }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                            .foregroundColor(t.cream)
+                        }
+                    }
+                }
             }
             if selection == .work {
                 settingBlock(title: L10n.t(.work, prefs.language)) {

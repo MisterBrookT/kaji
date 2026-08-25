@@ -38,10 +38,10 @@ swiftc -O $FILES scripts/snapshot.swift \
   -framework AppKit -framework SwiftUI -framework ServiceManagement \
   -o /tmp/kaji-snap -target "$TARGET"
 
-if [[ "$LANG_ARG" == "mail" ]]; then
-  echo "==> rendering mail light + dark verification"
-  /tmp/kaji-snap both mail zh
-  echo "==> wrote /tmp/mail-{light,dark}.png"
+if [[ "$LANG_ARG" == "mail" || "$LANG_ARG" == "settings" ]]; then
+  echo "==> rendering $LANG_ARG light + dark verification"
+  /tmp/kaji-snap both "$LANG_ARG" zh
+  echo "==> wrote /tmp/$LANG_ARG-{light,dark}.png"
 elif [[ "$LANG_ARG" == "goals" || "$LANG_ARG" == "work" || "$LANG_ARG" == "break" ]]; then
   echo "==> rendering $LANG_ARG dark verification"
   /tmp/kaji-snap dark "$LANG_ARG" zh
