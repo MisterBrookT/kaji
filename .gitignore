@@ -4,8 +4,6 @@ build/
 .DS_Store
 dist/
 .superpowers/
-.kaji-codesign-identity
-.kaji-codesign-keychain
 
 __pycache__/
 *.pyc

@@ -160,7 +160,7 @@ final class KajiMCPServer: ObservableObject {
             return rpcResult(id: id, result: [
                 "protocolVersion": params?["protocolVersion"] as? String ?? "2025-03-26",
                 "capabilities": ["tools": ["listChanged": false]],
-                "serverInfo": ["name": "Kaji", "version": "0.9.0"]
+                "serverInfo": ["name": "Kaji", "version": "0.9.1"]
             ])
         case "tools/list":
             return rpcResult(id: id, result: ["tools": Self.toolDefinitions])

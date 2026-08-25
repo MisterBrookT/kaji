@@ -105,20 +105,10 @@ cp "Resources/break-window-rain.png" "${BUNDLE}/Contents/Resources/break-window-
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
 
-# SMAppService requires a sealed app bundle. A stable local identity also keeps
-# the Keychain ACL stable across reinstallations. The machine-local file is
-# gitignored; release pipelines can provide KAJI_CODESIGN_IDENTITY directly.
-if [[ -z "${KAJI_CODESIGN_IDENTITY:-}" && -f ".kaji-codesign-identity" ]]; then
-	KAJI_CODESIGN_IDENTITY=$(<.kaji-codesign-identity)
-fi
+# Local builds are always ad-hoc signed and must never touch a user keychain.
+# Distribution signing is opt-in: CI or a release operator must pass the exact
+# identity through KAJI_CODESIGN_IDENTITY in a non-interactive environment.
 KAJI_CODESIGN_IDENTITY=${KAJI_CODESIGN_IDENTITY:--}
-if [[ -f ".kaji-codesign-keychain" ]]; then
-	KAJI_CODESIGN_KEYCHAIN=$(<.kaji-codesign-keychain)
-	KAJI_CODESIGN_KEYCHAIN_PASSWORD="$(dirname "${KAJI_CODESIGN_KEYCHAIN}")/keychain.password"
-	if [[ -f "${KAJI_CODESIGN_KEYCHAIN_PASSWORD}" ]]; then
-		security unlock-keychain -p "$(<"${KAJI_CODESIGN_KEYCHAIN_PASSWORD}")" "${KAJI_CODESIGN_KEYCHAIN}"
-	fi
-fi
 xattr -cr "${BUNDLE}"
 codesign --force --sign "${KAJI_CODESIGN_IDENTITY}" --identifier dev.kaji.sleep-helper \
 	"${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"

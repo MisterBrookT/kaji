@@ -35,3 +35,7 @@ jobs:
 
       - name: Assemble app bundle
         run: ./scripts/build-app.sh
+
+      - name: Verify non-interactive ad-hoc signature
+        run: |
+          test "$(codesign -dv --verbose=4 dist/Kaji.app 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"

@@ -286,22 +286,16 @@ struct KajiPopoverView: View {
 
     private func mailBriefRow(_ entry: MailBriefEntry) -> some View {
         HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.summaryZH)
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.cream)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Text(entry.subject)
-                    .font(.system(size: 8.5, weight: .medium))
-                    .foregroundColor(t.mute)
-                    .lineLimit(1)
-            }
+            Text(entry.summaryZH)
+                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .lineLimit(2)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "chevron.right")
                 .font(.system(size: 8, weight: .bold))
                 .foregroundColor(t.ash)
         }
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .contentShape(Rectangle())
         .onTapGesture {
             mailHoverGeneration += 1

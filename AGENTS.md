@@ -64,6 +64,12 @@ Rules:
 - **Tests:** Prefer automating anything deterministic and cheap (`swift test`). Humans do a short UX smoke after green — not instead of unit tests during development.
 - `AGENTS.md` (this file) stays at repo root so agents always see direction.
 
+## Code signing
+
+- Local builds must use ad-hoc signing (`codesign --sign -`) and remain fully non-interactive.
+- Build scripts must never discover, create, unlock, or add a signing keychain to the user's keychain search list.
+- Developer ID signing is allowed only when `KAJI_CODESIGN_IDENTITY` is supplied explicitly by CI or a release operator. Missing configuration must fall back to ad-hoc signing, never a password prompt.
+
 ## Code touch rules (when implementing lean modules)
 
 Start incremental — no multi-target rewrite:
