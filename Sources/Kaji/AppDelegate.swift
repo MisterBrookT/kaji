@@ -19,7 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let store = QuotaStore()
     private let prefs = Prefs()
     private var statusItem: NSStatusItem!
-    private var popover: NSPopover!
+    private var popoverWindow: NSPanel!
     private var popoverHostingController: NSHostingController<AnyView>?
     private var settingsWindow: NSWindow?
     private var hostingView: KajiHostingView<StatusItemView>!
@@ -322,18 +322,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Popover
 
     private func setupPopover() {
-        let pop = NSPopover()
-        pop.behavior = .transient
-        pop.animates = true
-        popover = pop
+        let panel = NSPanel(
+            contentRect: .zero,
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        panel.isReleasedWhenClosed = false
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.level = .popUpMenu
+        panel.hidesOnDeactivate = true
+        panel.collectionBehavior = [.transient, .moveToActiveSpace]
+        panel.delegate = self
+        popoverWindow = panel
     }
 
     private func showPopover(_ destination: MenuBarDestination) {
         guard let sender = statusItem.button else { return }
         dailyGoals.refreshPeriodBoundaries()
-        if popover.isShown {
+        if popoverWindow.isVisible {
             if destinationMatchesCurrentPanel(destination) {
-                popover.performClose(sender)
+                popoverWindow.orderOut(sender)
                 return
             }
             applyPopoverDestination(destination)
@@ -347,19 +358,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyPopoverDestination(stagingDestination)
         let requestedDestination = destination
 
-        // Rebuild content each open. Width uses the single standard panel size.
-        // so the popover follows S/M; height auto-fits since the popover
-        // also shows the settings footer (which the HUD doesn't).
+        // Rebuild content each open. A borderless panel avoids NSPopover's
+        // directional arrow while retaining the same compact SwiftUI surface.
         let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: sender.window?.screen))
         popoverHostingController = controller
         let target = popoverFittingSize(for: controller)
         controller.preferredContentSize = target
         controller.view.frame = NSRect(origin: .zero, size: target)
         controller.view.layoutSubtreeIfNeeded()
-        popover.contentSize = target
-        popover.contentViewController = controller
-        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
-        popover.contentViewController?.view.window?.makeKey()
+        popoverWindow.contentViewController = controller
+        positionPopoverWindow(size: target, relativeTo: sender)
+        popoverWindow.makeKeyAndOrderFront(sender)
 
         if requestedDestination != stagingDestination {
             DispatchQueue.main.async { [weak self] in
@@ -455,41 +464,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func resizePopoverContent(to measuredSize: CGSize) {
-        guard popover != nil, popover.isShown else { return }
+        guard popoverWindow.isVisible else { return }
         let width = PanelSize.medium.frameSize.width
-        let maxHeight = maxPopoverHeight(on: popover.contentViewController?.view.window?.screen ?? statusItem.button?.window?.screen)
+        let maxHeight = maxPopoverHeight(on: popoverWindow.screen ?? statusItem.button?.window?.screen)
         let target = CGSize(width: width, height: ceil(min(max(1, measuredSize.height), maxHeight)))
-        let needsPopoverResize = abs(popover.contentSize.height - target.height) > 0.5 ||
-            abs(popover.contentSize.width - target.width) > 0.5
+        let needsResize = abs(popoverWindow.frame.height - target.height) > 0.5 ||
+            abs(popoverWindow.frame.width - target.width) > 0.5
         popoverHostingController?.preferredContentSize = target
         popoverHostingController?.view.frame = NSRect(origin: .zero, size: target)
         popoverHostingController?.view.layoutSubtreeIfNeeded()
-        if needsPopoverResize {
-            popover.contentSize = target
+        if needsResize, let sender = statusItem.button {
+            positionPopoverWindow(size: target, relativeTo: sender)
         }
+    }
+
+    private func positionPopoverWindow(size: CGSize, relativeTo sender: NSStatusBarButton) {
+        guard let anchorWindow = sender.window else { return }
+        let anchor = anchorWindow.convertToScreen(sender.convert(sender.bounds, to: nil))
+        let visibleFrame = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame
+            ?? NSRect(x: 0, y: 0, width: size.width, height: size.height)
+        let inset: CGFloat = 8
+        let gap: CGFloat = 6
+        let x = min(
+            max(anchor.midX - size.width / 2, visibleFrame.minX + inset),
+            visibleFrame.maxX - size.width - inset
+        )
+        let y = max(visibleFrame.minY + inset, anchor.minY - size.height - gap)
+        popoverWindow.setFrame(NSRect(origin: CGPoint(x: x, y: y), size: size), display: true)
     }
 
     private func maxPopoverHeight(on screen: NSScreen?) -> CGFloat {
         let visibleHeight = (screen ?? NSScreen.main)?.visibleFrame.height ?? 760
-        // Leave room for NSPopover's arrow, border and AppKit's placement inset.
-        // Filling the entire visible frame makes the chrome cross the screen edge,
-        // where macOS clips it into a false top padding strip.
-        return max(240, visibleHeight - 64)
+        return max(240, visibleHeight - 24)
     }
 
     /// Rebuild only when layout dimensions change. Normal ObservableObject
     /// updates flow through SwiftUI; rebuilding for every busy/running tick
     /// makes the transient popover visibly jump.
     private func rebuildPopoverContentIfShown() {
-        guard popover != nil, popover.isShown else { return }
-        let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: popover.contentViewController?.view.window?.screen ?? statusItem.button?.window?.screen))
+        guard popoverWindow.isVisible else { return }
+        let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: popoverWindow.screen ?? statusItem.button?.window?.screen))
         popoverHostingController = controller
         let target = popoverFittingSize(for: controller)
         controller.preferredContentSize = target
         controller.view.frame = NSRect(origin: .zero, size: target)
         controller.view.layoutSubtreeIfNeeded()
-        popover.contentSize = target
-        popover.contentViewController = controller
+        popoverWindow.contentViewController = controller
+        if let sender = statusItem.button {
+            positionPopoverWindow(size: target, relativeTo: sender)
+        }
     }
 
     private func handleUpdateAction() {

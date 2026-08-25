@@ -22,10 +22,6 @@ private struct PopoverContentSizeKey: PreferenceKey {
     }
 }
 
-private enum GoalCreationKind: String, CaseIterable {
-    case goal = "Goal"
-    case fixed = "Schedule"
-}
 
 struct KajiPopoverView: View {
     @ObservedObject var store: QuotaStore
@@ -53,13 +49,9 @@ struct KajiPopoverView: View {
     @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
     @State private var showsGoalCreator = false
-    @State private var goalCreationKind: GoalCreationKind = .goal
     @State private var goalCreationTitle = ""
     @State private var goalCreationTagName = GoalTag.personal.rawValue
     @State private var goalCreationTagColor: UInt32 = 0x8E6AD8
-    @State private var goalCreationWeekdays: Set<Int> = [
-        Calendar.current.component(.weekday, from: Date())
-    ]
     @State private var goalCreationNote = ""
     @State private var shownGoalNoteID: UUID?
     @State private var goalNoteHoverGeneration = 0
@@ -569,40 +561,44 @@ struct KajiPopoverView: View {
 
     private func scheduleGoalRow(_ schedule: ScheduledGoal) -> some View {
         let completed = fixedPlanStore.isCompleted(schedule)
-        return Button {
-            fixedPlanStore.toggleCompletion(schedule)
-        } label: {
-            HStack(spacing: 8) {
-                completionIcon(isDone: completed)
-                Text(schedule.title)
-                    .font(.system(size: 10.8, weight: .semibold, design: .rounded))
-                    .foregroundColor(completed ? t.mute : t.cream)
-                    .strikethrough(completed)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                if !schedule.note.isEmpty {
-                    Image(systemName: "text.alignleft")
-                        .font(.system(size: 9, weight: .semibold))
-                        .foregroundColor(t.mute)
-                        .frame(width: 30, alignment: .trailing)
+        let tag = dailyGoals.tagDefinition(for: schedule.tag)
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                fixedPlanStore.toggleCompletion(schedule)
+            } label: {
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle().fill(Color(hex: tag.colorHex))
+                        if completed {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 5, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .frame(width: GoalControlMetrics.diameter, height: GoalControlMetrics.diameter)
+                    .frame(width: 16, height: 16)
+                    Text(schedule.title)
+                        .font(.system(size: 10.8, weight: .semibold, design: .rounded))
+                        .foregroundColor(completed ? t.mute : t.cream)
+                        .strikethrough(completed)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(8)
+                .contentShape(Rectangle())
             }
-            .padding(8)
-            .background(goalRowSurface(opacity: 0.92))
+            .buttonStyle(.plain)
+            if shownScheduleDetailsID == schedule.id, !schedule.note.isEmpty {
+                Text(schedule.note)
+                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 8)
+                    .transition(.opacity)
+            }
         }
-        .buttonStyle(.plain)
-        .onHover { inside in
-            updateScheduleHover(schedule, inside: inside)
-        }
-        .popover(isPresented: Binding(
-            get: { shownScheduleDetailsID == schedule.id && !schedule.note.isEmpty },
-            set: { if !$0 { shownScheduleDetailsID = nil } }
-        ), arrowEdge: .trailing) {
-            scheduleDetails(schedule)
-                .onHover { inside in
-                    updateScheduleHover(schedule, inside: inside)
-                }
-        }
+        .background(goalRowSurface(opacity: 0.92))
+        .onHover { inside in updateScheduleHover(schedule, inside: inside) }
     }
 
     private func scheduleDetails(_ schedule: ScheduledGoal) -> some View {
@@ -1327,7 +1323,7 @@ struct KajiPopoverView: View {
                 Spacer()
                 if horizon == .today {
                     Button {
-                        beginGoalCreation(.goal)
+                        beginGoalCreation()
                     } label: {
                         Image(systemName: "plus")
                             .font(.system(size: 11, weight: .semibold))
@@ -1342,10 +1338,11 @@ struct KajiPopoverView: View {
                     .buttonStyle(.plain)
                     .keyboardShortcut("n", modifiers: .command)
                     .help("新建目标（⌘N）")
-                    .popover(isPresented: $showsGoalCreator, arrowEdge: .trailing) {
-                        goalCreationPopover
-                    }
                 }
+            }
+            if showsGoalCreator {
+                goalCreationCard
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
             if showsHeatmap {
                 goalHeatmap
@@ -1367,40 +1364,9 @@ struct KajiPopoverView: View {
         }
     }
 
-    private var goalCreationPopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("新建目标")
-                .font(.system(size: 16, weight: .bold, design: .rounded))
-            Picker("类型", selection: $goalCreationKind) {
-                ForEach(GoalCreationKind.allCases, id: \.rawValue) { kind in
-                    Text(kind.rawValue).tag(kind)
-                }
-            }
-            .pickerStyle(.segmented)
-            if goalCreationKind == .fixed {
-                HStack(spacing: 5) {
-                    Text("星期")
-                    Spacer()
-                    ForEach(1...7, id: \.self) { day in
-                        Button {
-                            if goalCreationWeekdays.contains(day) {
-                                goalCreationWeekdays.remove(day)
-                            } else {
-                                goalCreationWeekdays.insert(day)
-                            }
-                        } label: {
-                            Text(["日", "一", "二", "三", "四", "五", "六"][day - 1])
-                                .frame(width: 22, height: 22)
-                                .background(
-                                    Circle().fill(goalCreationWeekdays.contains(day) ? t.gold : t.panel)
-                                )
-                                .foregroundColor(goalCreationWeekdays.contains(day) ? t.bg : t.mute)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            TextField("标题", text: $goalCreationTitle)
+    private var goalCreationCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("Name", text: $goalCreationTitle)
                 .textFieldStyle(.roundedBorder)
             HStack(spacing: 8) {
                 Menu {
@@ -1413,11 +1379,11 @@ struct KajiPopoverView: View {
                 } label: {
                     Circle()
                         .fill(Color(hex: goalCreationTagColor))
-                        .frame(width: 14, height: 14)
+                        .frame(width: 10, height: 10)
                 }
                 .menuStyle(.borderlessButton)
                 .menuIndicator(.hidden)
-                TextField("标签", text: $goalCreationTagName)
+                TextField("Tag", text: $goalCreationTagName)
                     .textFieldStyle(.roundedBorder)
                 HStack(spacing: 5) {
                     ForEach([0xE05D6F, 0xD18A3C, 0x4F9D69, 0x5B7CFA, 0x8E6AD8] as [UInt32], id: \.self) { hex in
@@ -1426,11 +1392,11 @@ struct KajiPopoverView: View {
                         } label: {
                             Circle()
                                 .fill(Color(hex: hex))
-                                .frame(width: 13, height: 13)
+                                .frame(width: 10, height: 10)
                                 .overlay(
                                     Circle().stroke(
                                         goalCreationTagColor == hex ? t.cream : Color.clear,
-                                        lineWidth: 1.5
+                                        lineWidth: 1
                                     )
                                 )
                         }
@@ -1438,56 +1404,43 @@ struct KajiPopoverView: View {
                     }
                 }
             }
-            TextField("说明（可选）", text: $goalCreationNote, axis: .vertical)
+            TextField("Description", text: $goalCreationNote, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
-                .lineLimit(2...5)
+                .lineLimit(2...4)
             HStack {
                 Button("取消") { showsGoalCreator = false }
                 Spacer()
                 Button("保存") { saveGoalCreation() }
                     .keyboardShortcut(.defaultAction)
-                    .disabled(
-                        goalCreationTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || (goalCreationKind == .fixed && goalCreationWeekdays.isEmpty)
-                    )
+                    .disabled(goalCreationTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
-        .padding(16)
-        .frame(width: goalCreationKind == .fixed ? 360 : 320)
-        .background(t.bg)
+        .padding(10)
+        .background(goalRowSurface(opacity: 0.72))
         .foregroundColor(t.cream)
     }
 
-    private func beginGoalCreation(_ kind: GoalCreationKind) {
-        goalCreationKind = kind
+    private func beginGoalCreation() {
         goalCreationTitle = ""
         let defaultTag = dailyGoals.tagDefinitions.first(where: { $0.name == GoalTag.personal.rawValue })
             ?? dailyGoals.tagDefinitions.first
         goalCreationTagName = defaultTag?.name ?? GoalTag.personal.rawValue
         goalCreationTagColor = defaultTag?.colorHex ?? 0x8E6AD8
-        goalCreationWeekdays = [Calendar.current.component(.weekday, from: Date())]
         goalCreationNote = ""
-        showsGoalCreator = true
+        withAnimation(.easeOut(duration: 0.16)) {
+            showsGoalCreator = true
+        }
     }
 
     private func saveGoalCreation() {
         let title = goalCreationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         let tag = dailyGoals.ensureTag(name: goalCreationTagName, colorHex: goalCreationTagColor)
-        if goalCreationKind == .fixed {
-            _ = fixedPlanStore.add(
-                title: title,
-                tag: tag,
-                note: goalCreationNote,
-                weekdays: goalCreationWeekdays
-            )
-        } else {
-            let id = dailyGoals.addGoal(in: .today)
-            if let goal = dailyGoals.goals(for: .today).first(where: { $0.id == id }) {
-                dailyGoals.updateTitle(goal, title: title, in: .today)
-                dailyGoals.updateTag(goal, tag: tag, in: .today)
-                dailyGoals.updateNote(goal, note: goalCreationNote, in: .today)
-            }
+        let id = dailyGoals.addGoal(in: .today)
+        if let goal = dailyGoals.goals(for: .today).first(where: { $0.id == id }) {
+            dailyGoals.updateTitle(goal, title: title, in: .today)
+            dailyGoals.updateTag(goal, tag: tag, in: .today)
+            dailyGoals.updateNote(goal, note: goalCreationNote, in: .today)
         }
         showsGoalCreator = false
     }
