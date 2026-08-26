@@ -80,7 +80,6 @@ final class LaunchdJobLogicTests: XCTestCase {
         XCTAssertEqual(snapshot.installedJobs.first(where: { $0.label == "dev.brook.failed" })?.lastExitCode, 78)
     }
 
-
     func testSkipsHeaderAndMalformedRows() {
         let snapshot = LaunchdJobLogic.snapshot(
             listOutput: "PID\tStatus\tLabel\nnot a launchctl row\n-\t-\tvalid.label\n",
@@ -90,6 +89,28 @@ final class LaunchdJobLogicTests: XCTestCase {
         XCTAssertEqual(snapshot.jobs.map(\.label), ["valid.label"])
         XCTAssertEqual(snapshot.jobs[0].state, .idle)
         XCTAssertNil(snapshot.jobs[0].lastExitCode)
+    }
+}
+
+@MainActor
+final class LaunchdJobDiscoveryTests: XCTestCase {
+    func testDiscoversOnlyPlistsWithValidLabels() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let valid = ["Label": "dev.brook.valid"]
+        let labelLess = ["Program": "/usr/bin/true"]
+        let empty: [String: String] = [:]
+        for (name, plist) in [("valid", valid), ("label-less", labelLess), ("empty", empty)] {
+            let data = try PropertyListSerialization.data(fromPropertyList: plist, format: .xml, options: 0)
+            try data.write(to: directory.appendingPathComponent("\(name).plist"))
+        }
+        try Data("not a plist".utf8).write(to: directory.appendingPathComponent("malformed.plist"))
+        try Data("ignored".utf8).write(to: directory.appendingPathComponent("not-a-plist.txt"))
+
+        XCTAssertEqual(LaunchdJobStore.installedUserAgentLabels(in: directory), ["dev.brook.valid"])
     }
 }
 

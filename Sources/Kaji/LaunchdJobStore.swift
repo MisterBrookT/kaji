@@ -107,9 +107,10 @@ final class LaunchdJobStore: ObservableObject {
         )
     }
 
-    nonisolated private static func installedUserAgentLabels() -> Set<String> {
-        let directory = FileManager.default.homeDirectoryForCurrentUser
+    nonisolated static func installedUserAgentLabels(
+        in directory: URL = FileManager.default.homeDirectoryForCurrentUser
             .appendingPathComponent("Library/LaunchAgents", isDirectory: true)
+    ) -> Set<String> {
         guard let files = try? FileManager.default.contentsOfDirectory(
             at: directory,
             includingPropertiesForKeys: nil,
@@ -117,18 +118,14 @@ final class LaunchdJobStore: ObservableObject {
         ) else { return [] }
 
         return Set(files.compactMap { url in
-            guard url.pathExtension == "plist" else { return nil }
-            if let data = try? Data(contentsOf: url),
-               let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
-               let dictionary = plist as? [String: Any],
-               let label = dictionary["Label"] as? String,
-               !label.isEmpty {
-                return label
-            }
-            // A plist file is still an installed agent even when an updater
-            // omits Label or the file is temporarily malformed. Keep it
-            // visible under its conventional filename-derived label.
-            return url.deletingPathExtension().lastPathComponent
+            guard url.pathExtension == "plist",
+                  let data = try? Data(contentsOf: url),
+                  let plist = try? PropertyListSerialization.propertyList(from: data, format: nil),
+                  let dictionary = plist as? [String: Any],
+                  let label = dictionary["Label"] as? String,
+                  !label.isEmpty
+            else { return nil }
+            return label
         })
     }
 }

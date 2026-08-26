@@ -265,7 +265,7 @@ struct KajiPopoverView: View {
     private var launchdPanel: some View {
         let installedJobs = launchdJobStore.snapshot.installedJobs
         let installedSummary = launchdJobStore.snapshot.installedSummary
-        VStack(alignment: .leading, spacing: 10) {
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
                 launchdSummary("\(installedSummary.runningCount)", label: "running")
                 launchdSummary("\(installedSummary.failedCount)", label: "failed")
