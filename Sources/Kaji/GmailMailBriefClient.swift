@@ -16,6 +16,20 @@ enum GmailThreadMutation: Sendable {
     }
 }
 
+@MainActor
+enum MailBriefAuthorizedRequest {
+    static func run<T>(
+        token: (Bool) async throws -> String,
+        operation: (String) async throws -> T
+    ) async throws -> T {
+        do {
+            return try await operation(try await token(false))
+        } catch MailBriefError.gmailUnauthorized {
+            return try await operation(try await token(true))
+        }
+    }
+}
+
 struct GmailMailBriefClient {
     private let session: URLSession
     init(session: URLSession = .shared) { self.session = session }
@@ -99,8 +113,20 @@ struct GmailMailBriefClient {
             request.httpBody = body
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw MailBriefError.transient("Gmail is temporarily unavailable")
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw MailBriefError.invalidResponse
+        }
+        if http.statusCode == 401 { throw MailBriefError.gmailUnauthorized }
+        if http.statusCode == 429 || (500..<600).contains(http.statusCode) {
+            throw MailBriefError.transient("Gmail is temporarily unavailable")
+        }
+        guard (200..<300).contains(http.statusCode) else {
             throw MailBriefError.invalidResponse
         }
         return data

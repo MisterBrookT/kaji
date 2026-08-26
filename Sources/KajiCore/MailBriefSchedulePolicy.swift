@@ -37,13 +37,3 @@ public enum MailBriefSchedulePolicy {
     }
 }
 
-public enum MailBriefFailureDisposition: Equatable, Sendable {
-    case reconnect
-    case waitUntilNextSchedule
-}
-
-public enum MailBriefFailurePolicy {
-    public static func disposition(errorCode: String) -> MailBriefFailureDisposition {
-        errorCode == "oauth" ? .reconnect : .waitUntilNextSchedule
-    }
-}

@@ -42,13 +42,6 @@ final class MailBriefSchedulePolicyTests: XCTestCase {
         )
     }
 
-    func testOAuthFailureRequiresReconnect() {
-        XCTAssertEqual(MailBriefFailurePolicy.disposition(errorCode: "oauth"), .reconnect)
-        XCTAssertEqual(
-            MailBriefFailurePolicy.disposition(errorCode: "codex_unavailable"),
-            .waitUntilNextSchedule
-        )
-    }
 
     private func date(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ minute: Int) -> Date {
         calendar.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: minute))!
