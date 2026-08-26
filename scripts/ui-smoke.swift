@@ -395,7 +395,7 @@ func run() throws {
         return collectAXElements(element, budget: &budget)
     }
 
-    let settingsSections = ["General", "Modules", "Work", "Goals", "Quota", "AI News", "Mail Brief", "MCP"]
+    let settingsSections = ["General", "Modules", "Work", "Goals", "Quota", "AI News", "Mail Brief", "CLI"]
     var previousSignature: Set<String>? = nil
     for (index, section) in settingsSections.enumerated() {
         if index > 0 {

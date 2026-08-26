@@ -32,7 +32,7 @@ Kaji starts small. Quota is on. Other modules are opt-in. One shell. Only the si
 
 `Kaji` is Japanese `舵 / かじ`. It means rudder.
 
-[Read the vision](dev_docs/product/vision.md).
+[Read the product principles](docs/product-principles.md).
 
 ## Install
 
@@ -74,7 +74,8 @@ Two layers, split by what each can actually prove:
 
 - [Latest release](https://github.com/blackblue-labs/kaji/releases/latest)
 - [AGENTS.md](AGENTS.md): contributor / agent notes
-- [dev_docs/](dev_docs/README.md): internal specs
+- [Published decisions](docs/product-principles.md): product, modules, design, and integration boundaries
+- [dev_docs/](dev_docs/README.md): internal durable decisions
 
 ## License
 

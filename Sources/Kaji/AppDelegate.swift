@@ -29,9 +29,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
-    private lazy var mcpServer = KajiMCPServer(
+    private lazy var controlServer = KajiControlServer(
         goals: dailyGoals,
-        snapshotProvider: { [weak self] in self?.mcpSnapshot() ?? [:] }
+        snapshotProvider: { [weak self] in self?.controlSnapshot() ?? [:] }
     )
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
@@ -71,7 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sleepController.refresh()
         store.start()
         applyModuleLifecycle(prefs.enabledModules)
-        mcpServer.setEnabled(prefs.mcpEnabled)
+        controlServer.start()
 
         // Re-render the menubar indicator whenever data OR the visible-provider /
         // menubar-style prefs change.
@@ -182,13 +182,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &cancellables)
-        prefs.$mcpEnabled
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] enabled in
-                self?.mcpServer.setEnabled(enabled)
-            }
-            .store(in: &cancellables)
         // Update availability re-renders the glyph (adds/removes the badge dot).
         updateChecker.$available
             .receive(on: RunLoop.main)
@@ -236,7 +229,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         closeBreakOverlay()
         aiNewsStore.stop()
         mailBriefStore.stop()
-        mcpServer.stop()
+        controlServer.stop()
     }
 
     func applicationDidBecomeActive(_ notification: Notification) {
@@ -568,7 +561,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func mcpSnapshot() -> [String: Any] {
+
+    private func controlSnapshot() -> [String: Any] {
         let snapshot = systemMonitor.snapshot
         return [
             "settings": [
@@ -629,13 +623,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ],
             "goals": [
                 "items": dailyGoals.goals(for: .today).map {
-                    [
-                        "id": $0.id.uuidString.lowercased(),
-                        "title": $0.title,
-                        "isDone": $0.isDone,
-                        "tag": $0.tag,
-                        "note": $0.note,
-                    ]
+                    ["id": $0.id.uuidString.lowercased(), "title": $0.title,
+                     "isDone": $0.isDone, "tag": $0.tag, "note": $0.note]
                 },
                 "tags": dailyGoals.tagDefinitions.map {
                     ["name": $0.name, "colorHex": String(format: "%06X", $0.colorHex)]
@@ -684,7 +673,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let controller = KajiHostingController(rootView: SettingsView(prefs: prefs,
                                                                        sleepController: sleepController,
                                                                        fixedPlanStore: fixedPlanStore,
-                                                                       mcpServer: mcpServer,
                                                                        mailBriefStore: mailBriefStore))
 
         controller.view.configureKajiHost()

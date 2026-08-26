@@ -8,6 +8,7 @@ let package = Package(
     ],
     products: [
         .executable(name: "Kaji", targets: ["Kaji"]),
+        .executable(name: "kaji-cli", targets: ["KajiCommand"]),
         .executable(name: "KajiSleepHelper", targets: ["KajiSleepHelper"]),
         .library(name: "KajiCore", targets: ["KajiCore"])
     ],
@@ -21,6 +22,10 @@ let package = Package(
             name: "Kaji",
             dependencies: ["KajiCore", "KajiSleepSupport"],
             path: "Sources/Kaji"
+        ),
+        .executableTarget(
+            name: "KajiCommand",
+            path: "Sources/KajiCLI"
         ),
         .target(
             name: "KajiSleepSupport",

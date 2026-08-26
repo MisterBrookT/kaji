@@ -58,6 +58,7 @@ public enum L10n {
         case fixedPlan
         case launchAtLogin
         case modules, modulesHint
+        case cliIntegrationHint, cliExamplePrompt, copyPrompt
         case moduleQuota, moduleWork, moduleSystem, moduleGoals, moduleAINews
         case aiNews, dataSource, updated, loading, noHotNews, retry, sources, refreshInterval
         case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
@@ -134,6 +135,19 @@ public enum L10n {
             ptBR: "Por padrão, só Quota. Ative o que precisar.",
             es: "Por defecto, solo Quota. Activa lo que necesites."
         ),
+        .cliIntegrationHint: .init(
+            en: "Agents manage Kaji goals through the kaji command built with this app.",
+            zh: "Agent 通过随本应用构建的 kaji 命令管理 Kaji goals。",
+            ptBR: "Agentes gerenciam as metas do Kaji pelo comando kaji criado com este app.",
+            es: "Los agentes gestionan las metas de Kaji mediante el comando kaji incluido con esta app."
+        ),
+        .cliExamplePrompt: .init(
+            en: "读 xxx,创建一个叫 kaji 的 skill",
+            zh: "读 xxx,创建一个叫 kaji 的 skill",
+            ptBR: "读 xxx,创建一个叫 kaji 的 skill",
+            es: "读 xxx,创建一个叫 kaji 的 skill"
+        ),
+        .copyPrompt: .init(en: "Copy prompt", zh: "复制提示词", ptBR: "Copiar prompt", es: "Copiar prompt"),
         .moduleQuota: .init(en: "Quota", zh: "Quota", ptBR: "Quota", es: "Quota"),
         .moduleWork: .init(en: "Work / Break", zh: "Work / Break", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
         .moduleSystem: .init(en: "System", zh: "System", ptBR: "Sistema", es: "Sistema"),

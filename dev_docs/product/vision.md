@@ -52,13 +52,12 @@ flowchart TB
 
 Kaji 从 AI coding quota 起步，但 quota 只是第一种值得常驻的状态。
 
-今天，Kaji 由可选的第一方 modules 组成。用户只开启自己需要的部分。未来，它可以容纳 AI News、后台 agent 活动等新的个人信号；也可能管理其它 menu-bar items，并让经过验证的 modules 按需安装。
+今天，Kaji 由可选的第一方 modules 组成。用户只开启自己需要的部分。未来的新能力仍限于经过验证、值得常驻的个人信号，不以扩张平台边界为目标。
 
-这些是演进方向，不是为了“平台感”预先搭建市场。顺序始终是：
+Kaji 不管理其它应用的 menu-bar items，也不提供第三方 module 市场。顺序始终是：
 
 > 先证明一个状态值得离用户这么近，再把它做成 module。
 
-替代单独的 menu-bar organizer 可以成为结果，但不是 Kaji 的全部身份。Kaji 管理的不只是图标，而是用户真正关心的活状态。
 
 ## 产品原则
 

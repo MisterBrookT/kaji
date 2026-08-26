@@ -10,7 +10,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case quota = "Quota"
     case aiNews = "AI News"
     case mailBrief = "Mail Brief"
-    case mcp = "MCP"
+    case cli = "CLI"
     case permissions = "Permissions"
 
     var id: String { rawValue }
@@ -23,7 +23,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .quota: "gauge.with.dots.needle.67percent"
         case .aiNews: "newspaper"
         case .mailBrief: "envelope"
-        case .mcp: "link"
+        case .cli: "terminal"
         case .permissions: "lock.shield"
         }
     }
@@ -41,7 +41,6 @@ struct SettingsView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var sleepController: SleepController
     @ObservedObject var fixedPlanStore: FixedPlanStore
-    @ObservedObject var mcpServer: KajiMCPServer
     @ObservedObject var mailBriefStore: MailBriefStore
     var onFixedPlanEditorChange: ((Bool) -> Void)? = nil
 
@@ -136,29 +135,25 @@ struct SettingsView: View {
                 }
             }
             }
-            if selection == .mcp {
-                settingBlock(title: "MCP") {
-                    VStack(alignment: .leading, spacing: 8) {
-                        settingRow(title: "Access") {
-                            segment(L10n.t(.on, prefs.language), on: prefs.mcpEnabled) {
-                                prefs.mcpEnabled = true
-                            }
-                            segment(L10n.t(.off, prefs.language), on: !prefs.mcpEnabled) {
-                                prefs.mcpEnabled = false
-                            }
-                        }
+            if selection == .cli {
+                settingBlock(title: "CLI") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(L10n.t(.cliIntegrationHint, prefs.language))
+                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                            .foregroundColor(t.mute)
+                            .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 8) {
-                            Circle()
-                                .fill(mcpStatusColor)
-                                .frame(width: 6, height: 6)
-                            Text(mcpStatusText)
-                                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
-                                .foregroundColor(t.mute)
-                                .lineLimit(1)
+                            Text(L10n.t(.cliExamplePrompt, prefs.language))
+                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                                .foregroundColor(t.cream)
+                                .textSelection(.enabled)
                             Spacer()
-                            Button("Copy endpoint") {
+                            Button(L10n.t(.copyPrompt, prefs.language)) {
                                 NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(KajiMCPServer.endpoint, forType: .string)
+                                NSPasteboard.general.setString(
+                                    L10n.t(.cliExamplePrompt, prefs.language),
+                                    forType: .string
+                                )
                             }
                             .buttonStyle(.plain)
                             .font(.system(size: 9.5, weight: .semibold, design: .rounded))
@@ -465,23 +460,6 @@ struct SettingsView: View {
         return "Started \(start) · Finished \(formatter.string(from: end))"
     }
 
-    private var mcpStatusText: String {
-        switch mcpServer.status {
-        case .stopped: "Stopped · \(KajiMCPServer.endpoint)"
-        case .starting: "Starting · \(KajiMCPServer.endpoint)"
-        case .running: "Running · \(KajiMCPServer.endpoint)"
-        case .failed(let message): "Failed · \(message)"
-        }
-    }
-
-    private var mcpStatusColor: Color {
-        switch mcpServer.status {
-        case .running: t.cream
-        case .failed: .red
-        case .starting: t.gold
-        case .stopped: t.mute
-        }
-    }
 
     private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {
         let on = prefs.isModuleEnabled(id)

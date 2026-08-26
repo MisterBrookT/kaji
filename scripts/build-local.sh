@@ -13,6 +13,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
 ./scripts/build-app.sh
+swift build -c release --product kaji-cli
+mkdir -p "$HOME/.local/bin"
+cp ".build/release/kaji-cli" "$HOME/.local/bin/kaji"
+chmod 755 "$HOME/.local/bin/kaji"
 APP="dist/Kaji.app"
 
 echo "==> md5 quota.py (source vs bundle — must match)"
