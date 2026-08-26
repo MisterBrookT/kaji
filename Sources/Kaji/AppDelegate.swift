@@ -797,11 +797,18 @@ extension AppDelegate: NSWindowDelegate {
     }
 }
 extension AppDelegate: NSPopoverDelegate {
+    func popoverWillShow(_ notification: Notification) {
+        guard let openingPopover = notification.object as? NSPopover,
+              openingPopover === popover else { return }
+        launchdJobStore.setPopoverVisible(true)
+    }
+
     func popoverWillClose(_ notification: Notification) {
         guard let closingPopover = notification.object as? NSPopover else { return }
         if closingPopover === detailPopover {
             detailPopover = nil
         } else if closingPopover === popover {
+            launchdJobStore.setPopoverVisible(false)
             closeDetailPopover()
         }
     }

@@ -7,8 +7,10 @@ final class LaunchdJobStore: ObservableObject {
     @Published private(set) var isRefreshing = false
     @Published private(set) var lastError: String?
 
-    private var timer: Timer?
     private let loadSnapshot: @Sendable () throws -> LaunchdJobSnapshot
+    private var enabled = false
+    private var popoverVisible = false
+    private var refreshGeneration = 0
     private(set) var refreshInvocationCount = 0
 
     init(
@@ -19,33 +21,42 @@ final class LaunchdJobStore: ObservableObject {
         self.loadSnapshot = loadSnapshot ?? { try LaunchdJobStore.loadLocalSnapshot() }
     }
 
-    var isPolling: Bool { timer != nil }
+    var isActive: Bool { enabled && popoverVisible }
 
     func setEnabled(_ enabled: Bool) {
+        self.enabled = enabled
         if enabled {
-            guard timer == nil else { return }
-            timer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
-                Task { @MainActor in self?.refresh() }
-            }
-            refresh()
+            if popoverVisible { refresh() }
         } else {
-            timer?.invalidate()
-            timer = nil
+            refreshGeneration += 1
             isRefreshing = false
             lastError = nil
             snapshot = LaunchdJobSnapshot(jobs: [])
         }
     }
 
+    func setPopoverVisible(_ visible: Bool) {
+        popoverVisible = visible
+        if visible {
+            refresh()
+        } else {
+            refreshGeneration += 1
+            isRefreshing = false
+        }
+    }
+
     func refresh() {
-        guard timer != nil, !isRefreshing else { return }
+        guard isActive, !isRefreshing else { return }
         isRefreshing = true
         refreshInvocationCount += 1
+        let generation = refreshGeneration
         let loader = loadSnapshot
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let result = Result { try loader() }
             DispatchQueue.main.async {
-                guard let self else { return }
+                guard let self,
+                      self.isActive,
+                      generation == self.refreshGeneration else { return }
                 self.isRefreshing = false
                 switch result {
                 case .success(let snapshot):

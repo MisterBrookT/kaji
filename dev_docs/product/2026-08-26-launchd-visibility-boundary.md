@@ -4,7 +4,7 @@
 
 Kaji 的 Background Tasks 模块 v1 只读，并且默认关闭。它只观察当前用户的 GUI launchd 域，不提供启动、停止、卸载、重新加载或提权操作。
 
-模块启用后，每次只执行一次 `launchctl list`，并读取 `~/Library/LaunchAgents` 中 plist 的 `Label`，把已安装但未出现在 GUI 域中的任务标为 `unloaded`。不为每个 label 调用 `launchctl print`。刷新间隔为一分钟；禁用模块时立即停止刷新并清空模块状态。
+模块启用后，只在状态栏 popover 可见时执行一次 `launchctl list`，并读取 `~/Library/LaunchAgents` 中 plist 的 `Label`，把已安装但未出现在 GUI 域中的任务标为 `unloaded`。不为每个 label 调用 `launchctl print`，也不在 popover 关闭时保留定时心跳；禁用模块时立即停止刷新并清空模块状态。
 
 ## 信息层级
 

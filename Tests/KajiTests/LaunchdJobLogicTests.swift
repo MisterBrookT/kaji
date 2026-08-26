@@ -61,23 +61,32 @@ final class LaunchdJobLogicTests: XCTestCase {
 
 @MainActor
 final class LaunchdJobStoreLifecycleTests: XCTestCase {
-    func testDisabledStoreDoesNotRefreshAndClearsModuleState() {
+    func testRefreshRunsOnlyWhileEnabledAndPopoverVisible() {
         let loaded = LaunchdJobSnapshot(jobs: [
             LaunchdJob(label: "dev.kaji.test", pid: 42, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
         ])
-        let store = LaunchdJobStore(loadSnapshot: { loaded })
+        let store = LaunchdJobStore(initialSnapshot: loaded, loadSnapshot: { loaded })
 
         store.refresh()
         XCTAssertEqual(store.refreshInvocationCount, 0)
-        XCTAssertFalse(store.isPolling)
+        XCTAssertFalse(store.isActive)
 
         store.setEnabled(true)
+        XCTAssertEqual(store.refreshInvocationCount, 0)
+        XCTAssertFalse(store.isActive)
+
+        store.setPopoverVisible(true)
         XCTAssertEqual(store.refreshInvocationCount, 1)
-        XCTAssertTrue(store.isPolling)
+        XCTAssertTrue(store.isActive)
+
+        store.setPopoverVisible(false)
+        XCTAssertFalse(store.isActive)
+        store.refresh()
+        XCTAssertEqual(store.refreshInvocationCount, 1, "closing the popover must stop further refreshes")
 
         store.setEnabled(false)
-        XCTAssertFalse(store.isPolling)
         XCTAssertTrue(store.snapshot.jobs.isEmpty)
+        store.setPopoverVisible(true)
         store.refresh()
         XCTAssertEqual(store.refreshInvocationCount, 1)
     }
