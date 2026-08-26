@@ -37,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let popoverNavigation = PopoverNavigation()
     private let aiNewsStore: AIHotNewsStore
     private let mailBriefStore: MailBriefStore
+    private let launchdJobStore = LaunchdJobStore()
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -214,6 +215,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
                                   batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
                                   model: prefs.mailBriefModel)
+        launchdJobStore.setEnabled(modules.contains(.launchd))
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -229,6 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         closeBreakOverlay()
         aiNewsStore.stop()
         mailBriefStore.stop()
+        launchdJobStore.stop()
         controlServer.stop()
     }
 
@@ -486,6 +489,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       fixedPlanStore: fixedPlanStore,
                                       aiNewsStore: aiNewsStore,
                                       mailBriefStore: mailBriefStore,
+                                      launchdJobStore: launchdJobStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),

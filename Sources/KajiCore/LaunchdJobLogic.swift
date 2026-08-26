@@ -1,0 +1,101 @@
+import Foundation
+
+public enum LaunchdJobState: Int, Codable, Sendable, CaseIterable {
+    case failed
+    case running
+    case idle
+    case unloaded
+
+    public var sortRank: Int { rawValue }
+}
+
+public struct LaunchdJob: Identifiable, Equatable, Sendable {
+    public let label: String
+    public let pid: Int?
+    public let lastExitCode: Int?
+    public let isInstalledUserAgent: Bool
+    public let state: LaunchdJobState
+
+    public var id: String { label }
+
+    public init(
+        label: String,
+        pid: Int?,
+        lastExitCode: Int?,
+        isInstalledUserAgent: Bool,
+        state: LaunchdJobState
+    ) {
+        self.label = label
+        self.pid = pid
+        self.lastExitCode = lastExitCode
+        self.isInstalledUserAgent = isInstalledUserAgent
+        self.state = state
+    }
+}
+
+public struct LaunchdJobSnapshot: Equatable, Sendable {
+    public let jobs: [LaunchdJob]
+
+    public init(jobs: [LaunchdJob]) {
+        self.jobs = jobs
+    }
+
+    public var runningCount: Int { jobs.count { $0.state == .running } }
+    public var failedCount: Int { jobs.count { $0.state == .failed } }
+    public var unloadedCount: Int { jobs.count { $0.state == .unloaded } }
+}
+
+public enum LaunchdJobLogic {
+    /// Parses the tab-separated output of `launchctl list` in one pass, then
+    public static func snapshot(listOutput: String, installedLabels: Set<String>) -> LaunchdJobSnapshot {
+        var jobsByLabel: [String: LaunchdJob] = [:]
+
+        for line in listOutput.split(whereSeparator: \.isNewline) {
+            let columns = line.split(separator: "\t", omittingEmptySubsequences: false)
+            guard columns.count >= 3 else { continue }
+            let pidText = String(columns[0])
+            let exitText = String(columns[1])
+            let label = columns.dropFirst(2).joined(separator: "\t")
+            guard label != "Label", !label.isEmpty else { continue }
+
+            let pid = Int(pidText)
+            let lastExitCode = Int(exitText)
+            let state: LaunchdJobState
+            if pid != nil {
+                state = .running
+            } else if let lastExitCode, lastExitCode != 0 {
+                state = .failed
+            } else {
+                state = .idle
+            }
+            jobsByLabel[label] = LaunchdJob(
+                label: label,
+                pid: pid,
+                lastExitCode: lastExitCode,
+                isInstalledUserAgent: installedLabels.contains(label),
+                state: state
+            )
+        }
+
+        for label in installedLabels where jobsByLabel[label] == nil {
+            jobsByLabel[label] = LaunchdJob(
+                label: label,
+                pid: nil,
+                lastExitCode: nil,
+                isInstalledUserAgent: true,
+                state: .unloaded
+            )
+        }
+
+        let jobs = jobsByLabel.values.sorted {
+            if $0.isInstalledUserAgent != $1.isInstalledUserAgent {
+                return $0.isInstalledUserAgent && !$1.isInstalledUserAgent
+            }
+            if $0.state.sortRank != $1.state.sortRank {
+                return $0.state.sortRank < $1.state.sortRank
+            }
+            return $0.label.localizedStandardCompare($1.label) == .orderedAscending
+        }
+        return LaunchdJobSnapshot(jobs: jobs)
+    }
+}

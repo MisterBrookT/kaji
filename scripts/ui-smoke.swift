@@ -353,6 +353,29 @@ func run() throws {
             }
             sequence.append(expected)
             try checkNoSystemAuthPrompt("popover page \(expected)", artifacts: artifacts)
+            if expected == "Background Tasks" {
+                guard wait(timeout: 3, for: { () -> Bool? in
+                    let texts = (try? popoverElements())?
+                        .filter { $0.role == "AXStaticText" }
+                        .map(\.text) ?? []
+                    return texts.contains(where: { $0.uppercased().hasPrefix("USER AGENTS · ") }) ? true : nil
+                }) != nil else {
+                    capture("\(artifacts)/background-tasks-failure.png")
+                    throw SmokeError.message("ASSERT background-tasks-real-data: FAIL no installed user-agent section appeared")
+                }
+                let launchdTexts = try popoverElements()
+                    .filter { $0.role == "AXStaticText" }
+                    .map(\.text)
+                let expectedCount = ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_EXPECT_USER_AGENT_COUNT"]
+                let expectedSection = expectedCount.map { "USER AGENTS · \($0)" }
+                guard expectedSection.map(launchdTexts.contains) ?? true,
+                      launchdTexts.contains(where: { ["RUNNING", "FAILED", "IDLE", "UNLOADED"].contains($0) }) else {
+                    capture("\(artifacts)/background-tasks-failure.png")
+                    throw SmokeError.message("ASSERT background-tasks-real-data: FAIL expected installed agents and visible job states; observed \(launchdTexts)")
+                }
+                capture("\(artifacts)/background-tasks.png")
+                print("ASSERT background-tasks-real-data: PASS rendered \(expectedCount ?? "installed") user agents with live launchd states")
+            }
         }
         print("ASSERT ax-page-nav: PASS clicked through pages in order \(sequence.joined(separator: " -> "))")
     } else {

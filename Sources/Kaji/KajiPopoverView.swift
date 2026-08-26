@@ -81,6 +81,7 @@ struct KajiPopoverView: View {
     @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var aiNewsStore: AIHotNewsStore
     @ObservedObject var mailBriefStore: MailBriefStore
+    @ObservedObject var launchdJobStore: LaunchdJobStore
     @ObservedObject var navigation: PopoverNavigation
 
     let controls: KajiPopoverControls
@@ -256,6 +257,112 @@ struct KajiPopoverView: View {
             aiNewsPanel
         case .mailBrief:
             mailBriefPanel
+        case .launchd:
+            launchdPanel
+        }
+    }
+
+    private var launchdPanel: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 6) {
+                launchdSummary("\(launchdJobStore.snapshot.runningCount)", label: "running")
+                launchdSummary("\(launchdJobStore.snapshot.failedCount)", label: "failed")
+                launchdSummary("\(launchdJobStore.snapshot.unloadedCount)", label: "unloaded")
+                Spacer(minLength: 6)
+                Button { launchdJobStore.refresh() } label: {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 10, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .disabled(launchdJobStore.isRefreshing)
+                .help("Refresh")
+            }
+
+            if launchdJobStore.snapshot.jobs.isEmpty {
+                HStack {
+                    Spacer()
+                    if launchdJobStore.isRefreshing {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text(launchdJobStore.lastError == nil ? "Looking for GUI jobs…" : "Could not read launchd jobs")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundColor(t.mute)
+                    Spacer()
+                }
+                .padding(.vertical, 24)
+            } else {
+                let installed = launchdJobStore.snapshot.jobs.filter(\.isInstalledUserAgent)
+                let other = launchdJobStore.snapshot.jobs.filter { !$0.isInstalledUserAgent }
+                LazyVStack(alignment: .leading, spacing: 10) {
+                    launchdSection("User agents", jobs: installed)
+                    launchdSection("Other GUI jobs", jobs: other)
+                }
+            }
+        }
+    }
+
+    private func launchdSummary(_ value: String, label: String) -> some View {
+        HStack(spacing: 3) {
+            Text(value)
+                .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                .foregroundColor(t.cream)
+            Text(label)
+                .font(.system(size: 9.5, weight: .medium))
+                .foregroundColor(t.mute)
+        }
+    }
+
+    @ViewBuilder
+    private func launchdSection(_ title: String, jobs: [LaunchdJob]) -> some View {
+        if !jobs.isEmpty {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("\(title) · \(jobs.count)")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(t.mute)
+                    .textCase(.uppercase)
+                ForEach(jobs) { job in
+                    launchdJobRow(job)
+                }
+            }
+        }
+    }
+
+    private func launchdJobRow(_ job: LaunchdJob) -> some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(job.state == .running ? t.cream : t.track)
+                .frame(width: 5, height: 5)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(job.label)
+                    .font(.system(size: 10.5, weight: job.state == .failed ? .semibold : .medium))
+                    .foregroundColor(job.state == .failed ? t.cream : t.ash)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(launchdJobDetail(job))
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(t.mute)
+            }
+            Spacer(minLength: 4)
+            Text(launchdStateLabel(job.state))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(job.state == .failed ? t.cream : t.mute)
+        }
+        .padding(.vertical, 2)
+    }
+
+    private func launchdJobDetail(_ job: LaunchdJob) -> String {
+        if let pid = job.pid { return "PID \(pid)" }
+        if let code = job.lastExitCode { return "Last exit \(code)" }
+        return job.isInstalledUserAgent ? "~/Library/LaunchAgents" : "GUI domain"
+    }
+
+    private func launchdStateLabel(_ state: LaunchdJobState) -> String {
+        switch state {
+        case .failed: "FAILED"
+        case .running: "RUNNING"
+        case .idle: "IDLE"
+        case .unloaded: "UNLOADED"
         }
     }
 
@@ -1860,6 +1967,7 @@ struct KajiPopoverView: View {
         case .goals: return "Goals"
         case .aiNews: return L10n.t(.aiNews, prefs.language)
         case .mailBrief: return "Mail Brief"
+        case .launchd: return "Background Tasks"
         }
     }
 

@@ -30,9 +30,9 @@ PREFS_DOMAIN="dev.kaji"
 # popover's Mail Brief page and the Settings > Mail Brief page, is the
 # regression test for that fix — if it ever starts failing, that is a real
 # regression, not a reason to re-exclude mailBrief from this list.
-SEED_MODULES=(quota work goals aiNews mailBrief)
+SEED_MODULES=(quota work goals aiNews mailBrief launchd)
 SEED_LANGUAGE=en
-EXPECTED_PAGE_TITLES="Quota|Work / Break|Goals|AI News|Mail Brief"
+EXPECTED_PAGE_TITLES="Quota|Work / Break|Goals|AI News|Mail Brief|Background Tasks"
 
 # Old-style property-list array literal, e.g. "(quota, work, goals, aiNews)" —
 # the format NSArgumentDomain parsing accepts for array-typed arguments.
@@ -86,10 +86,14 @@ if pgrep -x Kaji >/dev/null 2>&1; then
     exit 1
 fi
 
-printf '%s\n' 'UI-SMOKE launch: dist/Kaji.app'
-"$APP_EXECUTABLE" \
-    -enabledModules "$(seed_modules_plist_array)" \
-    -language "$SEED_LANGUAGE" \
+APP_ARGS=(
+    -enabledModules "$(seed_modules_plist_array)"
+    -language "$SEED_LANGUAGE"
+)
+if [[ -n "${KAJI_UI_SMOKE_APPEARANCE:-}" ]]; then
+    APP_ARGS+=(-AppleInterfaceStyle "$KAJI_UI_SMOKE_APPEARANCE")
+fi
+"$APP_EXECUTABLE" "${APP_ARGS[@]}" \
     >"$ARTIFACTS/kaji.stdout.log" 2>"$ARTIFACTS/kaji.stderr.log" &
 KAJI_PID=$!
 
@@ -98,6 +102,9 @@ if ! kill -0 "$KAJI_PID" 2>/dev/null; then
     exit 1
 fi
 
+shopt -s nullglob
+USER_AGENT_PLISTS=("$HOME"/Library/LaunchAgents/*.plist)
+export KAJI_UI_SMOKE_EXPECT_USER_AGENT_COUNT="${#USER_AGENT_PLISTS[@]}"
 "$HELPER" "$KAJI_PID" "$ARTIFACTS" "$EXPECTED_PAGE_TITLES"
 
 PREFS_MD5_AFTER=$(defaults export "$PREFS_DOMAIN" - 2>/dev/null | md5 -q || echo "no-domain")

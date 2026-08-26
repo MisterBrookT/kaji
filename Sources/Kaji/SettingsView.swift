@@ -90,6 +90,7 @@ struct SettingsView: View {
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
                     moduleRow(.aiNews, title: L10n.t(.moduleAINews, prefs.language), lockedOn: false)
                     moduleRow(.mailBrief, title: "Mail Brief", lockedOn: false)
+                    moduleRow(.launchd, title: "Background Tasks", lockedOn: false)
                 }
             }
             }
