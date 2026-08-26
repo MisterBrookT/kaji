@@ -76,12 +76,30 @@ final class PopoverInteractionTests: XCTestCase {
         }
     }
 
+    /// The goal note is no longer an AppKit affordance: nesting a second
+    /// `NSPopover` inside the status-item popover threw
+    /// `NSInternalInconsistencyException` from
+    /// `-[NSWindow _newFirstResponderAfterResigning]` when the note text view
+    /// resigned first responder, hanging/killing the app. The note card must
+    /// therefore render inside the popover's own window.
+    func testGoalNoteHasNoNestedAppKitPopoverAffordance() throws {
+        harness.clickStatusItem()
+        harness.appDelegate.popoverNavigation.panel = .goals
+        RunLoop.main.run(until: Date().addingTimeInterval(0.05))
+
+        XCTAssertTrue(harness.detailAffordances(prefix: "goal-detail-").isEmpty,
+                      "goal notes must not be backed by an AppKit button that opens a child NSPopover")
+        XCTAssertNil(harness.appDelegate.detailPopover,
+                     "paging to goals must not create a child popover")
+        XCTAssertTrue(harness.appDelegate.popover.isShown)
+    }
+
     func testDetailAffordanceOpensChildWhileParentStaysShown() throws {
         harness.clickStatusItem()
         harness.appDelegate.popoverNavigation.panel = .goals
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
 
-        harness.clickDetailAffordance(prefix: "goal-detail-")
+        harness.clickDetailAffordance(prefix: "schedule-detail-")
 
         XCTAssertTrue(harness.appDelegate.popover.isShown, "opening a detail must not dismiss the main popover")
         XCTAssertTrue(try XCTUnwrap(harness.appDelegate.detailPopover).isShown)
@@ -91,7 +109,7 @@ final class PopoverInteractionTests: XCTestCase {
         harness.clickStatusItem()
         harness.appDelegate.popoverNavigation.panel = .goals
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        harness.clickDetailAffordance(prefix: "goal-detail-")
+        harness.clickDetailAffordance(prefix: "schedule-detail-")
         let child = try XCTUnwrap(harness.appDelegate.detailPopover)
         child.animates = false
 
@@ -107,11 +125,15 @@ final class PopoverInteractionTests: XCTestCase {
         harness.clickStatusItem()
         harness.appDelegate.popoverNavigation.panel = .goals
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
-        harness.clickDetailAffordance(prefix: "goal-detail-")
+        let affordances = harness.detailAffordances(prefix: "schedule-detail-")
+        XCTAssertGreaterThan(affordances.count, 1,
+                             "harness seeds two scheduled goals with notes; both must render a detail affordance")
+
+        harness.click(affordances[0])
         let first = try XCTUnwrap(harness.appDelegate.detailPopover)
         first.animates = false
 
-        harness.clickDetailAffordance(prefix: "schedule-detail-")
+        harness.click(affordances[1])
         let second = try XCTUnwrap(harness.appDelegate.detailPopover)
 
         XCTAssertFalse(first === second)
