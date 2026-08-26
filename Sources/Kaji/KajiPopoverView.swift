@@ -6,6 +6,7 @@ import KajiCore
 final class PopoverNavigation: ObservableObject {
     @Published var panel: KajiModuleID = .quota
     @Published var goalHorizon: GoalHorizon = .today
+    @Published var launchdCategory: LaunchdJobCategory = .userAgent
 }
 
 struct KajiPopoverControls {
@@ -96,7 +97,6 @@ struct KajiPopoverView: View {
     @State private var previousFocusedGoalHorizon: GoalHorizon = .today
     @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
-    @State private var selectedLaunchdCategory: LaunchdJobCategory = .userAgent
     @State private var showsGoalCreator = false
     @State private var goalCreationTitle = ""
     @State private var goalCreationTagName = GoalTag.personal.rawValue
@@ -132,6 +132,10 @@ struct KajiPopoverView: View {
     private var panel: KajiModuleID {
         get { navigation.panel }
         nonmutating set { navigation.panel = newValue }
+    }
+    private var selectedLaunchdCategory: LaunchdJobCategory {
+        get { navigation.launchdCategory }
+        nonmutating set { navigation.launchdCategory = newValue }
     }
     private var pageIndex: Int {
         pages.firstIndex(of: panel) ?? 0

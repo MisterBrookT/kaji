@@ -9,7 +9,7 @@ public enum LaunchdJobState: Int, Codable, Sendable, CaseIterable {
     public var sortRank: Int { rawValue }
 }
 
-public enum LaunchdJobCategory: Sendable, CaseIterable {
+public enum LaunchdJobCategory: String, Sendable, CaseIterable {
     case userAgent
     case application
     case appleSystem

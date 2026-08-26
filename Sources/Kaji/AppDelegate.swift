@@ -29,10 +29,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
-    private lazy var controlServer = KajiControlServer(
-        goals: dailyGoals,
-        snapshotProvider: { [weak self] in self?.controlSnapshot() ?? [:] }
-    )
+    private lazy var controlServer: KajiControlServer = {
+        let environment = ProcessInfo.processInfo.environment
+        let testNonce = environment["KAJI_UI_SMOKE_NONCE"]
+        let testPort = environment["KAJI_UI_SMOKE_PORT"].flatMap(UInt16.init)
+        let automation = testNonce.map { nonce in
+            KajiControlServer.TestAutomation(
+                nonce: nonce,
+                render: { [weak self] surface, selection, outputPath in
+                    guard let self else { throw TestUIAutomationError.appUnavailable }
+                    return try self.renderTestSurface(
+                        surface: surface,
+                        selection: selection,
+                        outputPath: outputPath
+                    )
+                }
+            )
+        }
+        return KajiControlServer(
+            goals: dailyGoals,
+            port: testPort ?? KajiControlServer.port,
+            snapshotProvider: { [weak self] in self?.controlSnapshot() ?? [:] },
+            testAutomation: automation
+        )
+    }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
     private let aiNewsStore: AIHotNewsStore
@@ -385,6 +405,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyPopoverDestination(destination)
             return
         }
+        popoverNavigation.launchdCategory = .userAgent
+
 
         // AppKit's first fitting pass can leave the initial SwiftUI page offset.
         // Fit from another enabled page, then switch after placement so every
@@ -677,7 +699,111 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "replyDrafts": mailBriefStore.replyDrafts,
                 "runRecords": jsonValue(mailBriefStore.runRecords),
             ],
+            "launchd": [
+                "userAgent": controlCategorySnapshot(.userAgent),
+                "application": controlCategorySnapshot(.application),
+                "appleSystem": controlCategorySnapshot(.appleSystem),
+            ],
         ]
+    }
+
+    private func controlCategorySnapshot(_ category: LaunchdJobCategory) -> [String: Any] {
+        let jobs = launchdJobStore.snapshot.jobs(in: category)
+        return [
+            "total": jobs.count,
+            "running": jobs.count { $0.state == .running },
+            "failed": jobs.count { $0.state == .failed },
+            "idle": jobs.count { $0.state == .idle },
+            "unloaded": jobs.count { $0.state == .unloaded },
+        ]
+    }
+
+    private func renderTestSurface(
+        surface: String,
+        selection: String,
+        outputPath: String
+    ) throws -> [String: Any] {
+        guard let artifactRoot = ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_ARTIFACTS"] else {
+            throw TestUIAutomationError.disabled
+        }
+        let rootURL = URL(fileURLWithPath: artifactRoot, isDirectory: true).standardizedFileURL
+        let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
+        guard outputURL.path.hasPrefix(rootURL.path + "/") else {
+            throw TestUIAutomationError.invalidOutputPath
+        }
+
+        let size: CGSize
+        switch surface {
+        case "status":
+            updateStatusItem()
+            hostingView.layoutSubtreeIfNeeded()
+            size = try writePNG(view: hostingView, to: outputURL)
+        case "popover":
+            let parts = selection.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+            guard let pageID = parts.first,
+                  let page = KajiModuleID(rawValue: pageID),
+                  prefs.enabledModules.contains(page),
+                  parts.count <= 2 else {
+                throw TestUIAutomationError.invalidSelection
+            }
+            if parts.count == 2 {
+                guard page == .launchd,
+                      let category = LaunchdJobCategory(rawValue: parts[1]) else {
+                    throw TestUIAutomationError.invalidSelection
+                }
+                popoverNavigation.launchdCategory = category
+            } else if page == .launchd {
+                popoverNavigation.launchdCategory = .userAgent
+            }
+            popoverNavigation.panel = page
+            if page == .goals { popoverNavigation.goalHorizon = .today }
+            let controller = makePopoverContentController(maxContentHeight: 640)
+            let target = popoverFittingSize(for: controller)
+            controller.view.frame = NSRect(origin: .zero, size: target)
+            controller.view.layoutSubtreeIfNeeded()
+            size = try writePNG(view: controller.view, to: outputURL)
+        case "settings":
+            guard let section = SettingsSection(rawValue: selection) else {
+                throw TestUIAutomationError.invalidSelection
+            }
+            let view = KajiHostingView(rootView: SettingsView(
+                prefs: prefs,
+                sleepController: sleepController,
+                fixedPlanStore: fixedPlanStore,
+                mailBriefStore: mailBriefStore,
+                initialSection: section
+            ))
+            view.configureKajiHost()
+            view.frame = NSRect(x: 0, y: 0, width: 760, height: 560)
+            view.layoutSubtreeIfNeeded()
+            size = try writePNG(view: view, to: outputURL)
+        default:
+            throw TestUIAutomationError.invalidSurface
+        }
+        return [
+            "surface": surface,
+            "selection": selection,
+            "path": outputURL.path,
+            "width": Int(size.width),
+            "height": Int(size.height),
+        ]
+    }
+
+    private func writePNG(view: NSView, to outputURL: URL) throws -> CGSize {
+        guard view.bounds.width > 0, view.bounds.height > 0,
+              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            throw TestUIAutomationError.renderFailed
+        }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw TestUIAutomationError.renderFailed
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: outputURL, options: .atomic)
+        return view.bounds.size
     }
 
     private func jsonValue<T: Encodable>(_ value: T) -> Any {
@@ -838,4 +964,13 @@ extension AppDelegate: NSPopoverDelegate {
             closeDetailPopover()
         }
     }
+}
+
+private enum TestUIAutomationError: Error {
+    case appUnavailable
+    case disabled
+    case invalidOutputPath
+    case invalidSelection
+    case invalidSurface
+    case renderFailed
 }

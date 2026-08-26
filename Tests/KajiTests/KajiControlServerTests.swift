@@ -31,6 +31,66 @@ final class KajiControlServerTests: XCTestCase {
         XCTAssertEqual(state["sample"] as? Bool, true)
     }
 
+    func testUIAutomationRouteIsHiddenWithoutExactNonce() async throws {
+        let suite = "KajiControlServerTests.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let store = DailyGoalStore(defaults: defaults)
+
+        let unavailablePort = UInt16.random(in: 40_000...49_999)
+        let unavailableServer = KajiControlServer(goals: store, port: unavailablePort)
+        unavailableServer.start()
+        let unavailableBase = try XCTUnwrap(URL(string: "http://127.0.0.1:\(unavailablePort)/v1"))
+        try await waitUntilReachable(unavailableBase.appending(path: "goals"))
+        let unavailable = try await rawRequest(
+            unavailableBase,
+            method: "POST",
+            path: "test/render",
+            body: ["nonce": "anything", "surface": "status", "selection": "status", "outputPath": "/tmp/x"]
+        )
+        XCTAssertEqual(unavailable.status, 404)
+        unavailableServer.stop()
+
+        let automationPort = UInt16.random(in: 50_000...60_000)
+        let automationBase = try XCTUnwrap(URL(string: "http://127.0.0.1:\(automationPort)/v1"))
+        let automationServer = KajiControlServer(
+            goals: store,
+            port: automationPort,
+            testAutomation: .init(
+                nonce: "exact-test-nonce",
+                render: { surface, selection, outputPath in
+                    ["surface": surface, "selection": selection, "path": outputPath]
+                }
+            )
+        )
+        automationServer.start()
+        defer { automationServer.stop() }
+        try await waitUntilReachable(automationBase.appending(path: "goals"))
+
+        let rejected = try await rawRequest(
+            automationBase,
+            method: "POST",
+            path: "test/render",
+            body: ["nonce": "wrong", "surface": "popover", "selection": "quota", "outputPath": "/tmp/x"]
+        )
+        XCTAssertEqual(rejected.status, 404)
+
+        let accepted = try await rawRequest(
+            automationBase,
+            method: "POST",
+            path: "test/render",
+            body: [
+                "nonce": "exact-test-nonce",
+                "surface": "popover",
+                "selection": "launchd",
+                "outputPath": "/tmp/render.png",
+            ]
+        )
+        XCTAssertEqual(accepted.status, 200)
+        XCTAssertEqual(accepted.object["selection"] as? String, "launchd")
+        XCTAssertEqual(accepted.object["path"] as? String, "/tmp/render.png")
+    }
+
     private func waitUntilReachable(_ url: URL) async throws {
         for _ in 0..<50 {
             var request = URLRequest(url: url)
@@ -52,5 +112,24 @@ final class KajiControlServerTests: XCTestCase {
         let (data, response) = try await URLSession.shared.data(for: request)
         XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200, String(decoding: data, as: UTF8.self))
         return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    private func rawRequest(
+        _ base: URL,
+        method: String,
+        path: String,
+        body: [String: Any]? = nil
+    ) async throws -> (status: Int, object: [String: Any]) {
+        var request = URLRequest(url: base.appending(path: path))
+        request.httpMethod = method
+        if let body {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (data, response) = try await URLSession.shared.data(for: request)
+        return (
+            try XCTUnwrap((response as? HTTPURLResponse)?.statusCode),
+            try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        )
     }
 }

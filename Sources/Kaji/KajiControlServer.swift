@@ -7,8 +7,14 @@ final class KajiControlServer {
     nonisolated static let port: UInt16 = 37_841
     nonisolated static let baseURL = "http://127.0.0.1:\(port)/v1"
 
+    struct TestAutomation {
+        let nonce: String
+        let render: (_ surface: String, _ selection: String, _ outputPath: String) throws -> [String: Any]
+    }
+
     private weak var goals: DailyGoalStore?
     private let snapshotProvider: () -> [String: Any]
+    private let testAutomation: TestAutomation?
     private let host: NWEndpoint.Host
     private let port: NWEndpoint.Port
     private var listener: NWListener?
@@ -19,10 +25,12 @@ final class KajiControlServer {
         goals: DailyGoalStore,
         host: String = "127.0.0.1",
         port: UInt16 = KajiControlServer.port,
-        snapshotProvider: @escaping () -> [String: Any] = { [:] }
+        snapshotProvider: @escaping () -> [String: Any] = { [:] },
+        testAutomation: TestAutomation? = nil
     ) {
         self.goals = goals
         self.snapshotProvider = snapshotProvider
+        self.testAutomation = testAutomation
         self.host = NWEndpoint.Host(host)
         self.port = NWEndpoint.Port(rawValue: port)!
     }
@@ -97,7 +105,19 @@ final class KajiControlServer {
         do {
             let components = request.path.split(separator: "/").map(String.init)
             let payload: Any
-            if request.method == "GET", components == ["v1", "state"] {
+            if request.method == "POST", components == ["v1", "test", "render"] {
+                guard let testAutomation else {
+                    return .json(status: "404 Not Found", object: ["error": "Unknown local control route"])
+                }
+                let body = try request.jsonBody()
+                guard body["nonce"] as? String == testAutomation.nonce,
+                      let surface = body["surface"] as? String,
+                      let selection = body["selection"] as? String,
+                      let outputPath = body["outputPath"] as? String else {
+                    return .json(status: "404 Not Found", object: ["error": "Unknown local control route"])
+                }
+                payload = try testAutomation.render(surface, selection, outputPath)
+            } else if request.method == "GET", components == ["v1", "state"] {
                 payload = snapshotProvider()
             } else if request.method == "GET", components == ["v1", "goals"] {
                 payload = [
