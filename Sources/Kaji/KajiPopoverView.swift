@@ -36,6 +36,41 @@ private struct PopoverContentSizeKey: PreferenceKey {
     }
 }
 
+/// Laid-out height of the scrollable panel, used to derive the chrome height
+/// that the scroll budget subtracts from `maxContentHeight`.
+private struct PanelScrollHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 { value = next }
+    }
+}
+
+/// Anchor of the hovered goal's note icon, resolved in the popover's own
+/// coordinate space so the note card can live in this window.
+private struct NoteAnchorKey: PreferenceKey {
+    static let defaultValue: Anchor<CGRect>? = nil
+
+    static func reduce(value: inout Anchor<CGRect>?, nextValue: () -> Anchor<CGRect>?) {
+        value = value ?? nextValue()
+    }
+}
+
+private struct NoteCardHeightKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        let next = nextValue()
+        if next > 0 { value = next }
+    }
+}
+
+private enum NoteCardMetrics {
+    static let width: CGFloat = 208
+    static let margin: CGFloat = 8
+}
+
 
 struct KajiPopoverView: View {
     @ObservedObject var store: QuotaStore
@@ -67,11 +102,30 @@ struct KajiPopoverView: View {
     @State private var goalCreationNote = ""
     @State private var hoveredNewsID: String?
     @State private var newsHoverGeneration = 0
+    @State private var hoveredNoteGoalID: UUID?
+    @State private var hoveredNoteHorizon: GoalHorizon = .today
+    @State private var noteHoverGeneration = 0
+    @State private var noteCardHeight: CGFloat = 96
+    @State private var isEditingNote = false
+    @State private var noteTriggerHovered = false
+    @State private var noteCardHovered = false
+    @State private var panelChromeHeight: CGFloat = 0
+    @State private var measuredTotalHeight: CGFloat = 0
+    @State private var measuredScrollHeight: CGFloat = 0
+    @FocusState private var noteFieldFocused: Bool
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
     private var shown: [ProviderView] { store.providers.filter { prefs.isVisible($0.id) } }
-    private var panelScrollMaxHeight: CGFloat { max(180, maxContentHeight - 104) }
+    /// Measured, not assumed: an under-counted chrome estimate makes the
+    /// panel overshoot `maxContentHeight` and AppKit renders the overshoot as
+    /// a blank strip above the header.
+    private var panelScrollMaxHeight: CGFloat {
+        PopoverHeightBudget.scrollMaxHeight(
+            maxContentHeight: maxContentHeight,
+            measuredChrome: panelChromeHeight
+        )
+    }
     private var pages: [KajiModuleID] { prefs.popoverModulePages }
     private var panel: KajiModuleID {
         get { navigation.panel }
@@ -83,6 +137,9 @@ struct KajiPopoverView: View {
 
     var body: some View {
         mainSurface
+        .overlayPreferenceValue(NoteAnchorKey.self) { anchor in
+            noteOverlay(anchor)
+        }
         .background(background)
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
@@ -91,7 +148,13 @@ struct KajiPopoverView: View {
             }
         )
         .onPreferenceChange(PopoverContentSizeKey.self) { size in
+            measuredTotalHeight = size.height
+            reconcileChromeHeight()
             onContentSizeChange?(size)
+        }
+        .onPreferenceChange(PanelScrollHeightKey.self) { height in
+            measuredScrollHeight = height
+            reconcileChromeHeight()
         }
         .onAppear { clampPanelToEnabledPages() }
         .onChange(of: prefs.enabledModules) { _ in
@@ -99,6 +162,8 @@ struct KajiPopoverView: View {
         }
         .onChange(of: panel) { _ in
             controls.onDismissDetail()
+            noteHoverGeneration += 1
+            dismissNoteCard()
         }
         .onChange(of: focusedGoalID) { newValue in
             if let previousFocusedGoalID,
@@ -111,6 +176,22 @@ struct KajiPopoverView: View {
         }
         .onChange(of: navigation.goalHorizon) { _ in
             focusedGoalID = nil
+            noteHoverGeneration += 1
+            dismissNoteCard()
+        }
+    }
+
+    /// Chrome is whatever the popover renders outside the scrollable panel.
+    /// Deriving it from the two measured heights keeps the scroll budget
+    /// exact when rows, fonts, footers or languages change the chrome.
+    private func reconcileChromeHeight() {
+        guard measuredTotalHeight > 0, measuredScrollHeight > 0 else { return }
+        let chrome = PopoverHeightBudget.chromeHeight(
+            totalHeight: measuredTotalHeight,
+            scrollHeight: measuredScrollHeight
+        )
+        if PopoverHeightBudget.isMeaningfulChange(chrome, panelChromeHeight) {
+            panelChromeHeight = chrome
         }
     }
 
@@ -123,6 +204,11 @@ struct KajiPopoverView: View {
                     panelBody
                 }
                 .frame(maxHeight: panelScrollMaxHeight)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: PanelScrollHeightKey.self, value: proxy.size.height)
+                    }
+                )
             } else {
                 panelBody
             }
@@ -1200,16 +1286,7 @@ struct KajiPopoverView: View {
                     }
                     HStack(spacing: 4) {
                         if !vision.note.isEmpty {
-                            DetailPopoverButton(
-                                accessibilityIdentifier: "goal-detail-\(vision.id)",
-                                help: "查看详情"
-                            ) { sourceView in
-                                controls.onShowDetail(
-                                    sourceView,
-                                    goalDetailContent(vision, horizon: .longTerm)
-                                )
-                            }
-                            .frame(width: 18, height: 18)
+                            goalNoteAffordance(vision, horizon: .longTerm)
                         }
                         if index > 0 {
                             miniButton("chevron.up") {
@@ -1479,16 +1556,7 @@ struct KajiPopoverView: View {
             .accessibilityLabel(goal.isDone ? "撤回完成" : "完成")
             HStack(spacing: 4) {
                 if !goal.note.isEmpty {
-                    DetailPopoverButton(
-                        accessibilityIdentifier: "goal-detail-\(goal.id)",
-                        help: "查看详情"
-                    ) { sourceView in
-                        controls.onShowDetail(
-                            sourceView,
-                            goalDetailContent(goal, horizon: horizon)
-                        )
-                    }
-                    .frame(width: 18, height: 18)
+                    goalNoteAffordance(goal, horizon: horizon)
                 }
                 miniButton("trash") {
                     dailyGoals.delete(goal, in: horizon)
@@ -1527,26 +1595,157 @@ struct KajiPopoverView: View {
             .onTapGesture(perform: onEdit)
     }
 
-    func goalDetailContent(_ goal: DailyGoal, horizon: GoalHorizon) -> AnyView {
-        AnyView(goalNoteEditor(goal, horizon: horizon))
+    /// Hover-disclosed note affordance. The card is *not* a second
+    /// `NSPopover`: nesting one inside the status-item popover made the note
+    /// text view resign first responder in a window that had no successor,
+    /// which threw during layout and hung/killed the app. It is now a plain
+    /// overlay inside the same window, anchored to this icon.
+    private func goalNoteAffordance(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        let active = hoveredNoteGoalID == goal.id
+        return Image(systemName: "text.alignleft")
+            .font(.system(size: 9.5, weight: .medium))
+            .foregroundColor(active ? t.cream : t.ash)
+            .frame(width: 18, height: 18)
+            .contentShape(Rectangle())
+            .help("说明")
+            .accessibilityLabel("说明")
+            .accessibilityIdentifier("goal-detail-\(goal.id)")
+            .onHover { updateNoteHover(goal.id, horizon: horizon, inside: $0) }
+            .anchorPreference(key: NoteAnchorKey.self, value: .bounds) { anchor in
+                active ? anchor : nil
+            }
     }
 
-    private func goalNoteEditor(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+    /// The card, rendered once in the root overlay so it can never be clipped
+    /// by a row and never needs a window of its own.
+    @ViewBuilder
+    private func noteOverlay(_ anchor: Anchor<CGRect>?) -> some View {
+        GeometryReader { proxy in
+            if let anchor,
+               let id = hoveredNoteGoalID,
+               let goal = dailyGoals.goals(for: hoveredNoteHorizon).first(where: { $0.id == id }) {
+                let rect = proxy[anchor]
+                let width = NoteCardMetrics.width
+                let x = min(max(NoteCardMetrics.margin, rect.minX - width - 6),
+                            max(NoteCardMetrics.margin, proxy.size.width - width - NoteCardMetrics.margin))
+                let maxY = max(NoteCardMetrics.margin,
+                               proxy.size.height - noteCardHeight - NoteCardMetrics.margin)
+                let y = min(max(NoteCardMetrics.margin, rect.minY - 6), maxY)
+                goalNoteCard(goal, horizon: hoveredNoteHorizon)
+                    .frame(width: width, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .background(
+                        GeometryReader { card in
+                            Color.clear.preference(key: NoteCardHeightKey.self, value: card.size.height)
+                        }
+                    )
+                    .offset(x: x, y: y)
+                    .onHover { updateNoteCardHover(inside: $0) }
+                    .transition(.opacity)
+            }
+        }
+        .onPreferenceChange(NoteCardHeightKey.self) { height in
+            if height > 0 { noteCardHeight = height }
+        }
+        .animation(.easeOut(duration: 0.12), value: hoveredNoteGoalID)
+    }
 
+    private func updateNoteHover(_ id: UUID, horizon: GoalHorizon, inside: Bool) {
+        noteTriggerHovered = inside
+        // Never yank the card away from an active edit; the focus change
+        // schedules the dismissal instead.
+        if !inside, isEditingNote { return }
+        let hadActive = hoveredNoteGoalID != nil
+        noteHoverGeneration += 1
+        let generation = noteHoverGeneration
+        let delay = inside
+            ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActive)
+            : HoverDisclosurePolicy.closeDelay
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            guard generation == noteHoverGeneration else { return }
+            if inside {
+                hoveredNoteHorizon = horizon
+                hoveredNoteGoalID = id
+            } else if hoveredNoteGoalID == id {
+                dismissNoteCard()
+            }
+        }
+    }
+
+    private func updateNoteCardHover(inside: Bool) {
+        noteCardHovered = inside
+        noteHoverGeneration += 1
+        guard !inside, !isEditingNote else { return }
+        scheduleNoteDismissal()
+    }
+
+    /// Called when the note field gains or loses focus. Losing focus while the
+    /// pointer sits outside both the trigger and the card is the one path that
+    /// would otherwise leave the card stranded on screen.
+    private func noteFocusChanged(_ focused: Bool) {
+        isEditingNote = focused
+        guard !focused else { return }
+        noteHoverGeneration += 1
+        scheduleNoteDismissal()
+    }
+
+    private func scheduleNoteDismissal() {
+        let generation = noteHoverGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
+            guard generation == noteHoverGeneration,
+                  NoteCardHoverPolicy.shouldDismiss(
+                      triggerHovered: noteTriggerHovered,
+                      cardHovered: noteCardHovered,
+                      editing: isEditingNote
+                  ) else { return }
+            dismissNoteCard()
+        }
+    }
+
+    private func dismissNoteCard() {
+        if isEditingNote {
+            noteFieldFocused = false
+            isEditingNote = false
+        }
+        noteTriggerHovered = false
+        noteCardHovered = false
+        hoveredNoteGoalID = nil
+    }
+
+    func goalNoteCard(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
             Text(goal.title)
-                .font(.system(size: 12, weight: .bold, design: .rounded))
-            TextField("说明（可选）", text: Binding(
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Rectangle()
+                .fill(t.track)
+                .frame(height: 1)
+            TextField("说明", text: Binding(
                 get: { dailyGoals.goals(for: horizon).first(where: { $0.id == goal.id })?.note ?? "" },
                 set: { dailyGoals.updateNote(goal, note: $0, in: horizon) }
             ), axis: .vertical)
-            .textFieldStyle(.roundedBorder)
-            .lineLimit(3...8)
+            .textFieldStyle(.plain)
+            .font(.system(size: 11))
+            .foregroundColor(t.cream)
+            .lineLimit(2...10)
+            .fixedSize(horizontal: false, vertical: true)
+            .focused($noteFieldFocused)
+            .onChange(of: noteFieldFocused) { focused in
+                noteFocusChanged(focused)
+            }
         }
-        .padding(10)
-        .frame(width: 260)
-        .background(t.bg)
-        .foregroundColor(t.cream)
+        .padding(11)
+        .background(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(t.panel)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .stroke(t.track, lineWidth: 1)
+                )
+        )
     }
 
     private func goalTagMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {

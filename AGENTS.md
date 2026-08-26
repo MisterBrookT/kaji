@@ -86,6 +86,29 @@ Start incremental — no multi-target rewrite:
 
 Primary files today: `Sources/Kaji/{AppDelegate,Prefs,KajiPopoverView,StatusItemView,SettingsView}.swift`.
 
+## Popover layout rules (learned from repeat regressions)
+
+1. **No hard-coded chrome heights.** `NSPopover.contentSize` is clamped to
+   `maxContentHeight` while the hosting view keeps its full SwiftUI height, so
+   any overshoot renders as a blank strip above the header — and only once a
+   list is long enough to hit the scroll cap, which is why short pages look
+   fine. The scroll budget must be derived from a measured chrome height
+   (`PopoverHeightBudget` + `PanelScrollHeightKey`), never from a constant.
+   Any change to the header, footer, dividers, stack spacing or outer padding
+   must keep `PopoverHeightBudgetTests` green.
+2. **Never nest a second `NSPopover` inside the status-item popover.** A text
+   field in a child popover resigns first responder in a window with no
+   successor, throwing `NSInternalInconsistencyException` from
+   `-[NSWindow _newFirstResponderAfterResigning]` during layout — the app
+   hangs or dies. Secondary surfaces (notes, details) belong in the parent
+   window as anchored overlays (`anchorPreference` +
+   `overlayPreferenceValue`).
+3. **Hover disclosure needs an explicit dismissal state machine.** An
+   in-window card has no system dismissal: pointer-out of trigger, pointer-out
+   of card, focus loss, page switch and horizon switch must all funnel through
+   one policy (`NoteCardHoverPolicy`), with an active edit as the only veto.
+   Timing comes from `HoverDisclosurePolicy`, not per-call-site constants.
+
 ## Non-goals (explicit)
 
 - Ice-style management of other status items

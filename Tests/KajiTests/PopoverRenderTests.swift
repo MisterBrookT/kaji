@@ -55,14 +55,14 @@ final class PopoverRenderTests: XCTestCase {
     }
 
 
-    func testSecondaryDetailPopoverRendersNonBlank() throws {
+    func testGoalNoteCardRendersNonBlank() throws {
         let fixture = PopoverRenderFixture()
         defer { fixture.tearDown() }
         let page = fixture.view(page: .goals, maxContentHeight: Self.renderSize.height)
         let goal = try XCTUnwrap(fixture.dailyGoals.goals(for: .today).first)
-        let detail = page.goalDetailContent(goal, horizon: .today)
-        let rep = try XCTUnwrap(renderImage(detail, size: CGSize(width: 260, height: 180)))
-        let path = try XCTUnwrap(writePNG(rep, name: "popover-secondary-goal-detail"))
+        let card = page.goalNoteCard(goal, horizon: .today)
+        let rep = try XCTUnwrap(renderImage(card, size: CGSize(width: 208, height: 160)))
+        let path = try XCTUnwrap(writePNG(rep, name: "popover-goal-note-card"))
         XCTAssertTrue(FileManager.default.fileExists(atPath: path.path))
         assertNonBlank(rep, page: .goals)
     }

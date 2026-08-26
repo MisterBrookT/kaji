@@ -112,10 +112,18 @@ final class KajiUIHarness {
             note: "Fixture note",
             in: .today
         )
+        // Two scheduled goals, both with notes: the re-anchoring test needs two
+        // distinct AppKit detail affordances to exist deterministically.
         _ = appDelegate.fixedPlanStore.add(
             title: "Fixture scheduled goal",
             tag: GoalTag.personal.rawValue,
             note: "Fixture schedule note",
+            weekdays: Set(1...7)
+        )
+        _ = appDelegate.fixedPlanStore.add(
+            title: "Second fixture scheduled goal",
+            tag: GoalTag.personal.rawValue,
+            note: "Second fixture schedule note",
             weekdays: Set(1...7)
         )
         appDelegate.applicationDidFinishLaunching(
@@ -174,26 +182,36 @@ final class KajiUIHarness {
     }
 
     func clickDetailAffordance(prefix: String) {
-        guard let root = appDelegate.popover.contentViewController?.view,
-              let button = findButton(prefix: prefix, in: root) else {
+        guard let button = detailAffordances(prefix: prefix).first else {
             XCTFail("detail affordance starting with \(prefix) not found in popover")
             return
         }
+        click(button)
+    }
+
+    func click(_ button: NSButton) {
         button.performClick(nil)
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
     }
 
-    private func findButton(prefix: String, in view: NSView) -> NSButton? {
+    /// Every AppKit-backed detail affordance currently in the popover tree,
+    /// in view order. Goal notes deliberately have none — they render inside
+    /// the popover's own window instead of a child `NSPopover`.
+    func detailAffordances(prefix: String) -> [NSButton] {
+        guard let root = appDelegate.popover.contentViewController?.view else { return [] }
+        var found: [NSButton] = []
+        collectButtons(prefix: prefix, in: root, into: &found)
+        return found
+    }
+
+    private func collectButtons(prefix: String, in view: NSView, into found: inout [NSButton]) {
         if let button = view as? NSButton,
            button.identifier?.rawValue.hasPrefix(prefix) == true {
-            return button
+            found.append(button)
         }
         for subview in view.subviews {
-            if let button = findButton(prefix: prefix, in: subview) {
-                return button
-            }
+            collectButtons(prefix: prefix, in: subview, into: &found)
         }
-        return nil
     }
 
 }
