@@ -318,6 +318,13 @@ func run() throws {
         throw SmokeError.message("ASSERT ax-quota-page: FAIL expected an AXStaticText titled \"\(expectedQuotaTitle)\"; observed static text: \(observedTexts)")
     }
     print("ASSERT ax-quota-page: PASS found AXStaticText \"\(expectedQuotaTitle)\"")
+    let launchdAuditURL = URL(fileURLWithPath: artifacts).appendingPathComponent("kaji.stdout.log")
+    func launchdRefreshCount() -> Int {
+        let log = (try? String(contentsOf: launchdAuditURL, encoding: .utf8)) ?? ""
+        return log.split(whereSeparator: \.isNewline)
+            .count { $0 == "KAJI_UI_SMOKE launchd-refresh" }
+    }
+
 
     if expectedPageTitles.count > 1 {
         let windowTop = opened.bounds.minY
@@ -381,6 +388,27 @@ func run() throws {
     } else {
         print("ASSERT ax-page-nav: SKIP only \(expectedPageTitles.count) page(s) enabled; header chevrons are hidden (pages.count > 1 gate in KajiPopoverView.header)")
     }
+    let refreshCountBeforeVisibilityClose = launchdRefreshCount()
+    guard refreshCountBeforeVisibilityClose > 0 else {
+        throw SmokeError.message("ASSERT background-tasks-visible-lifecycle: FAIL no refresh occurred while the popover was visible")
+    }
+    try click(openPoint)
+    guard wait(timeout: 3, for: {
+        windows(pid: pid).contains(where: { $0.id == opened.id }) ? nil : true
+    }) != nil else {
+        throw SmokeError.message("ASSERT background-tasks-visible-lifecycle: FAIL popover did not close for lifecycle check")
+    }
+    Thread.sleep(forTimeInterval: 1.0)
+    let refreshCountAfterVisibilityClose = launchdRefreshCount()
+    guard refreshCountAfterVisibilityClose == refreshCountBeforeVisibilityClose else {
+        throw SmokeError.message("ASSERT background-tasks-visible-lifecycle: FAIL refresh count changed after close (\(refreshCountBeforeVisibilityClose) -> \(refreshCountAfterVisibilityClose))")
+    }
+    print("ASSERT background-tasks-visible-lifecycle: PASS refresh occurred while visible and count stayed \(refreshCountAfterVisibilityClose) after close")
+    try click(openPoint)
+    guard wait(timeout: 3, for: { popoverWindow(in: windows(pid: pid)) }) != nil else {
+        throw SmokeError.message("ASSERT background-tasks-visible-lifecycle: FAIL popover did not reopen after lifecycle check")
+    }
+
 
     // Settings walk: click gearshape in the popover footer, then click every
     // sidebar section and assert the visible content actually changes.
@@ -449,6 +477,7 @@ func run() throws {
     }
     print("ASSERT settings-nav: PASS walked \(settingsSections.count) sidebar sections, content changed on every click")
     print("ASSERT no-system-auth-prompt: PASS checked \(authPromptCheckCount) times, no system authorization window ever appeared")
+
 
 
     guard let refreshedBounds = statusItemBounds(pid: pid) else {

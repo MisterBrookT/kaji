@@ -24,6 +24,7 @@ final class LaunchdJobStore: ObservableObject {
     var isActive: Bool { enabled && popoverVisible }
 
     func setEnabled(_ enabled: Bool) {
+        guard self.enabled != enabled else { return }
         self.enabled = enabled
         if enabled {
             if popoverVisible { refresh() }
@@ -49,6 +50,9 @@ final class LaunchdJobStore: ObservableObject {
         guard isActive, !isRefreshing else { return }
         isRefreshing = true
         refreshInvocationCount += 1
+        if ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_AUDIT_LAUNCHD_REFRESH"] == "1" {
+            FileHandle.standardOutput.write(Data("KAJI_UI_SMOKE launchd-refresh\n".utf8))
+        }
         let generation = refreshGeneration
         let loader = loadSnapshot
         DispatchQueue.global(qos: .utility).async { [weak self] in

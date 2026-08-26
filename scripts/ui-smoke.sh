@@ -86,6 +86,7 @@ if pgrep -x Kaji >/dev/null 2>&1; then
     exit 1
 fi
 
+export KAJI_UI_SMOKE_AUDIT_LAUNCHD_REFRESH=1
 APP_ARGS=(
     -enabledModules "$(seed_modules_plist_array)"
     -language "$SEED_LANGUAGE"
