@@ -221,6 +221,19 @@ struct KajiPopoverView: View {
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }.frame(maxWidth: .infinity).padding(22)
+            case .credentialUnavailable:
+                VStack(spacing: 8) {
+                    Text("Kaji needs permission to use the saved Gmail credential.")
+                        .font(.system(size: 10.5, weight: .medium)).foregroundColor(t.mute)
+                    Button("Authorize Access") { mailBriefStore.authorizeCredentialAccess() }
+                        .buttonStyle(.bordered)
+                }.frame(maxWidth: .infinity).padding(22)
+            case .needsReauthorization:
+                VStack(spacing: 8) {
+                    Text("Gmail authorization needs to be renewed.")
+                        .font(.system(size: 10.5, weight: .medium)).foregroundColor(t.mute)
+                    Button("Reconnect Gmail") { mailBriefStore.connect() }.buttonStyle(.bordered)
+                }.frame(maxWidth: .infinity).padding(22)
             case .scheduled where mailBriefStore.generation == nil:
                 Text("Next brief \(mailBriefStore.nextDue?.formatted(date: .omitted, time: .shortened) ?? "09:00")")
                     .font(.system(size: 10.5, weight: .medium)).foregroundColor(t.mute)
@@ -271,6 +284,15 @@ struct KajiPopoverView: View {
                     Text("Inbox \(count)").font(.system(size: 9, weight: .medium, design: .monospaced)).foregroundColor(t.mute)
                 }
                 if mailBriefStore.state == .stale { Text("上次生成失败，显示旧简报").font(.system(size: 9)).foregroundColor(t.mute) }
+                switch mailBriefStore.credentialState {
+                case .unavailable where mailBriefStore.generation != nil:
+                    Button("Authorize Access") { mailBriefStore.authorizeCredentialAccess() }
+                        .buttonStyle(.plain)
+                case .needsGoogleReauthorization where mailBriefStore.generation != nil:
+                    Button("Reconnect Gmail") { mailBriefStore.connect() }.buttonStyle(.plain)
+                default:
+                    EmptyView()
+                }
                 if let error = mailBriefStore.lastError, mailBriefStore.state != .stale {
                     Text(error).font(.system(size: 9)).foregroundColor(t.mute).lineLimit(2)
                 }

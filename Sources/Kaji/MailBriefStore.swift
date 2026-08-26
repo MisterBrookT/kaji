@@ -3,7 +3,8 @@ import Foundation
 import KajiCore
 
 enum MailBriefState: Equatable {
-    case disabled, disconnected, scheduled, running, ready, stale, failed
+    case disabled, disconnected, credentialUnavailable, needsReauthorization
+    case scheduled, running, ready, stale, failed
 }
 
 @MainActor
@@ -19,7 +20,7 @@ final class MailBriefStore: ObservableObject {
     @Published private(set) var draftingThreadIDs: Set<String> = []
 
     private let cacheURL: URL
-    private let credentialStatus: () -> (hasCredential: Bool, account: String?, canModify: Bool)
+    private let credentialStatus: () -> MailBriefCredentialStatus
     private let runHistoryURL: URL
     private var enabled = false
     private var timer: Timer?
@@ -32,9 +33,8 @@ final class MailBriefStore: ObservableObject {
 
     init(
         cacheURL: URL? = nil,
-        credentialStatus: @escaping () -> (hasCredential: Bool, account: String?, canModify: Bool) = {
-            (MailBriefCredentialStore.hasCredential, MailBriefCredentialStore.account,
-             MailBriefCredentialStore.canModify)
+        credentialStatus: @escaping () -> MailBriefCredentialStatus = {
+            MailBriefCredentialStore.status()
         }
     ) {
         self.cacheURL = cacheURL ?? Self.defaultCacheURL()
@@ -48,14 +48,14 @@ final class MailBriefStore: ObservableObject {
     init(
         previewGeneration: MailBriefGeneration,
         cacheDirectory: URL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kaji-mail-preview-\(UUID().uuidString)", isDirectory: true)
+            .appendingPathComponent("kaji-mail-preview-\(UUID().uuidString)", isDirectory: true),
+        credentialStatus: @escaping () -> MailBriefCredentialStatus = {
+            MailBriefCredentialStore.status()
+        }
     ) {
         cacheURL = cacheDirectory.appendingPathComponent("mail-brief-cache-v1.json")
         runHistoryURL = cacheDirectory.appendingPathComponent("mail-brief-runs-v1.json")
-        credentialStatus = {
-            (MailBriefCredentialStore.hasCredential, MailBriefCredentialStore.account,
-             MailBriefCredentialStore.canModify)
-        }
+        self.credentialStatus = credentialStatus
         generation = previewGeneration
         state = .ready
     }
@@ -85,12 +85,24 @@ final class MailBriefStore: ObservableObject {
                                               archivedIDs: generation.archivedThreadIDs,
                                               trashedIDs: generation.trashedThreadIDs)
     }
-    private var cachedCredentialStatus: (hasCredential: Bool, account: String?, canModify: Bool)? {
+    private var currentCredentialStatus: MailBriefCredentialStatus? {
         enabled ? credentialStatus() : nil
     }
-    var isConnected: Bool { cachedCredentialStatus?.hasCredential ?? false }
-    var accountLabel: String? { cachedCredentialStatus?.account }
-    var canModify: Bool { cachedCredentialStatus?.canModify ?? false }
+    var credentialState: MailBriefCredentialStatus {
+        currentCredentialStatus ?? .absent
+    }
+    var isConnected: Bool {
+        if case .present = currentCredentialStatus { return true }
+        return false
+    }
+    var accountLabel: String? {
+        guard case .present(let account, _) = currentCredentialStatus else { return nil }
+        return account
+    }
+    var canModify: Bool {
+        guard case .present(_, let canModify) = currentCredentialStatus else { return false }
+        return canModify
+    }
 
     func setEnabled(_ enabled: Bool, hour: Int, minute: Int, batchSize: Int, concurrency: Int,
                     model: MailBriefModel) {
@@ -104,10 +116,25 @@ final class MailBriefStore: ObservableObject {
 
     func evaluateSchedule(now: Date = Date()) {
         guard enabled else { return }
-        guard isConnected else { timer?.invalidate(); state = .disconnected; return }
-        let decision = MailBriefSchedulePolicy.decision(now: now, hour: hour, minute: minute,
-                                                        calendar: .current,
-                                                        lastAutomaticSuccess: generation?.isComplete == false ? nil : generation?.createdAt)
+        switch currentCredentialStatus {
+        case .present:
+            break
+        case .absent:
+            timer?.invalidate(); state = .disconnected; return
+        case .unavailable:
+            timer?.invalidate(); state = generation == nil ? .credentialUnavailable : .stale; return
+        case .needsGoogleReauthorization:
+            timer?.invalidate(); state = generation == nil ? .needsReauthorization : .stale; return
+        case nil:
+            return
+        }
+        let decision = MailBriefSchedulePolicy.decision(
+            now: now,
+            hour: hour,
+            minute: minute,
+            calendar: .current,
+            lastAutomaticSuccess: generation?.isComplete == false ? nil : generation?.createdAt
+        )
         nextDue = decision.nextDue
         if decision.isDue { generateNow(automatic: true); return }
         state = generation == nil ? .scheduled : .ready
@@ -116,7 +143,7 @@ final class MailBriefStore: ObservableObject {
 
     func generateNow(automatic: Bool = false) {
         guard enabled, isConnected, runTask == nil else {
-            if !isConnected { state = .disconnected }
+            if !isConnected { evaluateSchedule() }
             return
         }
         state = .running; lastError = nil
@@ -131,9 +158,10 @@ final class MailBriefStore: ObservableObject {
                 guard let clientID = Bundle.main.object(forInfoDictionaryKey: "KajiGoogleOAuthClientID") as? String,
                       let clientSecret = Bundle.main.object(forInfoDictionaryKey: "KajiGoogleOAuthClientSecret") as? String,
                       !clientID.isEmpty, !clientSecret.isEmpty else { throw MailBriefError.oauth("Google OAuth client is not configured") }
-                let token = try await MailBriefCredentialStore.validAccessToken(clientID: clientID, clientSecret: clientSecret)
                 updateRun(id: runID) { $0.stage = .fetching }
-                let candidates = try await GmailMailBriefClient().fetchCandidates(accessToken: token)
+                let candidates = try await withGmailAccess(clientID: clientID, clientSecret: clientSecret) {
+                    try await GmailMailBriefClient().fetchCandidates(accessToken: $0)
+                }
                 syncProgress = (0, candidates.count)
                 let canReuse = generation?.classifierModelID == generationModel.rawValue
                 let oldByID = Dictionary(uniqueKeysWithValues: (canReuse ? generation?.entries ?? [] : []).map { ($0.threadID, $0) })
@@ -200,12 +228,8 @@ final class MailBriefStore: ObservableObject {
                 lastError = Self.safeError(error)
                 let errorCode = Self.safeErrorCode(error)
                 finishRun(id: runID, status: .failed, errorCode: errorCode)
-                if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
-                    MailBriefCredentialStore.delete()
-                    nextDue = nil
-                    state = .disconnected
-                } else {
-                    state = generation == nil ? .failed : .stale
+                applyFailureState(error)
+                if state == .failed || state == .stale {
                     scheduleNextAutomaticAttempt()
                 }
             }
@@ -246,13 +270,15 @@ final class MailBriefStore: ObservableObject {
                 try await MailBriefOAuthFlow(clientID: clientID, clientSecret: clientSecret, requestsModify: false).connect()
                 self?.evaluateSchedule()
             } catch {
-                self?.lastError = Self.safeError(error)
-                self?.state = .disconnected
+                guard let self else { return }
+                lastError = Self.safeError(error)
+                applyFailureState(error)
             }
         }
     }
 
     func generateReplyDraft(for entry: MailBriefEntry) {
+        guard isConnected else { evaluateSchedule(); return }
         guard !draftingThreadIDs.contains(entry.threadID) else { return }
         draftingThreadIDs.insert(entry.threadID)
         lastError = nil
@@ -266,24 +292,20 @@ final class MailBriefStore: ObservableObject {
                       !clientID.isEmpty, !clientSecret.isEmpty else {
                     throw MailBriefError.oauth("Google OAuth client is not configured")
                 }
-                let token = try await MailBriefCredentialStore.validAccessToken(
+                let candidate = try await withGmailAccess(
                     clientID: clientID,
                     clientSecret: clientSecret
-                )
-                let candidate = try await GmailMailBriefClient().fetchCandidate(
-                    threadID: entry.threadID,
-                    accessToken: token
-                )
+                ) {
+                    try await GmailMailBriefClient().fetchCandidate(
+                        threadID: entry.threadID,
+                        accessToken: $0
+                    )
+                }
                 replyDrafts[entry.threadID] = try await CodexMailBriefExecutor()
                     .draftReply(candidate, model: generationModel)
             } catch {
                 lastError = Self.safeError(error)
-                let errorCode = Self.safeErrorCode(error)
-                if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
-                    MailBriefCredentialStore.delete()
-                    nextDue = nil
-                    state = .disconnected
-                }
+                applyFailureState(error)
             }
         }
     }
@@ -299,6 +321,7 @@ final class MailBriefStore: ObservableObject {
     func untrash(_ entry: MailBriefEntry) { mutate(entry, .untrash) }
 
     private func mutate(_ entry: MailBriefEntry, _ mutation: GmailThreadMutation) {
+        guard isConnected else { evaluateSchedule(); return }
         guard !pendingThreadIDs.contains(entry.threadID), let current = generation else { return }
         pendingThreadIDs.insert(entry.threadID)
         lastError = nil
@@ -313,34 +336,27 @@ final class MailBriefStore: ObservableObject {
                       !clientID.isEmpty, !clientSecret.isEmpty else {
                     throw MailBriefError.oauth("Google OAuth client is not configured")
                 }
-                if !MailBriefCredentialStore.canModify {
+                if !canModify {
                     try await MailBriefOAuthFlow(
                         clientID: clientID,
                         clientSecret: clientSecret,
                         requestsModify: true
                     ).connect()
                 }
-                let token = try await MailBriefCredentialStore.validAccessToken(
-                    clientID: clientID,
-                    clientSecret: clientSecret
-                )
-                try await GmailMailBriefClient().mutate(
-                    threadID: entry.threadID,
-                    mutation: mutation,
-                    accessToken: token
-                )
+                try await withGmailAccess(clientID: clientID, clientSecret: clientSecret) {
+                    try await GmailMailBriefClient().mutate(
+                        threadID: entry.threadID,
+                        mutation: mutation,
+                        accessToken: $0
+                    )
+                }
             } catch {
                 if let current = generation {
                     generation = Self.applying(mutation.inverse, entry: entry, to: current)
                     try? saveCache()
                 }
                 lastError = Self.safeError(error)
-                let errorCode = Self.safeErrorCode(error)
-                if MailBriefFailurePolicy.disposition(errorCode: errorCode) == .reconnect {
-                    MailBriefCredentialStore.delete()
-                    nextDue = nil
-                    state = .disconnected
-                }
+                applyFailureState(error)
             }
         }
     }
@@ -377,13 +393,55 @@ final class MailBriefStore: ObservableObject {
     }
 
     func disconnect(deleteBrief: Bool = false) {
-        MailBriefCredentialStore.delete(); timer?.invalidate(); cancelActiveRun(); runTask?.cancel(); runTask = nil
+        MailBriefCredentialStore.disconnectByUser()
+        timer?.invalidate(); cancelActiveRun(); runTask?.cancel(); runTask = nil
         if deleteBrief {
             generation = nil; runRecords = []
             try? FileManager.default.removeItem(at: cacheURL)
             try? FileManager.default.removeItem(at: runHistoryURL)
         }
         state = enabled ? .disconnected : .disabled
+    }
+
+    func authorizeCredentialAccess() {
+        lastError = nil
+        do {
+            try MailBriefCredentialStore.authorizeAccess()
+            evaluateSchedule()
+        } catch {
+            lastError = Self.safeError(error)
+            state = generation == nil ? .credentialUnavailable : .stale
+        }
+    }
+
+    private func withGmailAccess<T>(
+        clientID: String,
+        clientSecret: String,
+        operation: (String) async throws -> T
+    ) async throws -> T {
+        try await MailBriefAuthorizedRequest.run(
+            token: { forceRefresh in
+                try await MailBriefCredentialStore.validAccessToken(
+                    clientID: clientID,
+                    clientSecret: clientSecret,
+                    forceRefresh: forceRefresh
+                )
+            },
+            operation: operation
+        )
+    }
+
+    private func applyFailureState(_ error: Error) {
+        switch error {
+        case MailBriefError.credentialUnavailable:
+            state = generation == nil ? .credentialUnavailable : .stale
+        case MailBriefError.reauthorizationRequired:
+            state = generation == nil ? .needsReauthorization : .stale
+        case MailBriefError.notConnected:
+            state = .disconnected
+        default:
+            state = generation == nil ? .failed : .stale
+        }
     }
 
     func stop() {
@@ -484,7 +542,12 @@ final class MailBriefStore: ObservableObject {
     private static func safeErrorCode(_ error: Error) -> String {
         guard let value = error as? MailBriefError else { return "unknown" }
         return switch value {
-        case .notConnected, .oauth: "oauth"
+        case .notConnected: "credential_absent"
+        case .credentialUnavailable: "credential_unavailable"
+        case .reauthorizationRequired: "reauthorization_required"
+        case .gmailUnauthorized: "gmail_unauthorized"
+        case .transient: "transient"
+        case .oauth: "oauth"
         case .invalidResponse: "gmail_invalid_response"
         case .executorUnavailable: "codex_unavailable"
         case .invalidOutput: "invalid_result"
@@ -493,14 +556,26 @@ final class MailBriefStore: ObservableObject {
 }
 
 enum MailBriefError: Error {
-    case notConnected, invalidResponse, executorUnavailable, invalidOutput, oauth(String)
+    case notConnected
+    case credentialUnavailable
+    case reauthorizationRequired
+    case gmailUnauthorized
+    case transient(String)
+    case invalidResponse
+    case executorUnavailable
+    case invalidOutput
+    case oauth(String)
+
     var errorDescription: String {
         switch self {
         case .notConnected: "Connect Gmail first"
+        case .credentialUnavailable: "Authorize Kaji to access the saved Gmail credential"
+        case .reauthorizationRequired: "Gmail authorization needs to be renewed"
+        case .gmailUnauthorized: "Gmail rejected the access token"
+        case .transient(let value), .oauth(let value): value
         case .invalidResponse: "Gmail returned an invalid response"
         case .executorUnavailable: "Codex is unavailable or not signed in"
         case .invalidOutput: "Codex returned an invalid brief"
-        case .oauth(let value): value
         }
     }
 }

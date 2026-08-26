@@ -1,4 +1,5 @@
 import Foundation
+import KajiCore
 import XCTest
 @testable import Kaji
 
@@ -50,6 +51,24 @@ final class MailBriefCredentialStoreTests: XCTestCase {
         XCTAssertThrowsError(try cache.value(load: missing))
         XCTAssertEqual(loads, 2)
     }
+    func testTransientCredentialReadFailureIsRetried() throws {
+        let cache = MailBriefCredentialCache()
+        var loads = 0
+
+        XCTAssertThrowsError(try cache.value {
+            loads += 1
+            throw MailBriefError.credentialUnavailable
+        })
+        XCTAssertEqual(
+            try cache.value {
+                loads += 1
+                return credential
+            },
+            credential
+        )
+        XCTAssertEqual(loads, 2)
+    }
+
 
     func testV2CredentialMigratesToV3BeforeDeletion() throws {
         var reads: [String] = []
@@ -96,7 +115,7 @@ final class MailBriefCredentialStoreTests: XCTestCase {
             .appendingPathComponent("kaji-disabled-mail-brief-\(UUID().uuidString).json")
         let store = MailBriefStore(cacheURL: cacheURL) {
             reads += 1
-            return (true, "user@example.com", true)
+            return .present(account: "user@example.com", canModify: true)
         }
 
         XCTAssertFalse(store.isConnected)
@@ -105,14 +124,72 @@ final class MailBriefCredentialStoreTests: XCTestCase {
         XCTAssertEqual(reads, 0)
     }
 
-    func testAuthenticationUIFailuresBecomeNotConnected() {
+    func testAuthenticationUIFailuresRemainRetryable() {
         for status in [errSecInteractionNotAllowed, errSecUserCanceled, errSecAuthFailed] {
             XCTAssertThrowsError(try MailBriefCredentialStore.decodedCredential(
                 status: status, result: nil
             )) { error in
-                guard case MailBriefError.notConnected = error else {
-                    return XCTFail("Expected notConnected, got \(error)")
+                guard case MailBriefError.credentialUnavailable = error else {
+                    return XCTFail("Expected credentialUnavailable, got \(error)")
                 }
+            }
+        }
+    }
+
+    @MainActor
+    func testConfirmedAbsentAloneShowsConnectState() {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kaji-credential-state-\(UUID().uuidString)", isDirectory: true)
+        let absent = MailBriefStore(cacheURL: root.appendingPathComponent("absent.json")) { .absent }
+        absent.setEnabled(true, hour: 9, minute: 0, batchSize: 10, concurrency: 2, model: .defaultValue)
+        XCTAssertEqual(absent.state, .disconnected)
+
+        let unavailable = MailBriefStore(cacheURL: root.appendingPathComponent("unavailable.json")) { .unavailable }
+        unavailable.setEnabled(true, hour: 9, minute: 0, batchSize: 10, concurrency: 2, model: .defaultValue)
+        XCTAssertEqual(unavailable.state, .credentialUnavailable)
+
+        let reauthorization = MailBriefStore(cacheURL: root.appendingPathComponent("reauthorization.json")) {
+            .needsGoogleReauthorization
+        }
+        reauthorization.setEnabled(true, hour: 9, minute: 0, batchSize: 10, concurrency: 2, model: .defaultValue)
+        XCTAssertEqual(reauthorization.state, .needsReauthorization)
+    }
+
+    @MainActor
+    func testTransientCredentialFailureKeepsCachedBriefStale() {
+        let generation = MailBriefGeneration(
+            briefDay: "2026-08-26",
+            entries: [],
+            snapshotInboxThreadCount: 60
+        )
+        let store = MailBriefStore(
+            previewGeneration: generation,
+            credentialStatus: { .unavailable }
+        )
+
+        store.setEnabled(true, hour: 9, minute: 0, batchSize: 10, concurrency: 2, model: .defaultValue)
+
+        XCTAssertEqual(store.state, .stale)
+        XCTAssertEqual(store.generation?.snapshotInboxThreadCount, 60)
+        XCTAssertEqual(store.credentialState, .unavailable)
+    }
+
+    func testInvalidGrantRequiresGoogleReauthorizationWithoutTreatingOtherFailuresAsRevocation() {
+        let invalidGrant = MailBriefCredentialStore.tokenRefreshError(
+            statusCode: 400,
+            data: Data(#"{"error":"invalid_grant"}"#.utf8)
+        )
+        guard case .reauthorizationRequired = invalidGrant else {
+            return XCTFail("Expected reauthorizationRequired")
+        }
+
+        for status in [400, 401, 429, 500, 503] {
+            let error = MailBriefCredentialStore.tokenRefreshError(
+                statusCode: status,
+                data: Data(#"{"error":"temporarily_unavailable"}"#.utf8)
+            )
+            guard case .transient = error else {
+                return XCTFail("Expected transient for \(status)")
             }
         }
     }

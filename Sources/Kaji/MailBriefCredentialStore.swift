@@ -11,7 +11,11 @@ struct MailBriefOAuthCredential: Codable, Sendable, Equatable {
 }
 
 final class MailBriefCredentialCache: @unchecked Sendable {
-    private enum State { case empty, loaded(MailBriefOAuthCredential?) }
+    private enum State {
+        case empty
+        case absent
+        case loaded(MailBriefOAuthCredential)
+    }
     private let lock = NSLock()
     private var state: State = .empty
 
@@ -20,27 +24,38 @@ final class MailBriefCredentialCache: @unchecked Sendable {
         defer { lock.unlock() }
         switch state {
         case .loaded(let value):
-            guard let value else { throw MailBriefError.notConnected }
             return value
+        case .absent:
+            throw MailBriefError.notConnected
         case .empty:
             do {
                 let value = try load()
                 state = .loaded(value)
                 return value
+            } catch MailBriefError.notConnected {
+                state = .absent
+                throw MailBriefError.notConnected
             } catch {
-                state = .loaded(nil)
+                // Access and transient Keychain failures must remain retryable.
                 throw error
             }
         }
     }
 
     func store(_ value: MailBriefOAuthCredential?) {
-        lock.withLock { state = .loaded(value) }
+        lock.withLock { state = value.map(State.loaded) ?? .absent }
     }
 
     func invalidate() {
         lock.withLock { state = .empty }
     }
+}
+
+enum MailBriefCredentialStatus: Equatable {
+    case absent
+    case unavailable
+    case present(account: String?, canModify: Bool)
+    case needsGoogleReauthorization
 }
 
 enum KeychainInteractionScope {
@@ -56,6 +71,14 @@ enum KeychainInteractionScope {
         return try operation()
     }
 }
+private final class MailBriefReauthorizationState: @unchecked Sendable {
+    private let lock = NSLock()
+    private var required = false
+
+    func read() -> Bool { lock.withLock { required } }
+    func set(_ value: Bool) { lock.withLock { required = value } }
+}
+
 
 enum MailBriefCredentialStore {
     private static let service = "dev.kaji.mail-brief.gmail"
@@ -63,6 +86,7 @@ enum MailBriefCredentialStore {
     private static let previousCredentialAccount = "oauth-credential-v2"
     private static let legacyCredentialAccount = "oauth-credential-v1"
     private static let cache = MailBriefCredentialCache()
+    private static let reauthorizationState = MailBriefReauthorizationState()
 
     enum AuthorizationStatus: Equatable {
         case authorized
@@ -70,17 +94,29 @@ enum MailBriefCredentialStore {
         case needsReauthorization
     }
 
-    static var hasCredential: Bool { (try? credential()) != nil }
-    static var account: String? { try? credential().account }
-    static var canModify: Bool { (try? credential().scopes?.contains(MailBriefOAuthFlow.modifyScope)) ?? false }
+    static func status() -> MailBriefCredentialStatus {
+        if reauthorizationState.read() {
+            return .needsGoogleReauthorization
+        }
+        do {
+            let value = try credential()
+            return .present(
+                account: value.account,
+                canModify: value.scopes?.contains(MailBriefOAuthFlow.modifyScope) ?? false
+            )
+        } catch MailBriefError.notConnected {
+            return .absent
+        } catch {
+            return .unavailable
+        }
+    }
+
     static func authorizationStatus() -> AuthorizationStatus {
         cache.invalidate()
-        do {
-            return try read(account: credentialAccount) == nil ? .notAuthorized : .authorized
-        } catch MailBriefError.notConnected {
-            return .needsReauthorization
-        } catch {
-            return .notAuthorized
+        switch status() {
+        case .present: return .authorized
+        case .absent: return .notAuthorized
+        case .unavailable, .needsGoogleReauthorization: return .needsReauthorization
         }
     }
 
@@ -124,21 +160,43 @@ enum MailBriefCredentialStore {
     static func save(_ credential: MailBriefOAuthCredential) throws {
         try write(credential, account: credentialAccount)
         cache.store(credential)
+        reauthorizationState.set(false)
     }
 
-    static func validAccessToken(clientID: String, clientSecret: String) async throws -> String {
+    static func validAccessToken(
+        clientID: String,
+        clientSecret: String,
+        forceRefresh: Bool = false,
+        session: URLSession = .shared
+    ) async throws -> String {
         var value = try credential()
-        if value.expiresAt.timeIntervalSinceNow > 120 { return value.accessToken }
-        guard let refreshToken = value.refreshToken else { throw MailBriefError.notConnected }
+        if !forceRefresh, value.expiresAt.timeIntervalSinceNow > 120 { return value.accessToken }
+        guard let refreshToken = value.refreshToken else {
+            markNeedsGoogleReauthorization()
+            throw MailBriefError.reauthorizationRequired
+        }
         var request = URLRequest(url: URL(string: "https://oauth2.googleapis.com/token")!)
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
         request.httpBody = form(["client_id": clientID, "client_secret": clientSecret,
                                  "refresh_token": refreshToken, "grant_type": "refresh_token"])
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let refreshed = try? JSONDecoder().decode(TokenRefresh.self, from: data) else {
-            throw MailBriefError.oauth("Gmail authorization expired; connect again")
+        let (data, response): (Data, URLResponse)
+        do {
+            (data, response) = try await session.data(for: request)
+        } catch {
+            throw MailBriefError.transient("Gmail token refresh is temporarily unavailable")
+        }
+        guard let http = response as? HTTPURLResponse else {
+            throw MailBriefError.transient("Gmail token refresh returned an invalid response")
+        }
+        if let refreshError = tokenRefreshError(statusCode: http.statusCode, data: data) {
+            if case .reauthorizationRequired = refreshError {
+                markNeedsGoogleReauthorization()
+            }
+            throw refreshError
+        }
+        guard let refreshed = try? JSONDecoder().decode(TokenRefresh.self, from: data) else {
+            throw MailBriefError.transient("Gmail token refresh is temporarily unavailable")
         }
         value.accessToken = refreshed.accessToken
         value.expiresAt = Date().addingTimeInterval(TimeInterval(refreshed.expiresIn))
@@ -146,11 +204,25 @@ enum MailBriefCredentialStore {
         return value.accessToken
     }
 
-    static func delete() {
+    static func markNeedsGoogleReauthorization() {
+        reauthorizationState.set(true)
+    }
+    static func tokenRefreshError(statusCode: Int, data: Data) -> MailBriefError? {
+        if statusCode == 200 { return nil }
+        if statusCode == 400,
+           (try? JSONDecoder().decode(TokenRefreshError.self, from: data).error) == "invalid_grant" {
+            return .reauthorizationRequired
+        }
+        return .transient("Gmail token refresh is temporarily unavailable")
+    }
+
+
+    static func disconnectByUser() {
         delete(account: credentialAccount)
         delete(account: previousCredentialAccount)
         delete(account: legacyCredentialAccount)
         cache.store(nil)
+        reauthorizationState.set(false)
     }
 
     private static func read(account: String, allowsInteraction: Bool = false) throws -> MailBriefOAuthCredential? {
@@ -174,10 +246,10 @@ enum MailBriefCredentialStore {
     static func decodedCredential(status: OSStatus, result: CFTypeRef?) throws -> MailBriefOAuthCredential {
         if status == errSecInteractionNotAllowed || status == errSecUserCanceled ||
             status == errSecAuthFailed {
-            throw MailBriefError.notConnected
+            throw MailBriefError.credentialUnavailable
         }
         guard status == errSecSuccess, let data = result as? Data else {
-            throw MailBriefError.oauth("Could not read Gmail credential (\(status))")
+            throw MailBriefError.credentialUnavailable
         }
         return try JSONDecoder().decode(MailBriefOAuthCredential.self, from: data)
     }
@@ -300,6 +372,9 @@ enum MailBriefCredentialStore {
     private struct TokenRefresh: Decodable {
         let accessToken: String; let expiresIn: Int
         enum CodingKeys: String, CodingKey { case accessToken = "access_token"; case expiresIn = "expires_in" }
+    }
+    private struct TokenRefreshError: Decodable {
+        let error: String
     }
     static func form(_ values: [String: String]) -> Data {
         let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))

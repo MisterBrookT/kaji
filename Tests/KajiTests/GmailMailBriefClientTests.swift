@@ -49,6 +49,96 @@ final class GmailMailBriefClientTests: XCTestCase {
         XCTAssertTrue(requests[0].body.contains("INBOX"))
         XCTAssertTrue(requests[2].body.contains("STARRED"))
     }
+    func testUnauthorizedIsDistinguishedForSingleRefreshRetry() async {
+        GmailURLProtocol.handler = { request in
+            let url = try XCTUnwrap(request.url)
+            return Self.response(for: url, status: 401, json: "{}")
+        }
+
+        do {
+            _ = try await makeClient().fetchCandidates(accessToken: "expired")
+            XCTFail("Expected unauthorized")
+        } catch MailBriefError.gmailUnauthorized {
+            // Expected: the store may refresh exactly once.
+        } catch {
+            XCTFail("Expected gmailUnauthorized, got \(error)")
+        }
+    }
+
+    func testRateLimitAndServerErrorsAreTransient() async {
+        for status in [429, 500, 503] {
+            GmailURLProtocol.handler = { request in
+                let url = try XCTUnwrap(request.url)
+                return Self.response(for: url, status: status, json: "{}")
+            }
+            do {
+                _ = try await makeClient().fetchCandidates(accessToken: "token")
+                XCTFail("Expected transient error for \(status)")
+            } catch MailBriefError.transient {
+                // Expected: credentials remain intact and the cached brief stays stale.
+            } catch {
+                XCTFail("Expected transient error for \(status), got \(error)")
+            }
+        }
+    }
+
+    func testNetworkErrorIsTransient() async {
+        GmailURLProtocol.handler = { _ in throw URLError(.notConnectedToInternet) }
+        do {
+            _ = try await makeClient().fetchCandidates(accessToken: "token")
+            XCTFail("Expected transient error")
+        } catch MailBriefError.transient {
+            // Expected.
+        } catch {
+            XCTFail("Expected transient error, got \(error)")
+        }
+    }
+
+    func testUnauthorizedRefreshesAndRetriesExactlyOnce() async throws {
+        var tokenRequests: [Bool] = []
+        var operations = 0
+
+        let value = try await MailBriefAuthorizedRequest.run(
+            token: { forceRefresh in
+                tokenRequests.append(forceRefresh)
+                return forceRefresh ? "fresh" : "expired"
+            },
+            operation: { token in
+                operations += 1
+                if token == "expired" { throw MailBriefError.gmailUnauthorized }
+                return "ok"
+            }
+        )
+
+        XCTAssertEqual(value, "ok")
+        XCTAssertEqual(tokenRequests, [false, true])
+        XCTAssertEqual(operations, 2)
+    }
+
+    func testSecondUnauthorizedIsNotRetriedAgain() async {
+        var tokenRequests: [Bool] = []
+        var operations = 0
+
+        do {
+            _ = try await MailBriefAuthorizedRequest.run(
+                token: { forceRefresh in
+                    tokenRequests.append(forceRefresh)
+                    return "token"
+                },
+                operation: { _ -> String in
+                    operations += 1
+                    throw MailBriefError.gmailUnauthorized
+                }
+            )
+            XCTFail("Expected unauthorized")
+        } catch MailBriefError.gmailUnauthorized {
+            XCTAssertEqual(tokenRequests, [false, true])
+            XCTAssertEqual(operations, 2)
+        } catch {
+            XCTFail("Expected gmailUnauthorized, got \(error)")
+        }
+    }
+
 
     private func makeClient() -> GmailMailBriefClient {
         let config = URLSessionConfiguration.ephemeral
@@ -56,8 +146,12 @@ final class GmailMailBriefClientTests: XCTestCase {
         return GmailMailBriefClient(session: URLSession(configuration: config))
     }
 
-    private static func response(for url: URL, json: String) -> (HTTPURLResponse, Data) {
-        (HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
+    private static func response(
+        for url: URL,
+        status: Int = 200,
+        json: String
+    ) -> (HTTPURLResponse, Data) {
+        (HTTPURLResponse(url: url, statusCode: status, httpVersion: nil, headerFields: nil)!, Data(json.utf8))
     }
 
     private static func threadJSON(id: String) -> String {
