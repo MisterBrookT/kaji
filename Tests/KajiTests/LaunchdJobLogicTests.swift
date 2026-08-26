@@ -47,6 +47,7 @@ final class LaunchdJobLogicTests: XCTestCase {
             "com.apple.running",
         ])
     }
+
     func testInstalledSummaryIgnoresLargeSessionDomainAndKeepsNonzeroExitFailed() {
         let otherJobs = (0..<128).map { index in
             index.isMultiple(of: 2)
@@ -78,6 +79,40 @@ final class LaunchdJobLogicTests: XCTestCase {
         )
         XCTAssertEqual(snapshot.installedJobs.first(where: { $0.label == "dev.brook.failed" })?.state, .failed)
         XCTAssertEqual(snapshot.installedJobs.first(where: { $0.label == "dev.brook.failed" })?.lastExitCode, 78)
+    }
+
+    func testCategorizesJobsAndLimitsFailureToInstalledAgents() {
+        let output = """
+        PID\tStatus\tLabel
+        -\t78\tdev.brook.task
+        -\t-9\tcom.adobe.helper
+        -\t78\tcom.openai.service
+        -\t-9\tcom.apple.cache
+        -\t78\tapplication.com.apple.Safari.123
+        """
+        let snapshot = LaunchdJobLogic.snapshot(
+            listOutput: output,
+            installedLabels: ["dev.brook.task"]
+        )
+
+        XCTAssertEqual(snapshot.jobs(in: .userAgent).map(\.label), ["dev.brook.task"])
+        XCTAssertEqual(Set(snapshot.jobs(in: .application).map(\.label)), [
+            "com.adobe.helper",
+            "com.openai.service",
+        ])
+        XCTAssertEqual(Set(snapshot.jobs(in: .appleSystem).map(\.label)), [
+            "application.com.apple.Safari.123",
+            "com.apple.cache",
+        ])
+        XCTAssertEqual(snapshot.jobs(in: .userAgent).first?.state, .failed)
+        XCTAssertEqual(snapshot.jobs(in: .userAgent).first?.lastExitCode, 78)
+        XCTAssertTrue(snapshot.jobs(in: .application).allSatisfy { $0.state == .idle })
+        XCTAssertTrue(snapshot.jobs(in: .appleSystem).allSatisfy { $0.state == .idle })
+        XCTAssertEqual(snapshot.jobs.first(where: { $0.label == "com.adobe.helper" })?.lastExitCode, -9)
+        XCTAssertEqual(
+            snapshot.jobs.first(where: { $0.label == "application.com.apple.Safari.123" })?.lastExitCode,
+            78
+        )
     }
 
     func testSkipsHeaderAndMalformedRows() {

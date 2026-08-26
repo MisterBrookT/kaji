@@ -9,6 +9,12 @@ public enum LaunchdJobState: Int, Codable, Sendable, CaseIterable {
     public var sortRank: Int { rawValue }
 }
 
+public enum LaunchdJobCategory: Sendable, CaseIterable {
+    case userAgent
+    case application
+    case appleSystem
+}
+
 public struct LaunchdJob: Identifiable, Equatable, Sendable {
     public let label: String
     public let pid: Int?
@@ -17,6 +23,14 @@ public struct LaunchdJob: Identifiable, Equatable, Sendable {
     public let state: LaunchdJobState
 
     public var id: String { label }
+
+    public var category: LaunchdJobCategory {
+        if isInstalledUserAgent { return .userAgent }
+        if label.hasPrefix("com.apple.") || label.hasPrefix("application.com.apple.") {
+            return .appleSystem
+        }
+        return .application
+    }
 
     public init(
         label: String,
@@ -55,7 +69,15 @@ public struct LaunchdJobSnapshot: Equatable, Sendable {
     }
 
     public var installedJobs: [LaunchdJob] {
-        jobs.filter(\.isInstalledUserAgent)
+        jobs(in: .userAgent)
+    }
+
+    public func jobs(in category: LaunchdJobCategory) -> [LaunchdJob] {
+        jobs.filter { $0.category == category }
+    }
+
+    public func count(in category: LaunchdJobCategory) -> Int {
+        jobs.count { $0.category == category }
     }
 
     public var installedSummary: LaunchdInstalledJobSummary {
@@ -95,10 +117,11 @@ public enum LaunchdJobLogic {
 
             let pid = Int(pidText)
             let lastExitCode = Int(exitText)
+            let isInstalledUserAgent = installedLabels.contains(label)
             let state: LaunchdJobState
             if pid != nil {
                 state = .running
-            } else if let lastExitCode, lastExitCode != 0 {
+            } else if isInstalledUserAgent, let lastExitCode, lastExitCode != 0 {
                 state = .failed
             } else {
                 state = .idle
@@ -107,7 +130,7 @@ public enum LaunchdJobLogic {
                 label: label,
                 pid: pid,
                 lastExitCode: lastExitCode,
-                isInstalledUserAgent: installedLabels.contains(label),
+                isInstalledUserAgent: isInstalledUserAgent,
                 state: state
             )
         }
