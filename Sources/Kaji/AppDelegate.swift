@@ -311,9 +311,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var goalsStatusSlotLabel: String? {
         MenuBarSlotLogic.goalsLabel(
             enabled: prefs.isModuleEnabled(.goals),
-            goals: dailyGoals.goals,
-            scheduledCompleted: fixedPlanStore.todayCompletedCount,
-            scheduledTotal: fixedPlanStore.today.count
+            goals: dailyGoals.todayGoalEntries,
+            scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
+            scheduledTotal: fixedPlanStore.todayScheduledEntries.count
         )
     }
 

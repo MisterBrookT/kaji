@@ -1272,9 +1272,9 @@ struct KajiPopoverView: View {
         let goals = dailyGoals.goals(for: horizon)
         let summary = dailyGoals.summary(for: horizon)
         let includesSchedules = horizon == .today
-        let schedules = includesSchedules ? fixedPlanStore.today : []
-        let completed = summary.completed + (includesSchedules ? fixedPlanStore.todayCompletedCount : 0)
-        let total = summary.total + schedules.count
+        let schedules = includesSchedules ? fixedPlanStore.visibleTodaySchedules : []
+        let completed = summary.completed + (includesSchedules ? fixedPlanStore.todayScheduledCompletedCount : 0)
+        let total = summary.total + (includesSchedules ? fixedPlanStore.todayScheduledEntries.count : 0)
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Text(title)

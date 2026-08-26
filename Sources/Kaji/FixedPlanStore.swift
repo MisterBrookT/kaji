@@ -70,16 +70,20 @@ final class FixedPlanStore: ObservableObject {
         persist()
     }
 
-    var today: [ScheduledGoal] {
+    var todayScheduledEntries: [ScheduledGoal] {
         refreshDayBoundary()
         return ScheduledGoalLogic.active(
             schedules,
             weekday: calendar.component(.weekday, from: now())
-        ).filter { !retiredCompletionIDs.contains($0.id) }
+        )
     }
 
-    var todayCompletedCount: Int {
-        today.filter { completion.completedIDs.contains($0.id) }.count
+    var visibleTodaySchedules: [ScheduledGoal] {
+        todayScheduledEntries.filter { !retiredCompletionIDs.contains($0.id) }
+    }
+
+    var todayScheduledCompletedCount: Int {
+        todayScheduledEntries.filter { completion.completedIDs.contains($0.id) }.count
     }
 
     func isCompleted(_ schedule: ScheduledGoal) -> Bool {
