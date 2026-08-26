@@ -186,7 +186,9 @@ final class GoalStatePersistenceTests: XCTestCase {
         let goal = try store.addGoal(title: "Finish me", tag: "Work", note: "", in: .today)
 
         store.toggle(goal)
-        try await Task.sleep(for: .milliseconds(40))
+        for _ in 0..<50 where !store.goals.isEmpty {
+            try await Task.sleep(for: .milliseconds(10))
+        }
 
         XCTAssertTrue(store.goals.isEmpty)
     }
