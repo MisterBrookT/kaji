@@ -46,8 +46,17 @@ final class LaunchdJobStore: ObservableObject {
         }
     }
 
+    func refreshStatus() {
+        guard enabled else { return }
+        refresh(requiresVisibility: false)
+    }
+
     func refresh() {
-        guard isActive, !isRefreshing else { return }
+        refresh(requiresVisibility: true)
+    }
+
+    private func refresh(requiresVisibility: Bool) {
+        guard enabled, (!requiresVisibility || popoverVisible), !isRefreshing else { return }
         isRefreshing = true
         refreshInvocationCount += 1
         if ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_AUDIT_LAUNCHD_REFRESH"] == "1" {
@@ -59,7 +68,8 @@ final class LaunchdJobStore: ObservableObject {
             let result = Result { try loader() }
             DispatchQueue.main.async {
                 guard let self,
-                      self.isActive,
+                      self.enabled,
+                      (!requiresVisibility || self.popoverVisible),
                       generation == self.refreshGeneration else { return }
                 self.isRefreshing = false
                 switch result {

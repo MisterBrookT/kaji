@@ -90,4 +90,16 @@ final class LaunchdJobStoreLifecycleTests: XCTestCase {
         store.refresh()
         XCTAssertEqual(store.refreshInvocationCount, 1)
     }
+
+    func testStatusRefreshCanRunOnceWhilePopoverIsHidden() {
+        let loaded = LaunchdJobSnapshot(jobs: [])
+        let store = LaunchdJobStore(initialSnapshot: loaded, loadSnapshot: { loaded })
+
+        store.refreshStatus()
+        XCTAssertEqual(store.refreshInvocationCount, 0)
+        store.setEnabled(true)
+        store.refreshStatus()
+        XCTAssertEqual(store.refreshInvocationCount, 1)
+        XCTAssertFalse(store.isActive)
+    }
 }

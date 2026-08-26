@@ -130,6 +130,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
             .store(in: &cancellables)
+        launchdJobStore.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
+            .store(in: &cancellables)
         dailyGoals.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -215,7 +219,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
                                   batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
                                   model: prefs.mailBriefModel)
-        launchdJobStore.setEnabled(modules.contains(.launchd))
+        let launchdEnabled = modules.contains(.launchd)
+        launchdJobStore.setEnabled(launchdEnabled)
+        if launchdEnabled { launchdJobStore.refreshStatus() }
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -260,11 +266,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
                                   mailBriefSlotLabel: MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount),
                                   showsMailBriefSlot: prefs.isModuleEnabled(.mailBrief),
+                                  launchdStatus: launchdStatus,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
                                   onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
                                   onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
-                                  onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) })
+                                  onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
+                                  onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -286,11 +294,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
                                                mailBriefSlotLabel: MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount),
                                                showsMailBriefSlot: prefs.isModuleEnabled(.mailBrief),
+                                               launchdStatus: launchdStatus,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
                                                onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
                                                onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
-                                               onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) })
+                                               onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
+                                               onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
         statusItem.length = statusItemLength
     }
 
@@ -320,6 +330,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    private var launchdStatus: LaunchdMenuBarStatus? {
+        MenuBarSlotLogic.launchdStatus(
+            enabled: prefs.isModuleEnabled(.launchd),
+            runningCount: launchdJobStore.snapshot.runningCount,
+            failedCount: launchdJobStore.snapshot.failedCount
+        )
+    }
+
     private var statusItemLength: CGFloat {
         let count = max(1, min(4, visibleProviders.count))
         var length = CGFloat(count) * 26 + 6
@@ -333,6 +351,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if prefs.isModuleEnabled(.aiNews) { length += 20 }
         if prefs.isModuleEnabled(.mailBrief) {
             length += 22 + CGFloat(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: mailBriefStore.actCount)?.count ?? 0) * 7
+        }
+        if let launchdStatus {
+            length += 22 + CGFloat(String(launchdStatus.count).count) * 7
         }
         return length
     }
@@ -428,7 +449,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .aiNews, .mailBrief:
+        case .work, .goalsToday, .aiNews, .mailBrief, .launchd:
             return .quota
         }
     }
@@ -445,6 +466,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .aiNews
         case .mailBrief:
             return popoverNavigation.panel == .mailBrief
+        case .launchd:
+            return popoverNavigation.panel == .launchd
         }
     }
 
@@ -469,6 +492,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popoverNavigation.panel = prefs.isModuleEnabled(.aiNews) ? .aiNews : .quota
         case .mailBrief:
             popoverNavigation.panel = prefs.isModuleEnabled(.mailBrief) ? .mailBrief : .quota
+        case .launchd:
+            popoverNavigation.panel = prefs.isModuleEnabled(.launchd) ? .launchd : .quota
         }
     }
 

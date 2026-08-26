@@ -231,6 +231,7 @@ public enum MenuBarDestination: Equatable, Sendable {
     case goalsToday
     case aiNews
     case mailBrief
+    case launchd
 }
 
 public enum MenuBarSlotLogic {
@@ -255,12 +256,35 @@ public enum MenuBarSlotLogic {
         case .goals: .goalsToday
         case .aiNews: .aiNews
         case .mailBrief: .mailBrief
+        case .launchd: .launchd
         }
     }
 
     public static func mailBriefLabel(enabled: Bool, actCount: Int) -> String? {
         guard enabled, actCount > 0 else { return nil }
         return String(actCount)
+    }
+
+    public static func launchdStatus(
+        enabled: Bool,
+        runningCount: Int,
+        failedCount: Int
+    ) -> LaunchdMenuBarStatus? {
+        guard enabled else { return nil }
+        if failedCount > 0 {
+            return LaunchdMenuBarStatus(count: failedCount, hasFailures: true)
+        }
+        return LaunchdMenuBarStatus(count: runningCount, hasFailures: false)
+    }
+}
+
+public struct LaunchdMenuBarStatus: Equatable, Sendable {
+    public let count: Int
+    public let hasFailures: Bool
+
+    public init(count: Int, hasFailures: Bool) {
+        self.count = count
+        self.hasFailures = hasFailures
     }
 }
 
@@ -270,5 +294,6 @@ public enum MenuBarSlot: Equatable, Sendable {
     case goals
     case aiNews
     case mailBrief
+    case launchd
     case background
 }
