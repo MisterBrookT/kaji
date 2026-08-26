@@ -33,6 +33,20 @@ public struct LaunchdJob: Identifiable, Equatable, Sendable {
     }
 }
 
+public struct LaunchdInstalledJobSummary: Equatable, Sendable {
+    public let runningCount: Int
+    public let failedCount: Int
+    public let unloadedCount: Int
+    public let idleCount: Int
+
+    public init(runningCount: Int, failedCount: Int, unloadedCount: Int, idleCount: Int) {
+        self.runningCount = runningCount
+        self.failedCount = failedCount
+        self.unloadedCount = unloadedCount
+        self.idleCount = idleCount
+    }
+}
+
 public struct LaunchdJobSnapshot: Equatable, Sendable {
     public let jobs: [LaunchdJob]
 
@@ -40,9 +54,30 @@ public struct LaunchdJobSnapshot: Equatable, Sendable {
         self.jobs = jobs
     }
 
-    public var runningCount: Int { jobs.count { $0.state == .running } }
-    public var failedCount: Int { jobs.count { $0.state == .failed } }
-    public var unloadedCount: Int { jobs.count { $0.state == .unloaded } }
+    public var installedJobs: [LaunchdJob] {
+        jobs.filter(\.isInstalledUserAgent)
+    }
+
+    public var installedSummary: LaunchdInstalledJobSummary {
+        var runningCount = 0
+        var failedCount = 0
+        var unloadedCount = 0
+        var idleCount = 0
+        for job in jobs where job.isInstalledUserAgent {
+            switch job.state {
+            case .running: runningCount += 1
+            case .failed: failedCount += 1
+            case .unloaded: unloadedCount += 1
+            case .idle: idleCount += 1
+            }
+        }
+        return LaunchdInstalledJobSummary(
+            runningCount: runningCount,
+            failedCount: failedCount,
+            unloadedCount: unloadedCount,
+            idleCount: idleCount
+        )
+    }
 }
 
 public enum LaunchdJobLogic {

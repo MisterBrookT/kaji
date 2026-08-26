@@ -16,9 +16,10 @@ final class LaunchdJobLogicTests: XCTestCase {
             installedLabels: ["dev.kaji.running", "dev.kaji.failed", "dev.kaji.unloaded"]
         )
 
-        XCTAssertEqual(snapshot.runningCount, 1)
-        XCTAssertEqual(snapshot.failedCount, 1)
-        XCTAssertEqual(snapshot.unloadedCount, 1)
+        XCTAssertEqual(snapshot.installedSummary.runningCount, 1)
+        XCTAssertEqual(snapshot.installedSummary.failedCount, 1)
+        XCTAssertEqual(snapshot.installedSummary.unloadedCount, 1)
+        XCTAssertEqual(snapshot.installedSummary.idleCount, 0)
         XCTAssertEqual(snapshot.jobs.first(where: { $0.label == "dev.kaji.running" })?.pid, 321)
         XCTAssertEqual(snapshot.jobs.first(where: { $0.label == "dev.kaji.failed" })?.state, .failed)
         XCTAssertEqual(snapshot.jobs.first(where: { $0.label == "dev.kaji.idle" })?.state, .idle)
@@ -46,6 +47,39 @@ final class LaunchdJobLogicTests: XCTestCase {
             "com.apple.running",
         ])
     }
+    func testInstalledSummaryIgnoresLargeSessionDomainAndKeepsNonzeroExitFailed() {
+        let otherJobs = (0..<128).map { index in
+            index.isMultiple(of: 2)
+                ? "\(index + 1000)\t0\tcom.apple.session.\(index)"
+                : "-\t\(index + 1)\tcom.apple.session.\(index)"
+        }
+        let output = ([
+            "PID\tStatus\tLabel",
+            "42\t0\tdev.brook.running",
+            "-\t78\tdev.brook.failed",
+            "-\t0\tdev.brook.idle",
+        ] + otherJobs).joined(separator: "\n")
+
+        let snapshot = LaunchdJobLogic.snapshot(
+            listOutput: output,
+            installedLabels: ["dev.brook.running", "dev.brook.failed", "dev.brook.idle", "dev.brook.unloaded"]
+        )
+
+        XCTAssertEqual(snapshot.jobs.count, 132)
+        XCTAssertEqual(snapshot.installedJobs.map(\.label), [
+            "dev.brook.failed",
+            "dev.brook.running",
+            "dev.brook.idle",
+            "dev.brook.unloaded",
+        ])
+        XCTAssertEqual(
+            snapshot.installedSummary,
+            LaunchdInstalledJobSummary(runningCount: 1, failedCount: 1, unloadedCount: 1, idleCount: 1)
+        )
+        XCTAssertEqual(snapshot.installedJobs.first(where: { $0.label == "dev.brook.failed" })?.state, .failed)
+        XCTAssertEqual(snapshot.installedJobs.first(where: { $0.label == "dev.brook.failed" })?.lastExitCode, 78)
+    }
+
 
     func testSkipsHeaderAndMalformedRows() {
         let snapshot = LaunchdJobLogic.snapshot(

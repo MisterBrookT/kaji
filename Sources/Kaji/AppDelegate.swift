@@ -331,10 +331,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var launchdStatus: LaunchdMenuBarStatus? {
-        MenuBarSlotLogic.launchdStatus(
+        let summary = launchdJobStore.snapshot.installedSummary
+        return MenuBarSlotLogic.launchdStatus(
             enabled: prefs.isModuleEnabled(.launchd),
-            runningCount: launchdJobStore.snapshot.runningCount,
-            failedCount: launchdJobStore.snapshot.failedCount
+            runningCount: summary.runningCount,
+            failedCount: summary.failedCount
         )
     }
 

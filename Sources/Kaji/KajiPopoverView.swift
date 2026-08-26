@@ -263,11 +263,13 @@ struct KajiPopoverView: View {
     }
 
     private var launchdPanel: some View {
+        let installedJobs = launchdJobStore.snapshot.installedJobs
+        let installedSummary = launchdJobStore.snapshot.installedSummary
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                launchdSummary("\(launchdJobStore.snapshot.runningCount)", label: "running")
-                launchdSummary("\(launchdJobStore.snapshot.failedCount)", label: "failed")
-                launchdSummary("\(launchdJobStore.snapshot.unloadedCount)", label: "unloaded")
+                launchdSummary("\(installedSummary.runningCount)", label: "running")
+                launchdSummary("\(installedSummary.failedCount)", label: "failed")
+                launchdSummary("\(installedSummary.unloadedCount)", label: "unloaded")
                 Spacer(minLength: 6)
                 Button { launchdJobStore.refresh() } label: {
                     Image(systemName: "arrow.clockwise")
@@ -278,25 +280,22 @@ struct KajiPopoverView: View {
                 .help("Refresh")
             }
 
-            if launchdJobStore.snapshot.jobs.isEmpty {
+            if installedJobs.isEmpty {
                 HStack {
                     Spacer()
                     if launchdJobStore.isRefreshing {
                         ProgressView()
                             .controlSize(.small)
                     }
-                    Text(launchdJobStore.lastError == nil ? "Looking for GUI jobs…" : "Could not read launchd jobs")
+                    Text(launchdJobStore.lastError == nil ? "Looking for user agents…" : "Could not read user agents")
                         .font(.system(size: 10.5, weight: .medium))
                         .foregroundColor(t.mute)
                     Spacer()
                 }
                 .padding(.vertical, 24)
             } else {
-                let installed = launchdJobStore.snapshot.jobs.filter(\.isInstalledUserAgent)
-                let other = launchdJobStore.snapshot.jobs.filter { !$0.isInstalledUserAgent }
                 LazyVStack(alignment: .leading, spacing: 10) {
-                    launchdSection("User agents", jobs: installed)
-                    launchdSection("Other GUI jobs", jobs: other)
+                    launchdSection("User agents", jobs: installedJobs)
                 }
             }
         }
@@ -354,7 +353,7 @@ struct KajiPopoverView: View {
     private func launchdJobDetail(_ job: LaunchdJob) -> String {
         if let pid = job.pid { return "PID \(pid)" }
         if let code = job.lastExitCode { return "Last exit \(code)" }
-        return job.isInstalledUserAgent ? "~/Library/LaunchAgents" : "GUI domain"
+        return "~/Library/LaunchAgents"
     }
 
     private func launchdStateLabel(_ state: LaunchdJobState) -> String {
