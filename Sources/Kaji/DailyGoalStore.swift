@@ -30,7 +30,8 @@ final class DailyGoalStore: ObservableObject {
     private var now: () -> Date
     private var calendar: Calendar
     private let completionRemovalDelay: Duration
-    private var completionRemovalTasks: [UUID: Task<Void, Never>] = [:]
+    private let completionRemovalSleep: @Sendable (Duration) async -> Void
+    var completionRemovalTasks: [UUID: Task<Void, Never>] = [:]
     private(set) var loadIssue: GoalStateLoadIssue?
     private static let tagDefinitionsKey = "goalTagDefinitionsV1"
 
@@ -38,12 +39,14 @@ final class DailyGoalStore: ObservableObject {
         defaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
         calendar: Calendar = .current,
-        completionRemovalDelay: Duration = .seconds(5)
+        completionRemovalDelay: Duration = .seconds(5),
+        completionRemovalSleep: @escaping @Sendable (Duration) async -> Void = { try? await Task.sleep(for: $0) }
     ) {
         self.defaults = defaults
         self.now = now
         self.calendar = calendar
         self.completionRemovalDelay = completionRemovalDelay
+        self.completionRemovalSleep = completionRemovalSleep
         if let data = defaults.data(forKey: Self.tagDefinitionsKey),
            let saved = try? JSONDecoder().decode([GoalTagDefinition].self, from: data),
            !saved.isEmpty {
@@ -319,7 +322,7 @@ final class DailyGoalStore: ObservableObject {
         guard isDone else { return }
         completionRemovalTasks[id] = Task { [weak self] in
             guard let self else { return }
-            try? await Task.sleep(for: self.completionRemovalDelay)
+            await self.completionRemovalSleep(self.completionRemovalDelay)
             guard !Task.isCancelled else { return }
             self.completionRemovalTasks[id] = nil
             self.mutate(horizon) { goals in

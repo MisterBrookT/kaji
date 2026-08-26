@@ -160,35 +160,52 @@ final class GoalStatePersistenceTests: XCTestCase {
 
     @MainActor
     func testCompletedGoalCanBeUndoneBeforeDelayedRemoval() async throws {
+        let gate = SleepGate()
         let store = DailyGoalStore(
             defaults: defaults,
-            completionRemovalDelay: .milliseconds(30)
+            completionRemovalDelay: .milliseconds(30),
+            completionRemovalSleep: { await gate.sleep($0) }
         )
         let goal = try store.addGoal(title: "Undo me", tag: "Work", note: "", in: .today)
 
         store.toggle(goal)
         XCTAssertTrue(store.goals.first?.isDone == true)
-        try await Task.sleep(for: .milliseconds(10))
+        let removalTask = try XCTUnwrap(store.completionRemovalTasks[goal.id])
+        // Wait until the removal task has actually reached its delay, proving
+        // there is a pending removal in flight to cancel below.
+        await gate.waitUntilReached()
+
         let completed = try XCTUnwrap(store.goals.first)
         store.toggle(completed)
-        try await Task.sleep(for: .milliseconds(40))
 
+        // The cancellation above happens synchronously inside `toggle`, so
+        // this assertion does not race any clock.
         XCTAssertEqual(store.goals.map(\.id), [goal.id])
         XCTAssertFalse(store.goals[0].isDone)
+
+        // Release the (already cancelled) task so it observes cancellation
+        // and exits cleanly instead of leaking a suspended continuation.
+        await gate.release()
+        _ = await removalTask.value
     }
 
     @MainActor
     func testCompletedGoalIsRemovedAfterDelay() async throws {
+        let gate = SleepGate()
         let store = DailyGoalStore(
             defaults: defaults,
-            completionRemovalDelay: .milliseconds(20)
+            completionRemovalDelay: .milliseconds(20),
+            completionRemovalSleep: { await gate.sleep($0) }
         )
         let goal = try store.addGoal(title: "Finish me", tag: "Work", note: "", in: .today)
 
         store.toggle(goal)
-        for _ in 0..<50 where !store.goals.isEmpty {
-            try await Task.sleep(for: .milliseconds(10))
-        }
+        let removalTask = try XCTUnwrap(store.completionRemovalTasks[goal.id])
+        await gate.waitUntilReached()
+        XCTAssertEqual(store.goals.map(\.id), [goal.id])
+
+        await gate.release()
+        await removalTask.value
 
         XCTAssertTrue(store.goals.isEmpty)
     }
@@ -203,5 +220,43 @@ final class GoalStatePersistenceTests: XCTestCase {
             history: ["2026-8-2": GoalHistoryDay(day: "2026-8-2", completed: 1, total: 2)],
             yesterdayPending: [GoalItem(id: UUID(), title: "Pending", isDone: false, tag: "Home")]
         )
+    }
+}
+
+/// Deterministic stand-in for `Task.sleep` used by `DailyGoalStore`'s
+/// delayed-removal task. Lets a test observe exactly when the production
+/// code has entered its delay (`waitUntilReached`) and control exactly when
+/// it resumes (`release`), replacing wall-clock races with explicit
+/// state-machine signaling.
+private actor SleepGate {
+    private var hasReached = false
+    private var reachedContinuation: CheckedContinuation<Void, Never>?
+    private var isReleased = false
+    private var releaseContinuation: CheckedContinuation<Void, Never>?
+
+    /// Called by the code under test in place of `Task.sleep`.
+    func sleep(_ duration: Duration) async {
+        hasReached = true
+        reachedContinuation?.resume()
+        reachedContinuation = nil
+        if isReleased { return }
+        await withCheckedContinuation { continuation in
+            releaseContinuation = continuation
+        }
+    }
+
+    /// Suspends the caller until `sleep(_:)` has been entered.
+    func waitUntilReached() async {
+        if hasReached { return }
+        await withCheckedContinuation { continuation in
+            reachedContinuation = continuation
+        }
+    }
+
+    /// Lets a suspended (or future) `sleep(_:)` call resume.
+    func release() {
+        isReleased = true
+        releaseContinuation?.resume()
+        releaseContinuation = nil
     }
 }
