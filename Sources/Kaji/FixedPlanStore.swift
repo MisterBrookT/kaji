@@ -6,10 +6,13 @@ import KajiCore
 final class FixedPlanStore: ObservableObject {
     @Published private(set) var schedules: [ScheduledGoal]
     @Published private(set) var completion: ScheduleCompletionState
+    @Published private var retiredCompletionIDs: Set<UUID>
 
     private let defaults: UserDefaults
     private let calendar: Calendar
     private let now: () -> Date
+    private let completionRemovalDelay: Duration
+    private var completionRemovalTasks: [UUID: Task<Void, Never>] = [:]
     nonisolated static let schedulesPersistenceKey = "scheduledGoalsV1"
 
     private enum Key {
@@ -24,11 +27,14 @@ final class FixedPlanStore: ObservableObject {
     init(
         defaults: UserDefaults = .standard,
         calendar: Calendar = .current,
-        now: @escaping () -> Date = Date.init
+        now: @escaping () -> Date = Date.init,
+        completionRemovalDelay: Duration = .seconds(5)
     ) {
         self.defaults = defaults
         self.calendar = calendar
         self.now = now
+        self.completionRemovalDelay = completionRemovalDelay
+        retiredCompletionIDs = []
 
         let date = now()
         let dayKey = Self.dayKey(date, calendar: calendar)
@@ -60,10 +66,11 @@ final class FixedPlanStore: ObservableObject {
             completion = ScheduleCompletionState(dayKey: dayKey, completedIDs: migrated.completedIDs)
             defaults.set(true, forKey: Key.migration)
         }
+        retiredCompletionIDs = completion.completedIDs
         persist()
     }
 
-    var today: [ScheduledGoal] {
+    var todayScheduledEntries: [ScheduledGoal] {
         refreshDayBoundary()
         return ScheduledGoalLogic.active(
             schedules,
@@ -71,8 +78,12 @@ final class FixedPlanStore: ObservableObject {
         )
     }
 
-    var todayCompletedCount: Int {
-        today.filter { completion.completedIDs.contains($0.id) }.count
+    var visibleTodaySchedules: [ScheduledGoal] {
+        todayScheduledEntries.filter { !retiredCompletionIDs.contains($0.id) }
+    }
+
+    var todayScheduledCompletedCount: Int {
+        todayScheduledEntries.filter { completion.completedIDs.contains($0.id) }.count
     }
 
     func isCompleted(_ schedule: ScheduledGoal) -> Bool {
@@ -82,10 +93,13 @@ final class FixedPlanStore: ObservableObject {
 
     func toggleCompletion(_ schedule: ScheduledGoal) {
         refreshDayBoundary()
+        completionRemovalTasks.removeValue(forKey: schedule.id)?.cancel()
         if completion.completedIDs.contains(schedule.id) {
             completion.completedIDs.remove(schedule.id)
+            retiredCompletionIDs.remove(schedule.id)
         } else {
             completion.completedIDs.insert(schedule.id)
+            scheduleRetirement(of: schedule.id)
         }
         persistCompletion()
     }
@@ -125,6 +139,8 @@ final class FixedPlanStore: ObservableObject {
     func delete(_ schedule: ScheduledGoal) {
         schedules.removeAll { $0.id == schedule.id }
         completion.completedIDs.remove(schedule.id)
+        retiredCompletionIDs.remove(schedule.id)
+        completionRemovalTasks.removeValue(forKey: schedule.id)?.cancel()
         persist()
     }
 
@@ -133,7 +149,20 @@ final class FixedPlanStore: ObservableObject {
         let refreshed = ScheduledGoalLogic.refreshedCompletion(completion, dayKey: key)
         guard refreshed != completion else { return }
         completion = refreshed
+        retiredCompletionIDs.removeAll()
+        completionRemovalTasks.values.forEach { $0.cancel() }
+        completionRemovalTasks.removeAll()
         persistCompletion()
+    }
+
+    private func scheduleRetirement(of id: UUID) {
+        completionRemovalTasks[id] = Task { [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(for: self.completionRemovalDelay)
+            guard !Task.isCancelled, self.completion.completedIDs.contains(id) else { return }
+            self.retiredCompletionIDs.insert(id)
+            self.completionRemovalTasks.removeValue(forKey: id)
+        }
     }
 
     private func persist() {

@@ -64,9 +64,6 @@ final class Prefs: ObservableObject {
     @Published var preventSleep: Bool {
         didSet { defaults.set(preventSleep, forKey: Key.preventSleep) }
     }
-    @Published var mcpEnabled: Bool {
-        didSet { defaults.set(mcpEnabled, forKey: Key.mcpEnabled) }
-    }
     @Published var aiNewsRefreshHours: Int {
         didSet {
             let normalized = AIHotRefreshPolicy.normalize(hours: aiNewsRefreshHours)
@@ -114,7 +111,6 @@ final class Prefs: ObservableObject {
         static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
-        static let mcpEnabled = "mcpEnabled"
         static let preferencesInitialized = "preferencesInitialized"
         static let aiNewsRefreshHours = "aiNewsRefreshHours"
         static let mailBriefHour = "mailBriefHour"
@@ -129,7 +125,7 @@ final class Prefs: ObservableObject {
             showRemaining, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
-            aiNewsRefreshHours, mcpEnabled, mailBriefHour, mailBriefMinute,
+            aiNewsRefreshHours, mailBriefHour, mailBriefMinute,
             mailBriefBatchSize, mailBriefConcurrency, mailBriefModel, goalGrouping
         ]
     }
@@ -137,6 +133,7 @@ final class Prefs: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         let d = defaults
+        d.removeObject(forKey: "mcpEnabled")
         let hadExistingPreferences = Key.existingPreferenceKeys.contains {
             d.object(forKey: $0) != nil
         }
@@ -223,9 +220,6 @@ final class Prefs: ObservableObject {
         } else {
             preventSleep = false
         }
-        mcpEnabled = d.object(forKey: Key.mcpEnabled) == nil
-            ? false
-            : d.bool(forKey: Key.mcpEnabled)
         aiNewsRefreshHours = AIHotRefreshPolicy.normalize(hours: d.object(forKey: Key.aiNewsRefreshHours) == nil ? 5 : d.integer(forKey: Key.aiNewsRefreshHours))
         mailBriefHour = d.object(forKey: Key.mailBriefHour) == nil ? 9 : min(23, max(0, d.integer(forKey: Key.mailBriefHour)))
         mailBriefMinute = d.object(forKey: Key.mailBriefMinute) == nil ? 0 : min(59, max(0, d.integer(forKey: Key.mailBriefMinute)))

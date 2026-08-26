@@ -129,6 +129,12 @@ public struct GoalHistoryDay: Identifiable, Codable, Equatable, Sendable {
     }
 }
 
+public enum GoalHeatmapFormatter {
+    public static func string(day: String, completed: Int, total: Int) -> String {
+        "\(day)-\(completed)/\(total)"
+    }
+}
+
 public struct GoalHorizonState: Codable, Equatable, Sendable {
     public var today: [GoalItem]
     public var week: [GoalItem]

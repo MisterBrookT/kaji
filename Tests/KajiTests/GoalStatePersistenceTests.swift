@@ -190,10 +190,17 @@ final class GoalStatePersistenceTests: XCTestCase {
     }
 
     @MainActor
-    func testCompletedGoalIsRemovedAfterDelay() async throws {
+    func testCompletedGoalRetiresAfterDelayWithoutErasingCountsOrHistory() async throws {
         let gate = SleepGate()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let currentDate = try XCTUnwrap(calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 26, hour: 12)
+        ))
         let store = DailyGoalStore(
             defaults: defaults,
+            now: { currentDate },
+            calendar: calendar,
             completionRemovalDelay: .milliseconds(20),
             completionRemovalSleep: { await gate.sleep($0) }
         )
@@ -208,6 +215,12 @@ final class GoalStatePersistenceTests: XCTestCase {
         await removalTask.value
 
         XCTAssertTrue(store.goals.isEmpty)
+        XCTAssertEqual(store.summary(for: .today).completed, 1)
+        XCTAssertEqual(store.summary(for: .today).total, 1)
+        XCTAssertEqual(
+            store.history["2026-8-26"],
+            GoalHistoryDay(day: "2026-8-26", completed: 1, total: 1)
+        )
     }
 
     private func fixtureState() -> GoalHorizonState {

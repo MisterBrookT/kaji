@@ -246,7 +246,6 @@ struct Snap {
                 prefs: prefs,
                 sleepController: SleepController(previewEnabled: false),
                 fixedPlanStore: fixedPlanStore,
-                mcpServer: KajiMCPServer(goals: dailyGoals),
                 mailBriefStore: mailBriefStore
             )
             .frame(width: 760, height: 560)

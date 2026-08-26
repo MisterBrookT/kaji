@@ -44,6 +44,16 @@ final class PopoverRenderTests: XCTestCase {
         XCTAssertNotNil(writePNG(rep, name: "popover-goals-grouped-by-tag"))
         assertNonBlank(rep, page: .goals)
     }
+    func testScheduledGoalDeleteAffordanceRenders() throws {
+        let fixture = PopoverRenderFixture()
+        defer { fixture.tearDown() }
+        let view = fixture.view(page: .goals, maxContentHeight: Self.renderSize.height)
+        let rep = try XCTUnwrap(renderImage(view, size: Self.renderSize))
+        let path = try XCTUnwrap(writePNG(rep, name: "popover-scheduled-goal-delete"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path.path))
+        assertNonBlank(rep, page: .goals)
+    }
+
 
     func testSecondaryDetailPopoverRendersNonBlank() throws {
         let fixture = PopoverRenderFixture()

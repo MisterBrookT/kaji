@@ -9,7 +9,7 @@
 - 外部系统契约；
 - 发布与分发约束。
 
-已落地 feature、bug fix、单次 UI 调整和逐版本 release notes 不在这里存档；行为以代码与测试为准，版本变化由 GitHub Releases 自动生成。
+Feature specs、bug-fix notes、implementation plans、单次 UI 调整和逐版本 release notes 属于 gitignored `.dev/`；行为以代码与测试为准，版本变化由 GitHub Releases 自动生成。面向外部读者的少量稳定决策放在 `docs/`，但不建立文档站。
 
 ## Catalog
 
@@ -18,8 +18,6 @@
 | Doc | Decision |
 | --- | --- |
 | [product/vision.md](product/vision.md) | Kaji 在 AI 时代的长期位置 |
-| [product/lean-module-host.md](product/lean-module-host.md) | 小而美优先、能力可裁剪 |
-| [product/architecture-modules.md](product/architecture-modules.md) | 模块主机边界与增量演进 |
 | [product/2026-08-05-popover-visualization-decision.md](product/2026-08-05-popover-visualization-decision.md) | Popover 与圆环的可视化架构选择 |
 | [product/2026-08-08-mail-brief-executor-adr.md](product/2026-08-08-mail-brief-executor-adr.md) | Gmail、Codex 与本地数据的执行边界 |
 
@@ -59,4 +57,4 @@ dev_docs/
   ship/
 ```
 
-No public Pages landing — repo face is README + GitHub Releases.
+No public Pages landing. Repo face remains README + GitHub Releases; `docs/` only contains a small set of published decisions.

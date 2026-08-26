@@ -15,8 +15,8 @@ Kaji is a **truncatable macOS menu-bar module host**.
 
 Product direction + architecture decisions:
 
-- [dev_docs/product/lean-module-host.md](dev_docs/product/lean-module-host.md)
-- [dev_docs/product/architecture-modules.md](dev_docs/product/architecture-modules.md)
+- [docs/product-principles.md](docs/product-principles.md)
+- [docs/module-architecture.md](docs/module-architecture.md)
 
 ## North star (read this first)
 
@@ -39,11 +39,11 @@ So:
 - Before merging, wait for every required GitHub Actions check to complete successfully. A local build or test run does not replace CI.
 - Merge only after CI is green, then return to a fresh branch for further optimization.
 
-## Internal docs (`dev_docs/`)
+## Documentation layers
 
-All working notes live under **`dev_docs/`** — product, design, integrate, ship, assets.
+Working notes, TODOs, findings, implementation plans, bug-fix notes, and per-release notes live under the gitignored **`.dev/`** directory. Durable internal product, architecture, design, integration, and distribution decisions live under **`dev_docs/`**. A deliberately small set of stable decisions for outside readers lives under **`docs/`**, with no docs site, navigation framework, or marketing layer.
 
-Browse from [dev_docs/README.md](dev_docs/README.md).
+Browse internal durable decisions from [dev_docs/README.md](dev_docs/README.md).
 
 ```text
 dev_docs/
@@ -55,15 +55,16 @@ dev_docs/
   ship/              # distribution constraints
 ```
 
-**No public docs site / no GitHub Pages landing.** Repo face is README + Releases only — less is more for a menu-bar tool.
+**No public docs site / no GitHub Pages landing.** Repo face remains README + Releases; `docs/` only publishes the few stable decisions that outside readers need.
 
 Rules:
 
-- **Internal prose → `dev_docs/`.** Do not recreate a `docs/` wiki or marketing site.
+- **Working notes → `.dev/`.** This includes feature specs, bug-fix notes, implementation plans, TODOs, findings, and per-release notes. `.dev/` is gitignored.
+- **Durable internal decisions → `dev_docs/`.** Record only stable product, architecture, design, integration, or distribution decisions; update the catalog.
+- **Stable external decisions → `docs/`.** Keep this set small. Do not add site scaffolding, navigation, themes, a wiki, or marketing pages.
 - **One language per doc** — no EN/ZH duplicate pairs.
 - **Assets stay in `dev_docs/assets/`** (README images included).
-- New internal prose must record a durable product, architecture, design, integration, or distribution decision; update the catalog.
-- Do **not** archive feature specs, bug-fix notes, implementation plans, or per-release notes in `dev_docs/`; code, tests, issues, and GitHub Releases are their source of truth.
+- Code, tests, issues, and GitHub Releases remain the source of truth for implemented behavior and version changes.
 - **Tests:** Prefer automating anything deterministic and cheap (`swift test`). Humans do a short UX smoke after green — not instead of unit tests during development.
 - `AGENTS.md` (this file) stays at repo root so agents always see direction.
 

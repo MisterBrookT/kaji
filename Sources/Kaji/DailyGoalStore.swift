@@ -32,6 +32,7 @@ final class DailyGoalStore: ObservableObject {
     private let completionRemovalDelay: Duration
     private let completionRemovalSleep: @Sendable (Duration) async -> Void
     var completionRemovalTasks: [UUID: Task<Void, Never>] = [:]
+    @Published private var retiredCompletionIDs: Set<UUID> = []
     private(set) var loadIssue: GoalStateLoadIssue?
     private static let tagDefinitionsKey = "goalTagDefinitionsV1"
 
@@ -75,13 +76,15 @@ final class DailyGoalStore: ObservableObject {
         refreshed.longTerm = []
         refreshed.yesterdayPending = []
         state = refreshed
+        retiredCompletionIDs = Set(refreshed.today.lazy.filter(\.isDone).map(\.id))
         loadIssue = loaded.issue
         if refreshed != loaded.state {
             save()
         }
     }
 
-    var goals: [DailyGoal] { state.today }
+    var goals: [DailyGoal] { visibleGoals(for: .today) }
+    var todayGoalEntries: [DailyGoal] { state.today }
     var completedCount: Int { summary(for: .today).completed }
     var history: [String: DailyGoalHistoryDay] { state.history }
     var pendingGoals: [DailyGoal] {
@@ -92,11 +95,15 @@ final class DailyGoalStore: ObservableObject {
     var yesterdayPending: [DailyGoal] { state.yesterdayPending }
 
     func goals(for horizon: GoalHorizon) -> [DailyGoal] {
-        state[horizon]
+        visibleGoals(for: horizon)
     }
 
     func summary(for horizon: GoalHorizon) -> (completed: Int, total: Int) {
         GoalHorizonLogic.summary(for: state[horizon])
+    }
+
+    private func visibleGoals(for horizon: GoalHorizon) -> [DailyGoal] {
+        state[horizon].filter { !retiredCompletionIDs.contains($0.id) }
     }
 
     func toggle(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
@@ -147,6 +154,7 @@ final class DailyGoalStore: ObservableObject {
 
     func delete(_ goal: DailyGoal, in horizon: GoalHorizon = .today) {
         completionRemovalTasks.removeValue(forKey: goal.id)?.cancel()
+        retiredCompletionIDs.remove(goal.id)
         mutate(horizon) { goals in
             goals.removeAll { $0.id == goal.id }
         }
@@ -264,6 +272,7 @@ final class DailyGoalStore: ObservableObject {
     }
 
     func reset(_ horizon: GoalHorizon) {
+        retiredCompletionIDs.subtract(state[horizon].map(\.id))
         mutate(horizon) { goals in
             for index in goals.indices {
                 goals[index].isDone = false
@@ -277,11 +286,17 @@ final class DailyGoalStore: ObservableObject {
 
     func refreshPeriodBoundaries() {
         let date = now()
+        let previousDayKey = state.dayKey
         state = GoalHorizonLogic.refresh(
             state,
             dayKey: Self.dayKey(for: date, calendar: calendar),
             weekKey: Self.weekKey(for: date, calendar: calendar)
         )
+        if state.dayKey != previousDayKey {
+            retiredCompletionIDs = Set(state.today.lazy.filter(\.isDone).map(\.id))
+            completionRemovalTasks.values.forEach { $0.cancel() }
+            completionRemovalTasks.removeAll()
+        }
         recordToday()
     }
 
@@ -319,15 +334,17 @@ final class DailyGoalStore: ObservableObject {
 
     private func updateCompletionRemoval(for id: UUID, in horizon: GoalHorizon, isDone: Bool) {
         completionRemovalTasks.removeValue(forKey: id)?.cancel()
-        guard isDone else { return }
+        guard isDone else {
+            retiredCompletionIDs.remove(id)
+            return
+        }
         completionRemovalTasks[id] = Task { [weak self] in
             guard let self else { return }
             await self.completionRemovalSleep(self.completionRemovalDelay)
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled,
+                  self.state[horizon].contains(where: { $0.id == id && $0.isDone }) else { return }
+            self.retiredCompletionIDs.insert(id)
             self.completionRemovalTasks[id] = nil
-            self.mutate(horizon) { goals in
-                goals.removeAll { $0.id == id && $0.isDone }
-            }
         }
     }
 

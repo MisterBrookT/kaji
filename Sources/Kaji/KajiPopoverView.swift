@@ -565,18 +565,28 @@ struct KajiPopoverView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if !schedule.note.isEmpty {
-                DetailPopoverButton(
-                    accessibilityIdentifier: "schedule-detail-\(schedule.id)",
-                    help: "查看详情"
-                ) { sourceView in
-                    controls.onShowDetail(sourceView, AnyView(scheduleDetails(schedule)))
+            HStack(spacing: 4) {
+                if !schedule.note.isEmpty {
+                    DetailPopoverButton(
+                        accessibilityIdentifier: "schedule-detail-\(schedule.id)",
+                        help: "查看详情"
+                    ) { sourceView in
+                        controls.onShowDetail(sourceView, AnyView(scheduleDetails(schedule)))
+                    }
+                    .frame(width: 18, height: 18)
                 }
-                .frame(width: 18, height: 18)
+                miniButton("trash") {
+                    fixedPlanStore.delete(schedule)
+                }
+                .accessibilityIdentifier("schedule-delete-\(schedule.id)")
             }
+            .frame(width: 96, alignment: .trailing)
         }
         .padding(8)
         .background(goalRowSurface(opacity: 0.92))
+        .compositingGroup()
+        .opacity(completed ? 0.18 : 1)
+        .animation(.easeOut(duration: completed ? 5 : 0.18), value: completed)
     }
 
     private func scheduleDetails(_ schedule: ScheduledGoal) -> some View {
@@ -1262,9 +1272,9 @@ struct KajiPopoverView: View {
         let goals = dailyGoals.goals(for: horizon)
         let summary = dailyGoals.summary(for: horizon)
         let includesSchedules = horizon == .today
-        let schedules = includesSchedules ? fixedPlanStore.today : []
-        let completed = summary.completed + (includesSchedules ? fixedPlanStore.todayCompletedCount : 0)
-        let total = summary.total + schedules.count
+        let schedules = includesSchedules ? fixedPlanStore.visibleTodaySchedules : []
+        let completed = summary.completed + (includesSchedules ? fixedPlanStore.todayScheduledCompletedCount : 0)
+        let total = summary.total + (includesSchedules ? fixedPlanStore.todayScheduledEntries.count : 0)
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 Text(title)
@@ -1604,7 +1614,8 @@ struct KajiPopoverView: View {
                         .onHover { hovering in
                             hoveredGoalDay = hovering ? day : nil
                         }
-                        .help(goalHeatDescription(day))
+                        .help(goalHeatReadout(day))
+                        .accessibilityLabel(goalHeatReadout(day))
                 }
             }
         }
@@ -1629,9 +1640,8 @@ struct KajiPopoverView: View {
     }
 
 
-    private func goalHeatDescription(_ day: DailyGoalHistoryDay) -> String {
-        if day.total == 0 { return "\(day.day) no goals" }
-        return "\(day.day) \(day.completed)/\(day.total) · \(Int(day.ratio * 100))%"
+    private func goalHeatReadout(_ day: DailyGoalHistoryDay) -> String {
+        GoalHeatmapFormatter.string(day: day.day, completed: day.completed, total: day.total)
     }
 
     private var controlsFooter: some View {

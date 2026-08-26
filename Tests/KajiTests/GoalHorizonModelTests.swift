@@ -117,4 +117,18 @@ final class GoalHorizonModelTests: XCTestCase {
         XCTAssertTrue(decoded.yesterdayPending.isEmpty)
     }
 
+    func testHeatmapReadoutFormatsEmptyDay() {
+        XCTAssertEqual(
+            GoalHeatmapFormatter.string(day: "2026-8-26", completed: 0, total: 0),
+            "2026-8-26-0/0"
+        )
+    }
+
+    func testHeatmapReadoutFormatsAllCompleteDay() {
+        XCTAssertEqual(
+            GoalHeatmapFormatter.string(day: "2026-8-26", completed: 4, total: 4),
+            "2026-8-26-4/4"
+        )
+    }
+
 }
