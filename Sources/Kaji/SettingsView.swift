@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import KajiCore
 
-private enum SettingsSection: String, CaseIterable, Identifiable {
+enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
     case modules = "Modules"
     case work = "Work"
@@ -53,6 +53,24 @@ struct SettingsView: View {
     @State private var sleepPermission: PermissionState = .notAuthorized
 
     @Environment(\.colorScheme) private var scheme
+
+    init(
+        prefs: Prefs,
+        sleepController: SleepController,
+        fixedPlanStore: FixedPlanStore,
+        mcpServer: KajiMCPServer,
+        mailBriefStore: MailBriefStore,
+        initialSection: SettingsSection = .general,
+        onFixedPlanEditorChange: ((Bool) -> Void)? = nil
+    ) {
+        self.prefs = prefs
+        self.sleepController = sleepController
+        self.fixedPlanStore = fixedPlanStore
+        self.mcpServer = mcpServer
+        self.mailBriefStore = mailBriefStore
+        self.onFixedPlanEditorChange = onFixedPlanEditorChange
+        _selection = State(initialValue: initialSection)
+    }
     private var t: KajiTheme { .resolve(scheme) }
 
     var body: some View {

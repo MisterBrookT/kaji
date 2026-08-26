@@ -14,12 +14,18 @@ final class KajiMCPServer: ObservableObject {
         case failed(String)
     }
 
+    struct TestAutomation {
+        let nonce: String
+        let render: (_ surface: String, _ selection: String, _ outputPath: String) throws -> [String: Any]
+    }
+
     @Published private(set) var status: Status = .stopped
 
     private weak var goals: DailyGoalStore?
     private let snapshotProvider: () -> [String: Any]
     private let host: NWEndpoint.Host
     private let port: NWEndpoint.Port
+    private let testAutomation: TestAutomation?
     private var listener: NWListener?
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private let queue = DispatchQueue(label: "dev.kaji.mcp")
@@ -28,10 +34,12 @@ final class KajiMCPServer: ObservableObject {
         goals: DailyGoalStore,
         host: String = "127.0.0.1",
         port: UInt16 = KajiMCPServer.port,
-        snapshotProvider: @escaping () -> [String: Any] = { [:] }
+        snapshotProvider: @escaping () -> [String: Any] = { [:] },
+        testAutomation: TestAutomation? = nil
     ) {
         self.goals = goals
         self.snapshotProvider = snapshotProvider
+        self.testAutomation = testAutomation
         self.host = NWEndpoint.Host(host)
         self.port = NWEndpoint.Port(rawValue: port)!
     }
@@ -150,6 +158,26 @@ final class KajiMCPServer: ObservableObject {
             return rpcError(id: id, code: -32600, message: "Invalid Request")
         }
 
+
+        if method == "kaji/test/render" {
+            guard let testAutomation,
+                  let params = rpc["params"] as? [String: Any],
+                  let nonce = params["nonce"] as? String,
+                  nonce == testAutomation.nonce,
+                  let surface = params["surface"] as? String,
+                  let selection = params["selection"] as? String,
+                  let outputPath = params["outputPath"] as? String else {
+                return rpcError(id: id, code: -32601, message: "Method not found")
+            }
+            do {
+                return rpcResult(
+                    id: id,
+                    result: try testAutomation.render(surface, selection, outputPath)
+                )
+            } catch {
+                return rpcError(id: id, code: -32603, message: error.localizedDescription)
+            }
+        }
         switch method {
         case "notifications/initialized":
             return MCPHTTPResponse.empty(status: "202 Accepted")

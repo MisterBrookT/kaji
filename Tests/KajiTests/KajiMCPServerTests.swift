@@ -110,6 +110,58 @@ final class KajiMCPServerTests: XCTestCase {
         )
     }
 
+    func testUIAutomationIsUnavailableWithoutNonceAndRequiresExactNonce() async throws {
+        let unavailable = try await rpc(
+            method: "kaji/test/render",
+            params: ["nonce": "anything", "surface": "status", "selection": "status", "outputPath": "/tmp/x"]
+        )
+        XCTAssertEqual((unavailable["error"] as? [String: Any])?["code"] as? Int, -32601)
+
+        let automationPort = UInt16.random(in: 40_000...60_000)
+        let automationEndpoint = URL(string: "http://127.0.0.1:\(automationPort)/mcp")!
+        let automationServer = KajiMCPServer(
+            goals: store,
+            port: automationPort,
+            testAutomation: .init(
+                nonce: "exact-test-nonce",
+                render: { surface, selection, outputPath in
+                    ["surface": surface, "selection": selection, "path": outputPath]
+                }
+            )
+        )
+        automationServer.start()
+        defer { automationServer.stop() }
+        for _ in 0..<100 {
+            if automationServer.status == .running { break }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        XCTAssertEqual(automationServer.status, .running)
+
+        func automationRPC(nonce: String) async throws -> [String: Any] {
+            let payload: [String: Any] = [
+                "jsonrpc": "2.0",
+                "id": "automation",
+                "method": "kaji/test/render",
+                "params": [
+                    "nonce": nonce,
+                    "surface": "popover",
+                    "selection": "quota",
+                    "outputPath": "/tmp/render.png",
+                ],
+            ]
+            var request = URLRequest(url: automationEndpoint)
+            request.httpMethod = "POST"
+            request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+            let (data, _) = try await URLSession.shared.data(for: request)
+            return try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        }
+
+        let rejected = try await automationRPC(nonce: "wrong")
+        XCTAssertEqual((rejected["error"] as? [String: Any])?["code"] as? Int, -32601)
+        let accepted = try await automationRPC(nonce: "exact-test-nonce")
+        XCTAssertEqual((accepted["result"] as? [String: Any])?["selection"] as? String, "quota")
+    }
+
     private func waitUntilRunning() async throws {
         for _ in 0..<100 {
             if server.status == .running { return }

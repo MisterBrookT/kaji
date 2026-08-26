@@ -29,10 +29,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
-    private lazy var mcpServer = KajiMCPServer(
-        goals: dailyGoals,
-        snapshotProvider: { [weak self] in self?.mcpSnapshot() ?? [:] }
-    )
+    private lazy var mcpServer: KajiMCPServer = {
+        let environment = ProcessInfo.processInfo.environment
+        let testNonce = environment["KAJI_UI_SMOKE_NONCE"]
+        let testPort = environment["KAJI_UI_SMOKE_PORT"].flatMap(UInt16.init)
+        let automation = testNonce.map { nonce in
+            KajiMCPServer.TestAutomation(
+                nonce: nonce,
+                render: { [weak self] surface, selection, outputPath in
+                    guard let self else { throw TestUIAutomationError.appUnavailable }
+                    return try self.renderTestSurface(
+                        surface: surface,
+                        selection: selection,
+                        outputPath: outputPath
+                    )
+                }
+            )
+        }
+        return KajiMCPServer(
+            goals: dailyGoals,
+            port: testPort ?? KajiMCPServer.port,
+            snapshotProvider: { [weak self] in self?.mcpSnapshot() ?? [:] },
+            testAutomation: automation
+        )
+    }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
     private let aiNewsStore: AIHotNewsStore
@@ -71,7 +91,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         sleepController.refresh()
         store.start()
         applyModuleLifecycle(prefs.enabledModules)
-        mcpServer.setEnabled(prefs.mcpEnabled)
+        mcpServer.setEnabled(
+            prefs.mcpEnabled || ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_NONCE"] != nil
+        )
 
         // Re-render the menubar indicator whenever data OR the visible-provider /
         // menubar-style prefs change.
@@ -186,7 +208,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .removeDuplicates()
             .receive(on: RunLoop.main)
             .sink { [weak self] enabled in
-                self?.mcpServer.setEnabled(enabled)
+                self?.mcpServer.setEnabled(
+                    enabled || ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_NONCE"] != nil
+                )
             }
             .store(in: &cancellables)
         // Update availability re-renders the glyph (adds/removes the badge dot).
@@ -661,6 +685,83 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
     }
 
+    private func renderTestSurface(
+        surface: String,
+        selection: String,
+        outputPath: String
+    ) throws -> [String: Any] {
+        guard let artifactRoot = ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_ARTIFACTS"] else {
+            throw TestUIAutomationError.disabled
+        }
+        let rootURL = URL(fileURLWithPath: artifactRoot, isDirectory: true).standardizedFileURL
+        let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
+        guard outputURL.path.hasPrefix(rootURL.path + "/") else {
+            throw TestUIAutomationError.invalidOutputPath
+        }
+
+        let size: CGSize
+        switch surface {
+        case "status":
+            updateStatusItem()
+            hostingView.layoutSubtreeIfNeeded()
+            size = try writePNG(view: hostingView, to: outputURL)
+        case "popover":
+            guard let page = KajiModuleID(rawValue: selection),
+                  prefs.enabledModules.contains(page) else {
+                throw TestUIAutomationError.invalidSelection
+            }
+            popoverNavigation.panel = page
+            if page == .goals { popoverNavigation.goalHorizon = .today }
+            let controller = makePopoverContentController(maxContentHeight: 640)
+            let target = popoverFittingSize(for: controller)
+            controller.view.frame = NSRect(origin: .zero, size: target)
+            controller.view.layoutSubtreeIfNeeded()
+            size = try writePNG(view: controller.view, to: outputURL)
+        case "settings":
+            guard let section = SettingsSection(rawValue: selection) else {
+                throw TestUIAutomationError.invalidSelection
+            }
+            let view = KajiHostingView(rootView: SettingsView(
+                prefs: prefs,
+                sleepController: sleepController,
+                fixedPlanStore: fixedPlanStore,
+                mcpServer: mcpServer,
+                mailBriefStore: mailBriefStore,
+                initialSection: section
+            ))
+            view.configureKajiHost()
+            view.frame = NSRect(x: 0, y: 0, width: 760, height: 560)
+            view.layoutSubtreeIfNeeded()
+            size = try writePNG(view: view, to: outputURL)
+        default:
+            throw TestUIAutomationError.invalidSurface
+        }
+        return [
+            "surface": surface,
+            "selection": selection,
+            "path": outputURL.path,
+            "width": Int(size.width),
+            "height": Int(size.height),
+        ]
+    }
+
+    private func writePNG(view: NSView, to outputURL: URL) throws -> CGSize {
+        guard view.bounds.width > 0, view.bounds.height > 0,
+              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            throw TestUIAutomationError.renderFailed
+        }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw TestUIAutomationError.renderFailed
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: outputURL, options: .atomic)
+        return view.bounds.size
+    }
+
     private func jsonValue<T: Encodable>(_ value: T) -> Any {
         guard let data = try? JSONEncoder().encode(value),
               let object = try? JSONSerialization.jsonObject(with: data) else {
@@ -813,4 +914,13 @@ extension AppDelegate: NSPopoverDelegate {
             closeDetailPopover()
         }
     }
+}
+
+private enum TestUIAutomationError: Error {
+    case appUnavailable
+    case disabled
+    case invalidOutputPath
+    case invalidSelection
+    case invalidSurface
+    case renderFailed
 }
