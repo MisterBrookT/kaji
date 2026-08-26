@@ -142,10 +142,10 @@ public enum L10n {
             es: "Los agentes gestionan las metas de Kaji mediante el comando kaji incluido con esta app."
         ),
         .cliExamplePrompt: .init(
-            en: "读 xxx,创建一个叫 kaji 的 skill",
-            zh: "读 xxx,创建一个叫 kaji 的 skill",
-            ptBR: "读 xxx,创建一个叫 kaji 的 skill",
-            es: "读 xxx,创建一个叫 kaji 的 skill"
+            en: "Read `kaji --help`, then create a skill called kaji",
+            zh: "读 `kaji --help`,创建一个叫 kaji 的 skill",
+            ptBR: "Leia `kaji --help` e crie uma skill chamada kaji",
+            es: "Lee `kaji --help` y crea una skill llamada kaji"
         ),
         .copyPrompt: .init(en: "Copy prompt", zh: "复制提示词", ptBR: "Copiar prompt", es: "Copiar prompt"),
         .moduleQuota: .init(en: "Quota", zh: "Quota", ptBR: "Quota", es: "Quota"),
