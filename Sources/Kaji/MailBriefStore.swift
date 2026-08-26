@@ -19,6 +19,7 @@ final class MailBriefStore: ObservableObject {
     @Published private(set) var draftingThreadIDs: Set<String> = []
 
     private let cacheURL: URL
+    private let credentialStatus: () -> (hasCredential: Bool, account: String?, canModify: Bool)
     private let runHistoryURL: URL
     private var enabled = false
     private var timer: Timer?
@@ -29,17 +30,32 @@ final class MailBriefStore: ObservableObject {
     private var concurrency = 2
     private var model = MailBriefModel.defaultValue
 
-    init(cacheURL: URL? = nil) {
+    init(
+        cacheURL: URL? = nil,
+        credentialStatus: @escaping () -> (hasCredential: Bool, account: String?, canModify: Bool) = {
+            (MailBriefCredentialStore.hasCredential, MailBriefCredentialStore.account,
+             MailBriefCredentialStore.canModify)
+        }
+    ) {
         self.cacheURL = cacheURL ?? Self.defaultCacheURL()
         self.runHistoryURL = self.cacheURL.deletingLastPathComponent()
             .appendingPathComponent("mail-brief-runs-v1.json")
+        self.credentialStatus = credentialStatus
         loadCache()
         loadRunHistory()
     }
 
-    init(previewGeneration: MailBriefGeneration) {
-        cacheURL = URL(fileURLWithPath: "/tmp/kaji-mail-preview.json")
-        runHistoryURL = URL(fileURLWithPath: "/tmp/kaji-mail-preview-runs.json")
+    init(
+        previewGeneration: MailBriefGeneration,
+        cacheDirectory: URL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("kaji-mail-preview-\(UUID().uuidString)", isDirectory: true)
+    ) {
+        cacheURL = cacheDirectory.appendingPathComponent("mail-brief-cache-v1.json")
+        runHistoryURL = cacheDirectory.appendingPathComponent("mail-brief-runs-v1.json")
+        credentialStatus = {
+            (MailBriefCredentialStore.hasCredential, MailBriefCredentialStore.account,
+             MailBriefCredentialStore.canModify)
+        }
         generation = previewGeneration
         state = .ready
     }
@@ -69,9 +85,12 @@ final class MailBriefStore: ObservableObject {
                                               archivedIDs: generation.archivedThreadIDs,
                                               trashedIDs: generation.trashedThreadIDs)
     }
-    var isConnected: Bool { MailBriefCredentialStore.hasCredential }
-    var accountLabel: String? { MailBriefCredentialStore.account }
-    var canModify: Bool { MailBriefCredentialStore.canModify }
+    private var cachedCredentialStatus: (hasCredential: Bool, account: String?, canModify: Bool)? {
+        enabled ? credentialStatus() : nil
+    }
+    var isConnected: Bool { cachedCredentialStatus?.hasCredential ?? false }
+    var accountLabel: String? { cachedCredentialStatus?.account }
+    var canModify: Bool { cachedCredentialStatus?.canModify ?? false }
 
     func setEnabled(_ enabled: Bool, hour: Int, minute: Int, batchSize: Int, concurrency: Int,
                     model: MailBriefModel) {

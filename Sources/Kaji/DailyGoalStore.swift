@@ -131,7 +131,13 @@ final class DailyGoalStore: ObservableObject {
     func addGoal(in horizon: GoalHorizon = .today) -> UUID {
         let id = UUID()
         mutate(horizon) { goals in
-            goals.append(DailyGoal(id: id, title: "", isDone: false, tag: GoalTag.personal.rawValue))
+            goals.append(DailyGoal(
+                id: id,
+                title: "",
+                isDone: false,
+                tag: GoalTag.personal.rawValue,
+                createdAt: now()
+            ))
         }
         return id
     }
@@ -160,7 +166,8 @@ final class DailyGoalStore: ObservableObject {
             title: normalizedTitle,
             isDone: false,
             tag: normalizedTag.isEmpty ? GoalTag.personal.rawValue : normalizedTag,
-            note: note
+            note: note,
+            createdAt: now()
         )
         mutate(horizon) { $0.append(goal) }
         return goal
@@ -240,7 +247,8 @@ final class DailyGoalStore: ObservableObject {
             title: moved.title,
             isDone: false,
             tag: moved.tag,
-            note: moved.note
+            note: moved.note,
+            createdAt: moved.createdAt
         ))
         state = next
         recordToday()

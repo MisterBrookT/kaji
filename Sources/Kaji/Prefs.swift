@@ -18,80 +18,84 @@ import KajiCore
 //     legacy `"color"` / `"mono"` are normalized and written back on load.
 @MainActor
 final class Prefs: ObservableObject {
+    private let defaults: UserDefaults
     @Published var visibleProviders: Set<String> {
-        didSet { UserDefaults.standard.set(Array(visibleProviders), forKey: Key.visibleProviders) }
+        didSet { defaults.set(Array(visibleProviders), forKey: Key.visibleProviders) }
     }
     @Published var enabledModules: Set<KajiModuleID> {
         didSet {
             let raw = enabledModules.map(\.rawValue).sorted()
-            UserDefaults.standard.set(raw, forKey: Key.enabledModules)
+            defaults.set(raw, forKey: Key.enabledModules)
         }
     }
     @Published var language: Lang {
-        didSet { UserDefaults.standard.set(language.rawValue, forKey: Key.language) }
+        didSet { defaults.set(language.rawValue, forKey: Key.language) }
     }
     @Published var menubarStyle: MenubarStyle {
-        didSet { UserDefaults.standard.set(menubarStyle.rawValue, forKey: Key.menubarStyle) }
+        didSet { defaults.set(menubarStyle.rawValue, forKey: Key.menubarStyle) }
+    }
+    @Published var goalGrouping: GoalGrouping {
+        didSet { defaults.set(goalGrouping.rawValue, forKey: Key.goalGrouping) }
     }
     /// Show the 5h percentage as USED (default, "100% means full") vs
     /// REMAINING ("0% means full"). Persisted; the toggle lives in both the
     /// popover footer segment and the popover on the status item.
     @Published var showRemaining: Bool {
-        didSet { UserDefaults.standard.set(showRemaining, forKey: Key.showRemaining) }
+        didSet { defaults.set(showRemaining, forKey: Key.showRemaining) }
     }
     @Published var focusMinutes: Int {
-        didSet { UserDefaults.standard.set(focusMinutes, forKey: Key.focusMinutes) }
+        didSet { defaults.set(focusMinutes, forKey: Key.focusMinutes) }
     }
     @Published var breakMinutes: Int {
-        didSet { UserDefaults.standard.set(breakMinutes, forKey: Key.breakMinutes) }
+        didSet { defaults.set(breakMinutes, forKey: Key.breakMinutes) }
     }
     @Published var allowBreakSkip: Bool {
-        didSet { UserDefaults.standard.set(allowBreakSkip, forKey: Key.allowBreakSkip) }
+        didSet { defaults.set(allowBreakSkip, forKey: Key.allowBreakSkip) }
     }
     @Published var breakOverlayEnabled: Bool {
-        didSet { UserDefaults.standard.set(breakOverlayEnabled, forKey: Key.breakOverlayEnabled) }
+        didSet { defaults.set(breakOverlayEnabled, forKey: Key.breakOverlayEnabled) }
     }
     @Published var autoCleanEnabled: Bool {
-        didSet { UserDefaults.standard.set(autoCleanEnabled, forKey: Key.autoCleanEnabled) }
+        didSet { defaults.set(autoCleanEnabled, forKey: Key.autoCleanEnabled) }
     }
     @Published var launchAtLogin: Bool {
-        didSet { UserDefaults.standard.set(launchAtLogin, forKey: Key.launchAtLogin) }
+        didSet { defaults.set(launchAtLogin, forKey: Key.launchAtLogin) }
     }
     @Published var preventSleep: Bool {
-        didSet { UserDefaults.standard.set(preventSleep, forKey: Key.preventSleep) }
+        didSet { defaults.set(preventSleep, forKey: Key.preventSleep) }
     }
     @Published var mcpEnabled: Bool {
-        didSet { UserDefaults.standard.set(mcpEnabled, forKey: Key.mcpEnabled) }
+        didSet { defaults.set(mcpEnabled, forKey: Key.mcpEnabled) }
     }
     @Published var aiNewsRefreshHours: Int {
         didSet {
             let normalized = AIHotRefreshPolicy.normalize(hours: aiNewsRefreshHours)
             if normalized != aiNewsRefreshHours { aiNewsRefreshHours = normalized; return }
-            UserDefaults.standard.set(normalized, forKey: Key.aiNewsRefreshHours)
+            defaults.set(normalized, forKey: Key.aiNewsRefreshHours)
         }
     }
     @Published var mailBriefHour: Int {
-        didSet { UserDefaults.standard.set(min(23, max(0, mailBriefHour)), forKey: Key.mailBriefHour) }
+        didSet { defaults.set(min(23, max(0, mailBriefHour)), forKey: Key.mailBriefHour) }
     }
     @Published var mailBriefMinute: Int {
-        didSet { UserDefaults.standard.set(min(59, max(0, mailBriefMinute)), forKey: Key.mailBriefMinute) }
+        didSet { defaults.set(min(59, max(0, mailBriefMinute)), forKey: Key.mailBriefMinute) }
     }
     @Published var mailBriefBatchSize: Int {
         didSet {
             let value = MailBriefBatchPolicy.batchSize(mailBriefBatchSize)
             if value != mailBriefBatchSize { mailBriefBatchSize = value; return }
-            UserDefaults.standard.set(value, forKey: Key.mailBriefBatchSize)
+            defaults.set(value, forKey: Key.mailBriefBatchSize)
         }
     }
     @Published var mailBriefConcurrency: Int {
         didSet {
             let value = MailBriefBatchPolicy.concurrency(mailBriefConcurrency)
             if value != mailBriefConcurrency { mailBriefConcurrency = value; return }
-            UserDefaults.standard.set(value, forKey: Key.mailBriefConcurrency)
+            defaults.set(value, forKey: Key.mailBriefConcurrency)
         }
     }
     @Published var mailBriefModel: MailBriefModel {
-        didSet { UserDefaults.standard.set(mailBriefModel.rawValue, forKey: Key.mailBriefModel) }
+        didSet { defaults.set(mailBriefModel.rawValue, forKey: Key.mailBriefModel) }
     }
 
     enum Key {
@@ -118,6 +122,7 @@ final class Prefs: ObservableObject {
         static let mailBriefBatchSize = "mailBriefBatchSize"
         static let mailBriefConcurrency = "mailBriefConcurrency"
         static let mailBriefModel = "mailBriefModel"
+        static let goalGrouping = "goalGrouping"
 
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
@@ -125,12 +130,13 @@ final class Prefs: ObservableObject {
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
             aiNewsRefreshHours, mcpEnabled, mailBriefHour, mailBriefMinute,
-            mailBriefBatchSize, mailBriefConcurrency, mailBriefModel
+            mailBriefBatchSize, mailBriefConcurrency, mailBriefModel, goalGrouping
         ]
     }
 
-    init() {
-        let d = UserDefaults.standard
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        let d = defaults
         let hadExistingPreferences = Key.existingPreferenceKeys.contains {
             d.object(forKey: $0) != nil
         }
@@ -187,6 +193,7 @@ final class Prefs: ObservableObject {
         } else {
             showRemaining = false
         }
+        goalGrouping = GoalGrouping(rawValue: d.string(forKey: Key.goalGrouping) ?? "") ?? .none
         let savedFocus = d.integer(forKey: Key.focusMinutes)
         focusMinutes = savedFocus > 0 ? savedFocus : 45
         let savedBreak = d.integer(forKey: Key.breakMinutes)

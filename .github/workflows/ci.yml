@@ -6,6 +6,7 @@ on:
     paths:
       - 'Package.swift'
       - 'Sources/**'
+      - 'Tests/**'
       - 'Resources/**'
       - 'scripts/**'
       - 'Info.plist'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'Package.swift'
       - 'Sources/**'
+      - 'Tests/**'
       - 'Resources/**'
       - 'scripts/**'
       - 'Info.plist'
@@ -32,6 +34,12 @@ jobs:
       # Catches regressions on every push/PR.
       - name: swift build
         run: swift build
+
+      # Unit + in-process UI tests (see Tests/KajiTests/UITestHarness.swift).
+      # These boot the real AppDelegate/status-item/popover object graph
+      # and invoke the real click-handler closure — no self-skipping.
+      - name: swift test
+        run: swift test
 
       - name: Assemble app bundle
         run: ./scripts/build-app.sh

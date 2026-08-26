@@ -16,6 +16,19 @@ final class SleepController: ObservableObject {
         plistName: "dev.kaji.sleep-helper.plist"
     )
 
+    enum AuthorizationStatus: Equatable {
+        case authorized, notAuthorized, needsReauthorization
+    }
+
+    static var authorizationStatus: AuthorizationStatus {
+        switch daemon.status {
+        case .enabled: .authorized
+        case .requiresApproval: .needsReauthorization
+        case .notRegistered, .notFound: .notAuthorized
+        @unknown default: .notAuthorized
+        }
+    }
+
     init(previewEnabled: Bool? = nil) {
         if let previewEnabled {
             isEnabled = previewEnabled

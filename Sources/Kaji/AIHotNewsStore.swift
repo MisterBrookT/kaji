@@ -28,6 +28,14 @@ final class AIHotNewsStore: ObservableObject {
         self.cacheURL = cacheURL ?? Self.defaultCacheURL()
     }
 
+    init(previewTopics: [AIHotTopic], cacheURL: URL) {
+        self.client = AIHotAPIClient()
+        self.cacheURL = cacheURL
+        self.topics = previewTopics
+        self.state = previewTopics.isEmpty ? .empty : .ready
+        self.lastSuccessfulRefresh = Date(timeIntervalSince1970: 1_700_000_000)
+    }
+
     func setEnabled(_ enabled: Bool, refreshHours: Int) {
         self.refreshHours = AIHotRefreshPolicy.normalize(hours: refreshHours)
         guard enabled else { stop(); return }

@@ -10,9 +10,10 @@ final class FixedPlanStore: ObservableObject {
     private let defaults: UserDefaults
     private let calendar: Calendar
     private let now: () -> Date
+    nonisolated static let schedulesPersistenceKey = "scheduledGoalsV1"
 
     private enum Key {
-        static let schedules = "scheduledGoalsV1"
+        static let schedules = schedulesPersistenceKey
         static let completion = "scheduledGoalCompletionV1"
         static let migration = "scheduledGoalsMigrationV1"
         static let legacyPlans = "fixedPlansV1"

@@ -16,31 +16,55 @@ import KajiCore
 // concurrency-clean under stricter checking.
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let store = QuotaStore()
-    private let prefs = Prefs()
-    private var statusItem: NSStatusItem!
-    private var popoverWindow: NSPanel!
+    private let store: QuotaStore
+    private let prefs: Prefs
+    var statusItem: NSStatusItem!
+    var popover: NSPopover!
     private var popoverHostingController: NSHostingController<AnyView>?
+    var detailPopover: NSPopover?
     private var settingsWindow: NSWindow?
-    private var hostingView: KajiHostingView<StatusItemView>!
+    var hostingView: KajiHostingView<StatusItemView>!
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
-    private let dailyGoals = DailyGoalStore()
+    let dailyGoals: DailyGoalStore
     private lazy var mcpServer = KajiMCPServer(
         goals: dailyGoals,
         snapshotProvider: { [weak self] in self?.mcpSnapshot() ?? [:] }
     )
-    private let fixedPlanStore = FixedPlanStore()
-    private let popoverNavigation = PopoverNavigation()
-    private let aiNewsStore = AIHotNewsStore()
-    private let mailBriefStore = MailBriefStore()
+    let fixedPlanStore: FixedPlanStore
+    let popoverNavigation = PopoverNavigation()
+    private let aiNewsStore: AIHotNewsStore
+    private let mailBriefStore: MailBriefStore
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
 
+    override convenience init() {
+        self.init(defaults: .standard)
+    }
+
+    init(defaults: UserDefaults, cacheDirectory: URL? = nil, store: QuotaStore? = nil) {
+        self.store = store ?? QuotaStore()
+        prefs = Prefs(defaults: defaults)
+        dailyGoals = DailyGoalStore(defaults: defaults)
+        fixedPlanStore = FixedPlanStore(defaults: defaults)
+        aiNewsStore = AIHotNewsStore(
+            cacheURL: cacheDirectory?.appendingPathComponent("ai-news-cache-v1.json")
+        )
+        mailBriefStore = MailBriefStore(
+            cacheURL: cacheDirectory?.appendingPathComponent("mail-brief-cache-v1.json")
+        )
+        super.init()
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Establish the visible app surface before any optional module can probe
+        // credentials. A stale keychain ACL must never prevent the status item.
+        setupStatusItem()
+        setupPopover()
+
         sleepController.onStateChanged = { [weak self] enabled in
             self?.prefs.preventSleep = enabled
         }
@@ -48,9 +72,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.start()
         applyModuleLifecycle(prefs.enabledModules)
         mcpServer.setEnabled(prefs.mcpEnabled)
-
-        setupStatusItem()
-        setupPopover()
 
         // Re-render the menubar indicator whenever data OR the visible-provider /
         // menubar-style prefs change.
@@ -209,6 +230,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        closeDetailPopover()
         store.stop()
         breakWatchdogTimer?.invalidate()
         closeBreakOverlay()
@@ -322,29 +344,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Popover
 
     private func setupPopover() {
-        let panel = NSPanel(
-            contentRect: .zero,
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false
-        )
-        panel.isReleasedWhenClosed = false
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
-        panel.level = .popUpMenu
-        panel.hidesOnDeactivate = true
-        panel.collectionBehavior = [.transient, .moveToActiveSpace]
-        panel.delegate = self
-        popoverWindow = panel
+        let pop = NSPopover()
+        // The child is anchored to a view inside this popover, so AppKit
+        // treats it as a nested popover without dismissing this transient
+        // parent. Keeping transient preserves click-outside dismissal when
+        // the user switches to another app or the desktop.
+        pop.behavior = .transient
+        pop.animates = true
+        pop.delegate = self
+        popover = pop
     }
 
-    private func showPopover(_ destination: MenuBarDestination) {
+    func showPopover(_ destination: MenuBarDestination) {
         guard let sender = statusItem.button else { return }
         dailyGoals.refreshPeriodBoundaries()
-        if popoverWindow.isVisible {
+        if popover.isShown {
             if destinationMatchesCurrentPanel(destination) {
-                popoverWindow.orderOut(sender)
+                closeDetailPopover()
+                popover.performClose(sender)
                 return
             }
             applyPopoverDestination(destination)
@@ -358,23 +375,55 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         applyPopoverDestination(stagingDestination)
         let requestedDestination = destination
 
-        // Rebuild content each open. A borderless panel avoids NSPopover's
-        // directional arrow while retaining the same compact SwiftUI surface.
+        // Rebuild content each open. Width uses the single standard panel size.
+        // so the popover follows S/M; height auto-fits since the popover
+        // also shows the settings footer (which the HUD doesn't).
         let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: sender.window?.screen))
         popoverHostingController = controller
         let target = popoverFittingSize(for: controller)
         controller.preferredContentSize = target
         controller.view.frame = NSRect(origin: .zero, size: target)
         controller.view.layoutSubtreeIfNeeded()
-        popoverWindow.contentViewController = controller
-        positionPopoverWindow(size: target, relativeTo: sender)
-        popoverWindow.makeKeyAndOrderFront(sender)
+        popover.contentSize = target
+        popover.contentViewController = controller
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .minY)
+        popover.contentViewController?.view.window?.makeKey()
 
         if requestedDestination != stagingDestination {
             DispatchQueue.main.async { [weak self] in
                 self?.applyPopoverDestination(requestedDestination)
             }
         }
+    }
+
+    func showDetailPopover(_ content: AnyView, relativeTo sourceView: NSView) {
+        closeDetailPopover()
+
+        let controller = NSHostingController(rootView: content)
+        let fittingSize = controller.view.fittingSize
+        controller.preferredContentSize = fittingSize
+
+        let child = NSPopover()
+        child.behavior = .transient
+        child.delegate = self
+        child.animates = true
+        child.contentViewController = controller
+        child.contentSize = fittingSize
+        detailPopover = child
+
+        let sourceMidX = sourceView.window?.frame.midX ?? 0
+        let screenMidX = sourceView.window?.screen?.visibleFrame.midX ?? 0
+        child.show(
+            relativeTo: sourceView.bounds,
+            of: sourceView,
+            preferredEdge: sourceMidX < screenMidX ? .maxX : .minX
+        )
+    }
+
+    func closeDetailPopover() {
+        detailPopover?.animates = false
+        detailPopover?.performClose(nil)
+        detailPopover = nil
     }
 
     private func popoverStagingDestination(for destination: MenuBarDestination) -> MenuBarDestination {
@@ -430,7 +479,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func makePopoverContentController(maxContentHeight: CGFloat? = nil) -> NSHostingController<AnyView> {
         let controls = KajiPopoverControls(
             onOpenSettings: { [weak self] in self?.openSettings() },
-            onQuit: { NSApp.terminate(nil) }
+            onQuit: { NSApp.terminate(nil) },
+            onShowDetail: { [weak self] sourceView, content in
+                self?.showDetailPopover(content, relativeTo: sourceView)
+            },
+            onDismissDetail: { [weak self] in self?.closeDetailPopover() }
         )
         let content = KajiPopoverView(store: store,
                                       prefs: prefs,
@@ -464,55 +517,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func resizePopoverContent(to measuredSize: CGSize) {
-        guard popoverWindow.isVisible else { return }
+        guard popover != nil, popover.isShown else { return }
         let width = PanelSize.medium.frameSize.width
-        let maxHeight = maxPopoverHeight(on: popoverWindow.screen ?? statusItem.button?.window?.screen)
+        let maxHeight = maxPopoverHeight(on: popover.contentViewController?.view.window?.screen ?? statusItem.button?.window?.screen)
         let target = CGSize(width: width, height: ceil(min(max(1, measuredSize.height), maxHeight)))
-        let needsResize = abs(popoverWindow.frame.height - target.height) > 0.5 ||
-            abs(popoverWindow.frame.width - target.width) > 0.5
+        let needsPopoverResize = abs(popover.contentSize.height - target.height) > 0.5 ||
+            abs(popover.contentSize.width - target.width) > 0.5
         popoverHostingController?.preferredContentSize = target
         popoverHostingController?.view.frame = NSRect(origin: .zero, size: target)
         popoverHostingController?.view.layoutSubtreeIfNeeded()
-        if needsResize, let sender = statusItem.button {
-            positionPopoverWindow(size: target, relativeTo: sender)
+        if needsPopoverResize {
+            popover.contentSize = target
         }
-    }
-
-    private func positionPopoverWindow(size: CGSize, relativeTo sender: NSStatusBarButton) {
-        guard let anchorWindow = sender.window else { return }
-        let anchor = anchorWindow.convertToScreen(sender.convert(sender.bounds, to: nil))
-        let visibleFrame = (anchorWindow.screen ?? NSScreen.main)?.visibleFrame
-            ?? NSRect(x: 0, y: 0, width: size.width, height: size.height)
-        let inset: CGFloat = 8
-        let gap: CGFloat = 6
-        let x = min(
-            max(anchor.midX - size.width / 2, visibleFrame.minX + inset),
-            visibleFrame.maxX - size.width - inset
-        )
-        let y = max(visibleFrame.minY + inset, anchor.minY - size.height - gap)
-        popoverWindow.setFrame(NSRect(origin: CGPoint(x: x, y: y), size: size), display: true)
     }
 
     private func maxPopoverHeight(on screen: NSScreen?) -> CGFloat {
         let visibleHeight = (screen ?? NSScreen.main)?.visibleFrame.height ?? 760
-        return max(240, visibleHeight - 24)
+        // Leave room for NSPopover's arrow, border and AppKit's placement inset.
+        // Filling the entire visible frame makes the chrome cross the screen edge,
+        // where macOS clips it into a false top padding strip.
+        return max(240, visibleHeight - 64)
     }
 
     /// Rebuild only when layout dimensions change. Normal ObservableObject
     /// updates flow through SwiftUI; rebuilding for every busy/running tick
     /// makes the transient popover visibly jump.
     private func rebuildPopoverContentIfShown() {
-        guard popoverWindow.isVisible else { return }
-        let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: popoverWindow.screen ?? statusItem.button?.window?.screen))
+        guard popover != nil, popover.isShown else { return }
+        let controller = makePopoverContentController(maxContentHeight: maxPopoverHeight(on: popover.contentViewController?.view.window?.screen ?? statusItem.button?.window?.screen))
         popoverHostingController = controller
         let target = popoverFittingSize(for: controller)
         controller.preferredContentSize = target
         controller.view.frame = NSRect(origin: .zero, size: target)
         controller.view.layoutSubtreeIfNeeded()
-        popoverWindow.contentViewController = controller
-        if let sender = statusItem.button {
-            positionPopoverWindow(size: target, relativeTo: sender)
-        }
+        popover.contentSize = target
+        popover.contentViewController = controller
     }
 
     private func handleUpdateAction() {
@@ -763,5 +802,15 @@ extension AppDelegate: NSWindowDelegate {
         guard let window = notification.object as? NSWindow,
               window === settingsWindow else { return }
         settingsWindow = nil
+    }
+}
+extension AppDelegate: NSPopoverDelegate {
+    func popoverWillClose(_ notification: Notification) {
+        guard let closingPopover = notification.object as? NSPopover else { return }
+        if closingPopover === detailPopover {
+            detailPopover = nil
+        } else if closingPopover === popover {
+            closeDetailPopover()
+        }
     }
 }

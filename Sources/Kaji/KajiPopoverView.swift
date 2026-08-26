@@ -11,6 +11,20 @@ final class PopoverNavigation: ObservableObject {
 struct KajiPopoverControls {
     let onOpenSettings: () -> Void
     let onQuit: () -> Void
+    let onShowDetail: (NSView, AnyView) -> Void
+    let onDismissDetail: () -> Void
+
+    init(
+        onOpenSettings: @escaping () -> Void,
+        onQuit: @escaping () -> Void,
+        onShowDetail: @escaping (NSView, AnyView) -> Void = { _, _ in },
+        onDismissDetail: @escaping () -> Void = {}
+    ) {
+        self.onOpenSettings = onOpenSettings
+        self.onQuit = onQuit
+        self.onShowDetail = onShowDetail
+        self.onDismissDetail = onDismissDetail
+    }
 }
 
 private struct PopoverContentSizeKey: PreferenceKey {
@@ -44,8 +58,6 @@ struct KajiPopoverView: View {
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
     @State private var previousFocusedGoalID: UUID?
     @State private var previousFocusedGoalHorizon: GoalHorizon = .today
-    @State private var shownScheduleDetailsID: UUID?
-    @State private var fixedPlanHoverGeneration = 0
     @FocusState private var focusedGoalID: UUID?
     @State private var showCleanConfirmation = false
     @State private var showsGoalCreator = false
@@ -53,12 +65,8 @@ struct KajiPopoverView: View {
     @State private var goalCreationTagName = GoalTag.personal.rawValue
     @State private var goalCreationTagColor: UInt32 = 0x8E6AD8
     @State private var goalCreationNote = ""
-    @State private var shownGoalNoteID: UUID?
-    @State private var goalNoteHoverGeneration = 0
     @State private var hoveredNewsID: String?
     @State private var newsHoverGeneration = 0
-    @State private var hoveredMailID: String?
-    @State private var mailHoverGeneration = 0
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -90,7 +98,7 @@ struct KajiPopoverView: View {
             clampPanelToEnabledPages()
         }
         .onChange(of: panel) { _ in
-            shownScheduleDetailsID = nil
+            controls.onDismissDetail()
         }
         .onChange(of: focusedGoalID) { newValue in
             if let previousFocusedGoalID,
@@ -283,37 +291,17 @@ struct KajiPopoverView: View {
                 .foregroundColor(t.cream)
                 .lineLimit(2)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8, weight: .bold))
-                .foregroundColor(t.ash)
+            DetailPopoverButton(
+                accessibilityIdentifier: "mail-detail-\(entry.threadID)",
+                help: "查看详情"
+            ) { sourceView in
+                controls.onShowDetail(sourceView, AnyView(mailBriefDetail(entry)))
+            }
+            .frame(width: 18, height: 18)
         }
         .padding(.vertical, 6)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            mailHoverGeneration += 1
-            hoveredMailID = entry.threadID
-        }
-        .onHover { inside in updateMailHover(entry, inside: inside) }
         .overlay(alignment: .bottom) {
             Rectangle().fill(t.track.opacity(0.55)).frame(height: 0.5)
-        }
-        .popover(
-            isPresented: Binding(
-                get: { hoveredMailID == entry.threadID },
-                set: {
-                    if !$0 {
-                        mailHoverGeneration += 1
-                        hoveredMailID = HoverSelectionPolicy.dismissed(
-                            current: hoveredMailID,
-                            dismissing: entry.threadID
-                        )
-                    }
-                }
-            ),
-            arrowEdge: .trailing
-        ) {
-            mailBriefDetail(entry)
-                .onHover { updateMailDetailHover(entry, inside: $0) }
         }
         .contextMenu {
             if let url = entry.gmailURL { Button("在 Gmail 打开") { NSWorkspace.shared.open(url) } }
@@ -387,7 +375,7 @@ struct KajiPopoverView: View {
             HStack(spacing: 9) {
                 Button("完成并归档") {
                     mailBriefStore.archive(entry)
-                    hoveredMailID = nil
+                    controls.onDismissDetail()
                 }
                 .buttonStyle(.borderedProminent)
                 if let url = entry.gmailURL {
@@ -404,7 +392,7 @@ struct KajiPopoverView: View {
                 .disabled(mailBriefStore.isConverted(entry))
                 mailDetailAction("trash", help: "移到垃圾箱") {
                     mailBriefStore.trash(entry)
-                    hoveredMailID = nil
+                    controls.onDismissDetail()
                 }
             }
         }
@@ -436,38 +424,6 @@ struct KajiPopoverView: View {
         }
     }
 
-    private func updateMailHover(_ entry: MailBriefEntry, inside: Bool) {
-        mailHoverGeneration += 1
-        let generation = mailHoverGeneration
-        if inside {
-            if hoveredMailID != nil {
-                hoveredMailID = entry.threadID
-            } else {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    guard generation == mailHoverGeneration else { return }
-                    hoveredMailID = entry.threadID
-                }
-            }
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
-            guard generation == mailHoverGeneration, hoveredMailID == entry.threadID else { return }
-            hoveredMailID = nil
-        }
-    }
-
-    private func updateMailDetailHover(_ entry: MailBriefEntry, inside: Bool) {
-        mailHoverGeneration += 1
-        guard !inside else { return }
-        let generation = mailHoverGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
-            guard generation == mailHoverGeneration else { return }
-            hoveredMailID = HoverSelectionPolicy.dismissed(
-                current: hoveredMailID,
-                dismissing: entry.threadID
-            )
-        }
-    }
 
 
     private func aiNewsRow(_ topic: AIHotTopic) -> some View {
@@ -562,7 +518,7 @@ struct KajiPopoverView: View {
     private func scheduleGoalRow(_ schedule: ScheduledGoal) -> some View {
         let completed = fixedPlanStore.isCompleted(schedule)
         let tag = dailyGoals.tagDefinition(for: schedule.tag)
-        return VStack(alignment: .leading, spacing: 0) {
+        return HStack(spacing: 8) {
             Button {
                 fixedPlanStore.toggleCompletion(schedule)
             } label: {
@@ -584,21 +540,21 @@ struct KajiPopoverView: View {
                         .lineLimit(2)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(8)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            if shownScheduleDetailsID == schedule.id, !schedule.note.isEmpty {
-                Text(schedule.note)
-                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .padding(.horizontal, 32)
-                    .padding(.bottom, 8)
-                    .transition(.opacity)
+            if !schedule.note.isEmpty {
+                DetailPopoverButton(
+                    accessibilityIdentifier: "schedule-detail-\(schedule.id)",
+                    help: "查看详情"
+                ) { sourceView in
+                    controls.onShowDetail(sourceView, AnyView(scheduleDetails(schedule)))
+                }
+                .frame(width: 18, height: 18)
             }
         }
+        .padding(8)
         .background(goalRowSurface(opacity: 0.92))
-        .onHover { inside in updateScheduleHover(schedule, inside: inside) }
     }
 
     private func scheduleDetails(_ schedule: ScheduledGoal) -> some View {
@@ -617,19 +573,6 @@ struct KajiPopoverView: View {
         .background(background)
     }
 
-    private func updateScheduleHover(_ schedule: ScheduledGoal, inside: Bool) {
-        guard !schedule.note.isEmpty else { return }
-        fixedPlanHoverGeneration += 1
-        let generation = fixedPlanHoverGeneration
-        if inside {
-            shownScheduleDetailsID = schedule.id
-            return
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-            guard generation == fixedPlanHoverGeneration else { return }
-            shownScheduleDetailsID = nil
-        }
-    }
 
     private var quotaPanel: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -1225,15 +1168,16 @@ struct KajiPopoverView: View {
                     }
                     HStack(spacing: 4) {
                         if !vision.note.isEmpty {
-                            Button {
-                                shownGoalNoteID = vision.id
-                            } label: {
-                                Image(systemName: "text.alignleft")
-                                    .font(.system(size: 9, weight: .semibold))
+                            DetailPopoverButton(
+                                accessibilityIdentifier: "goal-detail-\(vision.id)",
+                                help: "查看详情"
+                            ) { sourceView in
+                                controls.onShowDetail(
+                                    sourceView,
+                                    goalDetailContent(vision, horizon: .longTerm)
+                                )
                             }
-                            .buttonStyle(.plain)
-                            .foregroundColor(t.mute)
-                            .onHover { updateGoalNoteHover(vision, inside: $0) }
+                            .frame(width: 18, height: 18)
                         }
                         if index > 0 {
                             miniButton("chevron.up") {
@@ -1253,18 +1197,6 @@ struct KajiPopoverView: View {
                 }
                 .padding(8)
                 .background(goalRowSurface(opacity: 0.82))
-                .contextMenu {
-                    Button(vision.note.isEmpty ? "添加说明" : "编辑说明") {
-                        shownGoalNoteID = vision.id
-                    }
-                }
-                .popover(isPresented: Binding(
-                    get: { shownGoalNoteID == vision.id },
-                    set: { if !$0 { shownGoalNoteID = nil } }
-                ), arrowEdge: .trailing) {
-                    goalNoteEditor(vision, horizon: .longTerm)
-                        .onHover { updateGoalNoteHover(vision, inside: $0) }
-                }
             }
         }
     }
@@ -1321,6 +1253,30 @@ struct KajiPopoverView: View {
                     .foregroundColor(t.mute)
                     .monospacedDigit()
                 Spacer()
+                Menu {
+                    Section(L10n.t(.goalGroup, prefs.language).uppercased()) {
+                        ForEach(GoalGrouping.allCases, id: \.rawValue) { grouping in
+                            Button {
+                                prefs.goalGrouping = grouping
+                            } label: {
+                                HStack {
+                                    Text(goalGroupingTitle(grouping))
+                                    if prefs.goalGrouping == grouping {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } label: {
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(t.mute)
+                        .frame(width: 26, height: 26)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .help(L10n.t(.goalGroup, prefs.language))
                 if horizon == .today {
                     Button {
                         beginGoalCreation()
@@ -1352,8 +1308,24 @@ struct KajiPopoverView: View {
                     scheduleGoalRow(schedule)
                 }
             }
-            ForEach(goals) { goal in
-                goalRow(goal, horizon: horizon)
+            ForEach(
+                GoalGroupingLogic.group(
+                    goals,
+                    by: prefs.goalGrouping,
+                    tagOrder: dailyGoals.tagDefinitions.map(\.name),
+                    language: prefs.language
+                ),
+                id: \.title
+            ) { group in
+                if !group.title.isEmpty {
+                    Text(group.title)
+                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.mute)
+                        .padding(.top, 3)
+                }
+                ForEach(group.goals) { goal in
+                    goalRow(goal, horizon: horizon)
+                }
             }
             if goals.isEmpty && schedules.isEmpty {
                 Text("暂无目标")
@@ -1363,6 +1335,14 @@ struct KajiPopoverView: View {
             }
         }
     }
+    private func goalGroupingTitle(_ grouping: GoalGrouping) -> String {
+        switch grouping {
+        case .none: L10n.t(.goalGroupingNone, prefs.language)
+        case .byTag: L10n.t(.goalGroupingByTag, prefs.language)
+        case .byCreatedTime: L10n.t(.goalGroupingByCreatedTime, prefs.language)
+        }
+    }
+
 
     private var goalCreationCard: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -1467,15 +1447,16 @@ struct KajiPopoverView: View {
             .accessibilityLabel(goal.isDone ? "撤回完成" : "完成")
             HStack(spacing: 4) {
                 if !goal.note.isEmpty {
-                    Button {
-                        shownGoalNoteID = goal.id
-                    } label: {
-                        Image(systemName: "text.alignleft")
-                            .font(.system(size: 9, weight: .semibold))
+                    DetailPopoverButton(
+                        accessibilityIdentifier: "goal-detail-\(goal.id)",
+                        help: "查看详情"
+                    ) { sourceView in
+                        controls.onShowDetail(
+                            sourceView,
+                            goalDetailContent(goal, horizon: horizon)
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .foregroundColor(t.mute)
-                    .onHover { updateGoalNoteHover(goal, inside: $0) }
+                    .frame(width: 18, height: 18)
                 }
                 miniButton("trash") {
                     dailyGoals.delete(goal, in: horizon)
@@ -1489,9 +1470,6 @@ struct KajiPopoverView: View {
         .opacity(goal.isDone ? 0.18 : 1)
         .animation(.easeOut(duration: goal.isDone ? 5 : 0.18), value: goal.isDone)
         .contextMenu {
-            Button(goal.note.isEmpty ? "添加说明" : "编辑说明") {
-                shownGoalNoteID = goal.id
-            }
             Menu("标签") {
                 ForEach(dailyGoals.tagDefinitions) { tag in
                     Button(tag.name) {
@@ -1499,13 +1477,6 @@ struct KajiPopoverView: View {
                     }
                 }
             }
-        }
-        .popover(isPresented: Binding(
-            get: { shownGoalNoteID == goal.id },
-            set: { if !$0 { shownGoalNoteID = nil } }
-        ), arrowEdge: .trailing) {
-            goalNoteEditor(goal, horizon: horizon)
-                .onHover { updateGoalNoteHover(goal, inside: $0) }
         }
     }
 
@@ -1524,8 +1495,13 @@ struct KajiPopoverView: View {
             .onTapGesture(perform: onEdit)
     }
 
+    func goalDetailContent(_ goal: DailyGoal, horizon: GoalHorizon) -> AnyView {
+        AnyView(goalNoteEditor(goal, horizon: horizon))
+    }
+
     private func goalNoteEditor(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+
             Text(goal.title)
                 .font(.system(size: 12, weight: .bold, design: .rounded))
             TextField("说明（可选）", text: Binding(
@@ -1541,22 +1517,6 @@ struct KajiPopoverView: View {
         .foregroundColor(t.cream)
     }
 
-    private func updateGoalNoteHover(_ goal: DailyGoal, inside: Bool) {
-        let hadActiveGoal = shownGoalNoteID != nil
-        goalNoteHoverGeneration += 1
-        let generation = goalNoteHoverGeneration
-        let delay = inside
-            ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActiveGoal)
-            : HoverDisclosurePolicy.closeDelay
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard generation == goalNoteHoverGeneration else { return }
-            if inside {
-                shownGoalNoteID = goal.id
-            } else if shownGoalNoteID == goal.id {
-                shownGoalNoteID = nil
-            }
-        }
-    }
     private func goalTagMenu(_ goal: DailyGoal, horizon: GoalHorizon) -> some View {
         let selected = dailyGoals.tagDefinition(for: goal.tag)
         return Circle()

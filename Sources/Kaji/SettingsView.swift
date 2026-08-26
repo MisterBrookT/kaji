@@ -11,6 +11,7 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
     case aiNews = "AI News"
     case mailBrief = "Mail Brief"
     case mcp = "MCP"
+    case permissions = "Permissions"
 
     var id: String { rawValue }
     var systemImage: String {
@@ -23,8 +24,13 @@ private enum SettingsSection: String, CaseIterable, Identifiable {
         case .aiNews: "newspaper"
         case .mailBrief: "envelope"
         case .mcp: "link"
+        case .permissions: "lock.shield"
         }
     }
+}
+
+private enum PermissionState: Equatable {
+    case authorized, notAuthorized, needsReauthorization
 }
 
 // MARK: - SettingsView
@@ -42,6 +48,9 @@ struct SettingsView: View {
     @State private var selectedScheduleID: UUID?
     @State private var selection: SettingsSection = .general
     @State private var showsMailRunHistory = false
+    @State private var gmailPermission: PermissionState = .notAuthorized
+    @State private var loginPermission: PermissionState = .notAuthorized
+    @State private var sleepPermission: PermissionState = .notAuthorized
 
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
@@ -49,7 +58,8 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             List(SettingsSection.allCases, selection: $selection) { section in
-                Label(section.rawValue, systemImage: section.systemImage)
+                Label(section == .permissions ? L10n.t(.permissions, prefs.language) : section.rawValue,
+                      systemImage: section.systemImage)
                     .tag(section)
             }
             .listStyle(.sidebar)
@@ -157,6 +167,39 @@ struct SettingsView: View {
                     }
                 }
             }
+            if selection == .permissions {
+                settingBlock(title: L10n.t(.permissions, prefs.language)) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        permissionRow(
+                            title: L10n.t(.gmailCredential, prefs.language),
+                            why: L10n.t(.gmailCredentialWhy, prefs.language),
+                            status: gmailPermission
+                        ) {
+                            try? MailBriefCredentialStore.authorizeAccess()
+                            refreshPermissions()
+                        }
+                        permissionRow(
+                            title: L10n.t(.loginPermission, prefs.language),
+                            why: L10n.t(.loginPermissionWhy, prefs.language),
+                            status: loginPermission
+                        ) {
+                            _ = LoginItemManager.setEnabled(true)
+                            refreshPermissions()
+                        }
+                        permissionRow(
+                            title: L10n.t(.sleepPermission, prefs.language),
+                            why: L10n.t(.sleepPermissionWhy, prefs.language),
+                            status: sleepPermission
+                        ) {
+                            sleepController.setEnabled(true)
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                                refreshPermissions()
+                            }
+                        }
+                    }
+                }
+                .onAppear { refreshPermissions() }
+            }
             if selection == .work {
                 settingBlock(title: L10n.t(.work, prefs.language)) {
                     VStack(alignment: .leading, spacing: 10) {
@@ -263,6 +306,55 @@ struct SettingsView: View {
             }
         }
         .padding(24)
+    }
+
+    private func refreshPermissions() {
+        switch MailBriefCredentialStore.authorizationStatus() {
+        case .authorized: gmailPermission = .authorized
+        case .notAuthorized: gmailPermission = .notAuthorized
+        case .needsReauthorization: gmailPermission = .needsReauthorization
+        }
+        switch LoginItemManager.authorizationStatus {
+        case .authorized: loginPermission = .authorized
+        case .notAuthorized: loginPermission = .notAuthorized
+        case .needsReauthorization: loginPermission = .needsReauthorization
+        }
+        switch SleepController.authorizationStatus {
+        case .authorized: sleepPermission = .authorized
+        case .notAuthorized: sleepPermission = .notAuthorized
+        case .needsReauthorization: sleepPermission = .needsReauthorization
+        }
+    }
+
+    private func permissionRow(title: String, why: String, status: PermissionState,
+                               action: @escaping () -> Void) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Text(why)
+                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.mute)
+            }
+            Spacer(minLength: 8)
+            Text(permissionStatusText(status))
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .foregroundColor(t.mute)
+            if status != .authorized {
+                outlineButton(title: L10n.t(.authorize, prefs.language),
+                              systemImage: "checkmark.shield", action: action)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func permissionStatusText(_ status: PermissionState) -> String {
+        switch status {
+        case .authorized: L10n.t(.authorized, prefs.language)
+        case .notAuthorized: L10n.t(.notAuthorized, prefs.language)
+        case .needsReauthorization: L10n.t(.needsReauthorization, prefs.language)
+        }
     }
 
     private var mailRunActivity: some View {
