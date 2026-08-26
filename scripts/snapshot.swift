@@ -166,6 +166,7 @@ struct Snap {
             let workMode = args.contains("work")
             let breakMode = args.contains("break")
             let mailMode = args.contains("mail")
+            let launchdMode = args.contains("launchd")
             let settingsMode = args.contains("settings")
             let lang: Lang = args.contains("zh") ? .zh : .en
             let showRemaining = args.contains("remaining")
@@ -174,6 +175,7 @@ struct Snap {
             if goalsMode { prefs.enabledModules = [.quota, .goals] }
             if workMode || breakMode { prefs.enabledModules = [.quota, .work] }
             if mailMode { prefs.enabledModules = [.quota, .mailBrief] }
+            if launchdMode { prefs.enabledModules = [.quota, .launchd] }
 
             let store = QuotaStore(previewProviders: mocks, updated: Date())
             let workSession = WorkSessionController(prefs: prefs)
@@ -185,10 +187,18 @@ struct Snap {
             let mailBriefStore = mailMode
                 ? MailBriefStore(previewGeneration: makeMailGeneration())
                 : MailBriefStore(cacheURL: URL(fileURLWithPath: "/tmp/kaji-snapshot-mail.json"))
+            let launchdJobStore = LaunchdJobStore(initialSnapshot: LaunchdJobSnapshot(jobs: [
+                LaunchdJob(label: "com.bubu.lisa-daemon", pid: 65368, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
+                LaunchdJob(label: "dev.bubu.hub-sync", pid: 842, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
+                LaunchdJob(label: "com.openai.atlas.update-helper", pid: nil, lastExitCode: 78, isInstalledUserAgent: true, state: .failed),
+                LaunchdJob(label: "com.google.keystone.agent", pid: nil, lastExitCode: nil, isInstalledUserAgent: true, state: .unloaded),
+                LaunchdJob(label: "com.apple.coreservices.uiagent", pid: 321, lastExitCode: 0, isInstalledUserAgent: false, state: .running),
+            ]))
             let navigation = PopoverNavigation()
             if goalsMode { navigation.panel = .goals }
             if workMode || breakMode { navigation.panel = .work }
             if mailMode { navigation.panel = .mailBrief }
+            if launchdMode { navigation.panel = .launchd }
             let controls = KajiPopoverControls(
                 onOpenSettings: {},
                 onQuit: {}
@@ -203,6 +213,7 @@ struct Snap {
                 fixedPlanStore: fixedPlanStore,
                 aiNewsStore: aiNewsStore,
                 mailBriefStore: mailBriefStore,
+                launchdJobStore: launchdJobStore,
                 navigation: navigation,
                 controls: controls,
                 maxContentHeight: 720,
@@ -260,6 +271,11 @@ struct Snap {
             if mailMode {
                 render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/mail-dark.png")
                 render(popover, appearance: .aqua, scheme: .light, to: "/tmp/mail-light.png")
+                return
+            }
+            if launchdMode {
+                render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/launchd-dark.png")
+                render(popover, appearance: .aqua, scheme: .light, to: "/tmp/launchd-light.png")
                 return
             }
             if goalsMode {

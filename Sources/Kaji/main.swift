@@ -8,7 +8,17 @@ import AppKit
 let app = NSApplication.shared
 // main.swift top-level runs on the main thread but is nonisolated to the type
 // system; AppDelegate is @MainActor, so assume isolation to build it here.
-let delegate = MainActor.assumeIsolated { AppDelegate() }
+let delegate = MainActor.assumeIsolated {
+    let environment = ProcessInfo.processInfo.environment
+    if let nonce = environment["KAJI_UI_SMOKE_NONCE"],
+       let defaults = UserDefaults(suiteName: "dev.kaji.ui-smoke.\(nonce)") {
+        let cacheDirectory = environment["KAJI_UI_SMOKE_ARTIFACTS"].map {
+            URL(fileURLWithPath: $0, isDirectory: true)
+        }
+        return AppDelegate(defaults: defaults, cacheDirectory: cacheDirectory)
+    }
+    return AppDelegate()
+}
 app.delegate = delegate
 app.setActivationPolicy(.accessory)
 app.run()

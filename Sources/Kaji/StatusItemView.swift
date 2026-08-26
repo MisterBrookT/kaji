@@ -1,4 +1,5 @@
 import SwiftUI
+import KajiCore
 
 // MARK: - StatusItemView
 //
@@ -27,11 +28,13 @@ struct StatusItemView: View {
     var showsAINewsSlot: Bool = false
     var mailBriefSlotLabel: String? = nil
     var showsMailBriefSlot: Bool = false
+    var launchdStatus: LaunchdMenuBarStatus? = nil
     var onQuotaClick: () -> Void = {}
     var onWorkClick: () -> Void = {}
     var onGoalsClick: () -> Void = {}
     var onAINewsClick: () -> Void = {}
     var onMailBriefClick: () -> Void = {}
+    var onLaunchdClick: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
@@ -87,6 +90,29 @@ struct StatusItemView: View {
                     .foregroundStyle(scheme == .dark ? .white : .black)
                     .fixedSize()
                     .contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            }
+            if let launchdStatus {
+                Button(action: onLaunchdClick) {
+                    HStack(spacing: 2) {
+                        Image(systemName: "gearshape.2")
+                            .font(.system(size: 10.5, weight: .medium))
+                        Text(String(launchdStatus.count))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .monospacedDigit()
+                    }
+                    .foregroundStyle(
+                        launchdStatus.hasFailures
+                            ? KajiTheme.resolve(scheme).amber
+                            : (scheme == .dark ? .white : .black)
+                    )
+                    .fixedSize()
+                    .contentShape(Rectangle())
+                    .accessibilityLabel(
+                        launchdStatus.hasFailures
+                            ? "\(launchdStatus.count) failed background tasks"
+                            : "\(launchdStatus.count) running background tasks"
+                    )
                 }.buttonStyle(.plain)
             }
         }

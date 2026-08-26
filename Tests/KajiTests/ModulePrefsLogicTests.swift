@@ -62,7 +62,7 @@ final class ModulePrefsLogicTests: XCTestCase {
 
     func testPopoverPages_allEnabled_fullOrder() {
         let pages = ModulePrefsLogic.popoverPages(
-            enabled: [.quota, .work, .system, .goals, .aiNews, .mailBrief]
+            enabled: Set(KajiModuleID.allCases)
         )
         XCTAssertEqual(pages, KajiModuleID.stableOrder)
     }
@@ -77,6 +77,14 @@ final class ModulePrefsLogicTests: XCTestCase {
         XCTAssertEqual(
             ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .aiNews, .mailBrief]),
             [.quota, .goals, .aiNews, .mailBrief]
+        )
+    }
+
+    func testLaunchdDefaultsOffAndAppearsLastWhenEnabled() {
+        XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.launchd))
+        XCTAssertEqual(
+            ModulePrefsLogic.popoverPages(enabled: [.quota, .launchd]),
+            [.quota, .launchd]
         )
     }
 

@@ -29,14 +29,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var workSession = WorkSessionController(prefs: prefs)
     private let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
-    private lazy var controlServer = KajiControlServer(
-        goals: dailyGoals,
-        snapshotProvider: { [weak self] in self?.controlSnapshot() ?? [:] }
-    )
+    private lazy var controlServer: KajiControlServer = {
+        let environment = ProcessInfo.processInfo.environment
+        let testNonce = environment["KAJI_UI_SMOKE_NONCE"]
+        let testPort = environment["KAJI_UI_SMOKE_PORT"].flatMap(UInt16.init)
+        let automation = testNonce.map { nonce in
+            KajiControlServer.TestAutomation(
+                nonce: nonce,
+                render: { [weak self] surface, selection, outputPath in
+                    guard let self else { throw TestUIAutomationError.appUnavailable }
+                    return try self.renderTestSurface(
+                        surface: surface,
+                        selection: selection,
+                        outputPath: outputPath
+                    )
+                }
+            )
+        }
+        return KajiControlServer(
+            goals: dailyGoals,
+            port: testPort ?? KajiControlServer.port,
+            snapshotProvider: { [weak self] in self?.controlSnapshot() ?? [:] },
+            testAutomation: automation
+        )
+    }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
     private let aiNewsStore: AIHotNewsStore
     private let mailBriefStore: MailBriefStore
+    private let launchdJobStore = LaunchdJobStore()
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -129,6 +150,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
             .store(in: &cancellables)
+        launchdJobStore.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
+            .store(in: &cancellables)
         dailyGoals.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in
@@ -214,6 +239,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
                                   batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
                                   model: prefs.mailBriefModel)
+        let launchdEnabled = modules.contains(.launchd)
+        launchdJobStore.setEnabled(launchdEnabled)
+        if launchdEnabled { launchdJobStore.refreshStatus() }
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -229,6 +257,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         closeBreakOverlay()
         aiNewsStore.stop()
         mailBriefStore.stop()
+        launchdJobStore.stop()
         controlServer.stop()
     }
 
@@ -257,11 +286,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
                                   mailBriefSlotLabel: MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount),
                                   showsMailBriefSlot: prefs.isModuleEnabled(.mailBrief),
+                                  launchdStatus: launchdStatus,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
                                   onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
                                   onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
-                                  onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) })
+                                  onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
+                                  onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -283,11 +314,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                showsAINewsSlot: prefs.isModuleEnabled(.aiNews),
                                                mailBriefSlotLabel: MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount),
                                                showsMailBriefSlot: prefs.isModuleEnabled(.mailBrief),
+                                               launchdStatus: launchdStatus,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
                                                onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
                                                onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
-                                               onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) })
+                                               onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
+                                               onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
         statusItem.length = statusItemLength
     }
 
@@ -317,6 +350,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    private var launchdStatus: LaunchdMenuBarStatus? {
+        let summary = launchdJobStore.snapshot.installedSummary
+        return MenuBarSlotLogic.launchdStatus(
+            enabled: prefs.isModuleEnabled(.launchd),
+            runningCount: summary.runningCount,
+            failedCount: summary.failedCount
+        )
+    }
+
     private var statusItemLength: CGFloat {
         let count = max(1, min(4, visibleProviders.count))
         var length = CGFloat(count) * 26 + 6
@@ -330,6 +372,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if prefs.isModuleEnabled(.aiNews) { length += 20 }
         if prefs.isModuleEnabled(.mailBrief) {
             length += 22 + CGFloat(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: mailBriefStore.actCount)?.count ?? 0) * 7
+        }
+        if let launchdStatus {
+            length += 22 + CGFloat(String(launchdStatus.count).count) * 7
         }
         return length
     }
@@ -360,6 +405,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyPopoverDestination(destination)
             return
         }
+        popoverNavigation.launchdCategory = .userAgent
+
 
         // AppKit's first fitting pass can leave the initial SwiftUI page offset.
         // Fit from another enabled page, then switch after placement so every
@@ -425,7 +472,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .aiNews, .mailBrief:
+        case .work, .goalsToday, .aiNews, .mailBrief, .launchd:
             return .quota
         }
     }
@@ -442,6 +489,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .aiNews
         case .mailBrief:
             return popoverNavigation.panel == .mailBrief
+        case .launchd:
+            return popoverNavigation.panel == .launchd
         }
     }
 
@@ -466,6 +515,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popoverNavigation.panel = prefs.isModuleEnabled(.aiNews) ? .aiNews : .quota
         case .mailBrief:
             popoverNavigation.panel = prefs.isModuleEnabled(.mailBrief) ? .mailBrief : .quota
+        case .launchd:
+            popoverNavigation.panel = prefs.isModuleEnabled(.launchd) ? .launchd : .quota
         }
     }
 
@@ -486,6 +537,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       fixedPlanStore: fixedPlanStore,
                                       aiNewsStore: aiNewsStore,
                                       mailBriefStore: mailBriefStore,
+                                      launchdJobStore: launchdJobStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
@@ -647,7 +699,111 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "replyDrafts": mailBriefStore.replyDrafts,
                 "runRecords": jsonValue(mailBriefStore.runRecords),
             ],
+            "launchd": [
+                "userAgent": controlCategorySnapshot(.userAgent),
+                "application": controlCategorySnapshot(.application),
+                "appleSystem": controlCategorySnapshot(.appleSystem),
+            ],
         ]
+    }
+
+    private func controlCategorySnapshot(_ category: LaunchdJobCategory) -> [String: Any] {
+        let jobs = launchdJobStore.snapshot.jobs(in: category)
+        return [
+            "total": jobs.count,
+            "running": jobs.count { $0.state == .running },
+            "failed": jobs.count { $0.state == .failed },
+            "idle": jobs.count { $0.state == .idle },
+            "unloaded": jobs.count { $0.state == .unloaded },
+        ]
+    }
+
+    private func renderTestSurface(
+        surface: String,
+        selection: String,
+        outputPath: String
+    ) throws -> [String: Any] {
+        guard let artifactRoot = ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_ARTIFACTS"] else {
+            throw TestUIAutomationError.disabled
+        }
+        let rootURL = URL(fileURLWithPath: artifactRoot, isDirectory: true).standardizedFileURL
+        let outputURL = URL(fileURLWithPath: outputPath).standardizedFileURL
+        guard outputURL.path.hasPrefix(rootURL.path + "/") else {
+            throw TestUIAutomationError.invalidOutputPath
+        }
+
+        let size: CGSize
+        switch surface {
+        case "status":
+            updateStatusItem()
+            hostingView.layoutSubtreeIfNeeded()
+            size = try writePNG(view: hostingView, to: outputURL)
+        case "popover":
+            let parts = selection.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
+            guard let pageID = parts.first,
+                  let page = KajiModuleID(rawValue: pageID),
+                  prefs.enabledModules.contains(page),
+                  parts.count <= 2 else {
+                throw TestUIAutomationError.invalidSelection
+            }
+            if parts.count == 2 {
+                guard page == .launchd,
+                      let category = LaunchdJobCategory(rawValue: parts[1]) else {
+                    throw TestUIAutomationError.invalidSelection
+                }
+                popoverNavigation.launchdCategory = category
+            } else if page == .launchd {
+                popoverNavigation.launchdCategory = .userAgent
+            }
+            popoverNavigation.panel = page
+            if page == .goals { popoverNavigation.goalHorizon = .today }
+            let controller = makePopoverContentController(maxContentHeight: 640)
+            let target = popoverFittingSize(for: controller)
+            controller.view.frame = NSRect(origin: .zero, size: target)
+            controller.view.layoutSubtreeIfNeeded()
+            size = try writePNG(view: controller.view, to: outputURL)
+        case "settings":
+            guard let section = SettingsSection(rawValue: selection) else {
+                throw TestUIAutomationError.invalidSelection
+            }
+            let view = KajiHostingView(rootView: SettingsView(
+                prefs: prefs,
+                sleepController: sleepController,
+                fixedPlanStore: fixedPlanStore,
+                mailBriefStore: mailBriefStore,
+                initialSection: section
+            ))
+            view.configureKajiHost()
+            view.frame = NSRect(x: 0, y: 0, width: 760, height: 560)
+            view.layoutSubtreeIfNeeded()
+            size = try writePNG(view: view, to: outputURL)
+        default:
+            throw TestUIAutomationError.invalidSurface
+        }
+        return [
+            "surface": surface,
+            "selection": selection,
+            "path": outputURL.path,
+            "width": Int(size.width),
+            "height": Int(size.height),
+        ]
+    }
+
+    private func writePNG(view: NSView, to outputURL: URL) throws -> CGSize {
+        guard view.bounds.width > 0, view.bounds.height > 0,
+              let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else {
+            throw TestUIAutomationError.renderFailed
+        }
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        guard let data = bitmap.representation(using: .png, properties: [:]) else {
+            throw TestUIAutomationError.renderFailed
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try data.write(to: outputURL, options: .atomic)
+        return view.bounds.size
     }
 
     private func jsonValue<T: Encodable>(_ value: T) -> Any {
@@ -793,12 +949,28 @@ extension AppDelegate: NSWindowDelegate {
     }
 }
 extension AppDelegate: NSPopoverDelegate {
+    func popoverWillShow(_ notification: Notification) {
+        guard let openingPopover = notification.object as? NSPopover,
+              openingPopover === popover else { return }
+        launchdJobStore.setPopoverVisible(true)
+    }
+
     func popoverWillClose(_ notification: Notification) {
         guard let closingPopover = notification.object as? NSPopover else { return }
         if closingPopover === detailPopover {
             detailPopover = nil
         } else if closingPopover === popover {
+            launchdJobStore.setPopoverVisible(false)
             closeDetailPopover()
         }
     }
+}
+
+private enum TestUIAutomationError: Error {
+    case appUnavailable
+    case disabled
+    case invalidOutputPath
+    case invalidSelection
+    case invalidSurface
+    case renderFailed
 }
