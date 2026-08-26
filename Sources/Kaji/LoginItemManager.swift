@@ -6,6 +6,19 @@ enum LoginItemManager {
         SMAppService.mainApp.status == .enabled
     }
 
+    enum AuthorizationStatus: Equatable {
+        case authorized, notAuthorized, needsReauthorization
+    }
+
+    static var authorizationStatus: AuthorizationStatus {
+        switch SMAppService.mainApp.status {
+        case .enabled: .authorized
+        case .requiresApproval: .needsReauthorization
+        case .notRegistered, .notFound: .notAuthorized
+        @unknown default: .notAuthorized
+        }
+    }
+
     @discardableResult
     static func setEnabled(_ enabled: Bool) -> Bool {
         do {

@@ -63,6 +63,13 @@ swift test
 ./scripts/build-local.sh
 ```
 
+### UI tests
+
+Two layers, split by what each can actually prove:
+
+- **In-process** — `Tests/KajiTests/PopoverInteractionTests.swift` + `PopoverRenderTests.swift`, run by plain `swift test` (no XCUITest target; SwiftPM can't host one — see `Tests/KajiTests/UITestHarness.swift`). These boot the real `AppDelegate`/status-item/popover object graph in-process and invoke the real click-handler closure `setupStatusItem()` wires up, so a regression in that wiring, or in `showPopover`'s state/content, fails for real. They do **not** cover real OS-level click delivery — a synthetic click reliably does not reach a SwiftUI `Button`'s gesture recognizer from inside a bare `xctest` process, and some activation-state-dependent bugs (e.g. a window that hides itself because clicking the status item never activates an `LSUIElement` app) only manifest with a real OS click against a real, launched, frontmost `.app` — this layer cannot see those. `PopoverRenderTests` writes one PNG per module page to `.build/ui-snapshots/` for visual inspection.
+- **Real click, real .app** — `scripts/ui-smoke.sh` launches the actual signed `Kaji.app`, posts a genuine `CGEvent` click at the status item, and asserts on `CGWindowList`. This is the only layer that proves a real click actually opens the popover on screen.
+
 ## Links
 
 - [Latest release](https://github.com/blackblue-labs/kaji/releases/latest)

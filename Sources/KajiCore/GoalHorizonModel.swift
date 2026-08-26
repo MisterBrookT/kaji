@@ -75,17 +75,28 @@ public struct GoalItem: Identifiable, Codable, Equatable, Sendable {
     public var isDone: Bool
     public var tag: String
     public var note: String
+    /// Persisted creation time. `nil` identifies goals decoded from data written
+    /// before creation timestamps existed; grouping keeps those in source order.
+    public let createdAt: Date?
 
-    public init(id: UUID, title: String, isDone: Bool, tag: String = "", note: String = "") {
+    public init(
+        id: UUID,
+        title: String,
+        isDone: Bool,
+        tag: String = "",
+        note: String = "",
+        createdAt: Date? = nil
+    ) {
         self.id = id
         self.title = title
         self.isDone = isDone
         self.tag = tag
         self.note = note
+        self.createdAt = createdAt
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, title, isDone, tag, note
+        case id, title, isDone, tag, note, createdAt
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,8 +106,10 @@ public struct GoalItem: Identifiable, Codable, Equatable, Sendable {
         isDone = try container.decode(Bool.self, forKey: .isDone)
         tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? ""
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
     }
 }
+
 
 public struct GoalHistoryDay: Identifiable, Codable, Equatable, Sendable {
     public let day: String

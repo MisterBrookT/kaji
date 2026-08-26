@@ -86,8 +86,10 @@ final class QuotaStore: ObservableObject {
     @Published private(set) var lastUpdated: Date?
 
     private var timer: Timer?
+    private let isPreview: Bool
 
     init() {
+        isPreview = false
         UserDefaults.standard.removeObject(forKey: "sparklineHistory")
         UserDefaults.standard.removeObject(forKey: "tokenHistory")
         UserDefaults.standard.removeObject(forKey: "tokenHistoryV2")
@@ -96,6 +98,7 @@ final class QuotaStore: ObservableObject {
     /// Seed a store with fixed data for previews / offscreen snapshots. Does not
     /// start the poll timer or touch UserDefaults.
     init(previewProviders: [ProviderView], updated: Date? = nil) {
+        isPreview = true
         self.providers = previewProviders
         self.lastUpdated = updated
     }
@@ -117,6 +120,7 @@ final class QuotaStore: ObservableObject {
     }
 
     func start() {
+        guard !isPreview else { return }
         refresh()
         let t = Timer.scheduledTimer(withTimeInterval: Config.refreshInterval,
                                      repeats: true) { [weak self] _ in

@@ -60,6 +60,10 @@ public enum L10n {
         case modules, modulesHint
         case moduleQuota, moduleWork, moduleSystem, moduleGoals, moduleAINews
         case aiNews, dataSource, updated, loading, noHotNews, retry, sources, refreshInterval
+        case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
+        case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
+        case permissions, gmailCredential, gmailCredentialWhy, loginPermission, loginPermissionWhy
+        case sleepPermission, sleepPermissionWhy, authorized, notAuthorized, needsReauthorization, authorize
     }
 
     private struct Text {
@@ -142,7 +146,27 @@ public enum L10n {
         .noHotNews: .init(en: "No hot news", zh: "暂无热点", ptBR: "Sem notícias em alta", es: "Sin noticias destacadas"),
         .retry: .init(en: "Retry", zh: "重试", ptBR: "Tentar novamente", es: "Reintentar"),
         .sources: .init(en: "sources", zh: "个来源", ptBR: "fontes", es: "fuentes"),
-        .refreshInterval: .init(en: "Refresh", zh: "刷新间隔", ptBR: "Atualização", es: "Actualización")
+        .refreshInterval: .init(en: "Refresh", zh: "刷新间隔", ptBR: "Atualização", es: "Actualización"),
+        .goalGroup: .init(en: "Group", zh: "分组", ptBR: "Agrupar", es: "Agrupar"),
+        .goalGroupingNone: .init(en: "No Grouping", zh: "不分组", ptBR: "Sem agrupamento", es: "Sin agrupar"),
+        .goalGroupingByTag: .init(en: "By Tag", zh: "按标签", ptBR: "Por etiqueta", es: "Por etiqueta"),
+        .goalGroupingByCreatedTime: .init(en: "By Created Time", zh: "按创建时间", ptBR: "Por data de criação", es: "Por fecha de creación"),
+        .goalGroupUntagged: .init(en: "Untagged", zh: "无标签", ptBR: "Sem etiqueta", es: "Sin etiqueta"),
+        .goalGroupToday: .init(en: "Today", zh: "今天", ptBR: "Hoje", es: "Hoy"),
+        .goalGroupYesterday: .init(en: "Yesterday", zh: "昨天", ptBR: "Ontem", es: "Ayer"),
+        .goalGroupThisWeek: .init(en: "This Week", zh: "本周", ptBR: "Esta semana", es: "Esta semana"),
+        .goalGroupEarlier: .init(en: "Earlier", zh: "更早", ptBR: "Anteriores", es: "Anteriores"),
+        .permissions: .init(en: "Permissions", zh: "授权", ptBR: "Autorizações", es: "Permisos"),
+        .gmailCredential: .init(en: "Gmail credential", zh: "Gmail 凭据", ptBR: "Credencial do Gmail", es: "Credencial de Gmail"),
+        .gmailCredentialWhy: .init(en: "Reads Gmail securely for Mail Brief.", zh: "安全读取 Gmail 以生成邮件简报。", ptBR: "Lê o Gmail com segurança para o resumo.", es: "Lee Gmail de forma segura para el resumen."),
+        .loginPermission: .init(en: "Launch at login", zh: "登录时启动", ptBR: "Iniciar ao entrar", es: "Iniciar al entrar"),
+        .loginPermissionWhy: .init(en: "Keeps Kaji available after you sign in.", zh: "登录 Mac 后自动保持 Kaji 可用。", ptBR: "Mantém o Kaji disponível após entrar.", es: "Mantiene Kaji disponible tras iniciar sesión."),
+        .sleepPermission: .init(en: "Prevent sleep helper", zh: "防休眠助手", ptBR: "Auxiliar antirrepouso", es: "Asistente antirreposo"),
+        .sleepPermissionWhy: .init(en: "Keeps the Mac awake during active work.", zh: "工作期间让 Mac 保持唤醒。", ptBR: "Mantém o Mac ativo durante o trabalho.", es: "Mantiene el Mac activo durante el trabajo."),
+        .authorized: .init(en: "Authorized", zh: "已授权", ptBR: "Autorizado", es: "Autorizado"),
+        .notAuthorized: .init(en: "Not authorized", zh: "未授权", ptBR: "Não autorizado", es: "No autorizado"),
+        .needsReauthorization: .init(en: "Needs re-authorization", zh: "需要重新授权", ptBR: "Requer nova autorização", es: "Requiere nueva autorización"),
+        .authorize: .init(en: "Authorize", zh: "授权", ptBR: "Autorizar", es: "Autorizar"),
     ]
 
     public static func t(_ key: K, _ language: AppLanguage) -> String {
