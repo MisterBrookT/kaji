@@ -16,12 +16,10 @@ final class SettingsPermissionUITests: XCTestCase {
         let cacheURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("kaji-sleep-ui-\(UUID().uuidString).json")
         let environment = SleepController.Environment(
-            status: { .enabled },
-            register: {},
-            unregister: {},
+            status: { .installed },
+            install: {},
             request: { _ in false },
-            readState: { false },
-            openSettings: {}
+            readState: { false }
         )
         let controller = SleepController(previewEnabled: false, environment: environment)
         let window = NSWindow(

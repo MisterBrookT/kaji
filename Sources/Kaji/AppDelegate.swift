@@ -270,7 +270,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from hitting the network on every menubar interaction.
         updateChecker.checkIfDue()
         dailyGoals.refreshPeriodBoundaries()
-        sleepController.resumePendingApprovalIfAuthorized()
         if prefs.isModuleEnabled(.aiNews) {
             aiNewsStore.setEnabled(true, refreshHours: prefs.aiNewsRefreshHours)
         }

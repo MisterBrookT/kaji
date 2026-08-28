@@ -114,24 +114,15 @@ struct SettingsView: View {
     }
 
     private var sleepGuidanceTitle: String {
-        let key: L10n.K = sleepController.approvalFlow.guidance == .repair
-            ? .sleepRepairTitle
-            : .sleepApprovalTitle
-        return L10n.t(key, prefs.language)
+        L10n.t(.sleepRepairTitle, prefs.language)
     }
 
     private var sleepGuidanceMessage: String {
-        let key: L10n.K = sleepController.approvalFlow.guidance == .repair
-            ? .sleepRepairMessage
-            : .sleepApprovalMessage
-        return L10n.t(key, prefs.language)
+        L10n.t(.sleepRepairMessage, prefs.language)
     }
 
     private var sleepGuidanceActionTitle: String {
-        let key: L10n.K = sleepController.approvalFlow.guidance == .repair
-            ? .repairHelper
-            : .openSystemSettings
-        return L10n.t(key, prefs.language)
+        L10n.t(.repairHelper, prefs.language)
     }
 
     private var mainSettings: some View {
@@ -190,10 +181,10 @@ struct SettingsView: View {
                             sleepController.toggle()
                         }
                         .disabled(sleepController.isBusy)
-                        .help("保持 Mac 唤醒。首次开启可能需要在系统设置中批准 Kaji。")
+                        .help(L10n.t(.sleepPermissionWhy, prefs.language))
                     }
                     if sleepController.lastError != nil {
-                        Text("防休眠未能开启。请检查系统设置 → 登录项与扩展。")
+                        Text(L10n.t(.sleepRepairMessage, prefs.language))
                             .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                             .foregroundColor(t.amber)
                     }

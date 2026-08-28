@@ -1,10 +1,9 @@
 import Foundation
 import KajiCore
 import KajiSleepSupport
-import ServiceManagement
 
 enum SleepGuidanceKind: Equatable {
-    case approval, repair
+    case repair
 }
 
 struct SleepApprovalFlow: Equatable {
@@ -12,11 +11,6 @@ struct SleepApprovalFlow: Equatable {
     private(set) var guidance: SleepGuidanceKind?
 
     var isGuidancePresented: Bool { guidance != nil }
-
-    mutating func requireApproval(for target: Bool) {
-        pendingTarget = target
-        guidance = .approval
-    }
 
     mutating func requireRepair(for target: Bool) {
         pendingTarget = target
@@ -31,12 +25,6 @@ struct SleepApprovalFlow: Equatable {
         pendingTarget = nil
         guidance = nil
     }
-
-    mutating func consumePendingTarget(ifAuthorized authorized: Bool) -> Bool? {
-        guard authorized, let pendingTarget else { return nil }
-        cancel()
-        return pendingTarget
-    }
 }
 
 @MainActor
@@ -49,43 +37,31 @@ final class SleepController: ObservableObject {
 
     var onStateChanged: ((Bool) -> Void)?
 
-    private static let daemon = SMAppService.daemon(
-        plistName: "dev.kaji.sleep-helper.plist"
-    )
-
     enum AuthorizationStatus: Equatable {
         case authorized, notAuthorized, needsReauthorization
     }
-    enum HelperRegistrationAction: Equatable {
-        case reuse, register, requestApproval, fail
-    }
 
     struct Environment {
-        let status: @MainActor () -> SMAppService.Status
-        let register: @MainActor () throws -> Void
-        let unregister: @MainActor () async throws -> Void
+        let status: @MainActor () -> SleepHelperInstallStatus
+        let install: @MainActor () async throws -> Void
         let request: @Sendable (Bool) async -> Bool
         let readState: @MainActor () -> Bool
-        let openSettings: @MainActor () -> Void
 
         static let live = Environment(
-            status: { SleepController.daemon.status },
-            register: { try SleepController.daemon.register() },
-            unregister: { try await SleepController.daemon.unregister() },
+            status: { SleepHelperInstaller.live.status() },
+            install: { try await SleepHelperInstaller.live.install() },
             request: { await SleepController.requestSleepDisabled($0) },
-            readState: { SleepController.readSleepDisabled() },
-            openSettings: { SMAppService.openSystemSettingsLoginItems() }
+            readState: { SleepController.readSleepDisabled() }
         )
     }
 
     private let environment: Environment
 
     static var authorizationStatus: AuthorizationStatus {
-        switch daemon.status {
-        case .enabled: .authorized
-        case .requiresApproval: .needsReauthorization
-        case .notRegistered, .notFound: .notAuthorized
-        @unknown default: .notAuthorized
+        switch SleepHelperInstaller.live.status() {
+        case .installed: .authorized
+        case .notInstalled: .notAuthorized
+        case .needsRepair, .unavailable: .needsReauthorization
         }
     }
 
@@ -119,53 +95,37 @@ final class SleepController: ObservableObject {
 
         Task {
             let commandSucceeded: Bool
-            var guidanceWasRequested = false
+            var installedNow = false
             do {
-                try registerHelperIfNeeded()
-                commandSucceeded = await environment.request(enabled)
+                switch environment.status() {
+                case .installed:
+                    break
+                case .notInstalled:
+                    try await environment.install()
+                    installedNow = true
+                    guard environment.status() == .installed else {
+                        throw SleepControllerError.installationFailed
+                    }
+                case .needsRepair, .unavailable:
+                    throw SleepControllerError.installationFailed
+                }
+                commandSucceeded = await request(enabled, attempts: installedNow ? 3 : 1)
                 if !commandSucceeded {
                     approvalFlow.requireRepair(for: enabled)
-                    guidanceWasRequested = true
                 }
-            } catch SleepControllerError.approvalRequired {
-                approvalFlow.requireApproval(for: enabled)
-                guidanceWasRequested = true
-                commandSucceeded = false
             } catch {
                 commandSucceeded = false
+                approvalFlow.requireRepair(for: enabled)
             }
-
-            let observed = environment.readState()
+            let observed = commandSucceeded ? enabled : environment.readState()
             isBusy = false
             targetEnabled = nil
             isEnabled = observed
             onStateChanged?(observed)
-
-            if !guidanceWasRequested,
-               case .failure = SleepControlLogic.resolvedState(
-                   requested: enabled,
-                   commandSucceeded: commandSucceeded,
-                   observed: observed
-               ) {
-                lastError = "pmset_failed"
-            }
         }
     }
-
     func performGuidanceAction() {
-        switch approvalFlow.guidance {
-        case .approval:
-            openApprovalSettings()
-        case .repair:
-            repairHelper()
-        case nil:
-            break
-        }
-    }
-
-    func openApprovalSettings() {
-        approvalFlow.dismissGuidance()
-        environment.openSettings()
+        repairHelper()
     }
 
     func dismissApprovalGuidance() {
@@ -176,78 +136,49 @@ final class SleepController: ObservableObject {
         approvalFlow.cancel()
     }
 
-    func resumePendingApprovalIfAuthorized() {
-        let authorized = Self.registrationAction(for: environment.status()) == .reuse
-        guard let target = approvalFlow.consumePendingTarget(ifAuthorized: authorized) else {
-            return
-        }
-        setEnabled(target)
-    }
-
-    func restoreAndRemoveHelper() async throws {
-        guard await environment.request(false) else {
-            throw SleepControllerError.restoreFailed
-        }
-        try await environment.unregister()
-        refresh()
-    }
-
     private func repairHelper() {
         guard let target = approvalFlow.pendingTarget else { return }
         approvalFlow.dismissGuidance()
         isBusy = true
+        targetEnabled = target
+        lastError = nil
+
         Task {
             do {
-                if Self.registrationAction(for: environment.status()) == .reuse {
-                    try await environment.unregister()
+                try await environment.install()
+                guard environment.status() == .installed else {
+                    throw SleepControllerError.installationFailed
                 }
-                try environment.register()
-                guard Self.registrationAction(for: environment.status()) == .reuse else {
-                    throw SleepControllerError.approvalRequired
+                let commandSucceeded = await request(target, attempts: 3)
+                let observed = commandSucceeded ? target : environment.readState()
+                isBusy = false
+                targetEnabled = nil
+                isEnabled = observed
+                onStateChanged?(observed)
+
+                if commandSucceeded, observed == target {
+                    approvalFlow.cancel()
+                } else {
+                    approvalFlow.requireRepair(for: target)
+                    lastError = "helper_repair_failed"
                 }
-                approvalFlow.cancel()
-                isBusy = false
-                setEnabled(target)
-            } catch SleepControllerError.approvalRequired {
-                isBusy = false
-                approvalFlow.requireApproval(for: target)
-                openApprovalSettings()
             } catch {
                 isBusy = false
+                targetEnabled = nil
+                approvalFlow.requireRepair(for: target)
                 lastError = "helper_repair_failed"
             }
         }
     }
 
-    private func registerHelperIfNeeded() throws {
-        switch Self.registrationAction(for: environment.status()) {
-        case .reuse:
-            return
-        case .register:
-            try environment.register()
-            guard Self.registrationAction(for: environment.status()) == .reuse else {
-                throw SleepControllerError.approvalRequired
+    private func request(_ target: Bool, attempts: Int) async -> Bool {
+        for attempt in 1...attempts {
+            if await environment.request(target) { return true }
+            if attempt < attempts {
+                try? await Task.sleep(for: .milliseconds(500))
             }
-        case .requestApproval:
-            throw SleepControllerError.approvalRequired
-        case .fail:
-            throw SleepControllerError.registrationFailed
         }
-    }
-
-    nonisolated static func registrationAction(
-        for status: SMAppService.Status
-    ) -> HelperRegistrationAction {
-        switch status {
-        case .enabled:
-            .reuse
-        case .notRegistered, .notFound:
-            .register
-        case .requiresApproval:
-            .requestApproval
-        @unknown default:
-            .fail
-        }
+        return false
     }
 
     nonisolated static func requestSleepDisabled(
@@ -337,7 +268,5 @@ private final class SleepRequestCompletion: @unchecked Sendable {
 }
 
 private enum SleepControllerError: Error {
-    case approvalRequired
-    case registrationFailed
-    case restoreFailed
+    case installationFailed
 }

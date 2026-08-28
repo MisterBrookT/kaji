@@ -10,8 +10,12 @@ ARTIFACTS="${KAJI_VM_ARTIFACTS:-$HOME/.dev/kaji/runs/vm-system/$RUN_ID}"
 DRIVER_BUILD="$ROOT/.build/vm-system-driver/KajiVMTestDriver.app"
 RUN_PROCESS=""
 KEEP_FAILURE="${KAJI_VM_KEEP_FAILURE:-0}"
+KEEP_RUNNING="${KAJI_VM_KEEP_RUNNING:-0}"
 FAILED=1
 
+phase() {
+    printf '[%s] %s\n' "$(date -u +%H:%M:%S)" "$*"
+}
 
 build_driver() {
     rm -rf "$DRIVER_BUILD"
@@ -56,10 +60,13 @@ wait_for_gui() {
 start_vm() {
     local name="$1"
     shift
+    phase "BOOT starting $name"
     tart run --no-audio --no-clipboard "$@" "$name" >"$ARTIFACTS/tart.log" 2>&1 &
     RUN_PROCESS=$!
     wait_for_guest "$name"
+    phase "LOGIN guest agent ready; waiting for Finder"
     wait_for_gui "$name"
+    phase "LOGIN ready"
 }
 
 stop_running_vm() {
@@ -72,8 +79,15 @@ stop_running_vm() {
 }
 
 cleanup() {
+    if [[ "$FAILED" == "1" && "$KEEP_RUNNING" == "1" ]]; then
+        printf 'VM-SYSTEM retained running VM: %s\n' "$VM" >&2
+        printf 'VM-SYSTEM rerun: tart exec %s /bin/zsh \"/Volumes/My Shared Files/kaji-source/scripts/vm-system-guest.sh\"\n' "$VM" >&2
+        wait "$RUN_PROCESS" >/dev/null 2>&1 || true
+        return
+    fi
+    phase "CLEANUP stopping and removing ephemeral VM"
     stop_running_vm "$VM"
-    if [[ "$MODE" == "run" ]]; then
+    if [[ "$MODE" == "run" || "$MODE" == "run-visible" ]]; then
         if [[ "$FAILED" == "1" && "$KEEP_FAILURE" == "1" ]]; then
             printf 'VM-SYSTEM retained failed clone: %s\n' "$VM" >&2
         else
@@ -86,6 +100,7 @@ trap cleanup EXIT INT TERM
 mkdir -p "$ARTIFACTS"
 printf '%s\n' "run_id=$RUN_ID" "base=$BASE" "mode=$MODE" >"$ARTIFACTS/run.env"
 tart get "$BASE" --format json >"$ARTIFACTS/base.json"
+phase "PREPARE building VM UI driver"
 build_driver
 
 case "$MODE" in
@@ -111,24 +126,35 @@ bootstrap)
     echo "VM-SYSTEM FAIL: Accessibility bootstrap timed out" >&2
     exit 1
     ;;
-run)
-    if [[ "${KAJI_CODESIGN_IDENTITY:--}" == "-" ]]; then
-        echo "VM-SYSTEM FAIL: Prevent Sleep requires a Team ID; set KAJI_CODESIGN_IDENTITY explicitly to a signing identity" >&2
-        exit 1
-    fi
+run|run-visible)
+    phase "BUILD assembling Kaji.app"
     "$ROOT/scripts/build-app.sh"
+    phase "CLONE creating ephemeral VM from $BASE"
     tart clone "$BASE" "$VM"
-    start_vm "$VM" --no-graphics --no-pointer --no-keyboard \
-        --dir="kaji-source:$ROOT:ro" \
-        --dir="kaji-artifacts:$ARTIFACTS"
+    if [[ "$MODE" == "run-visible" ]]; then
+        phase "BOOT visible mode; Tart VM window will open"
+        start_vm "$VM" \
+            --dir="kaji-source:$ROOT:ro" \
+            --dir="kaji-artifacts:$ARTIFACTS"
+    else
+        start_vm "$VM" --no-graphics --no-pointer --no-keyboard \
+            --dir="kaji-source:$ROOT:ro" \
+            --dir="kaji-artifacts:$ARTIFACTS"
+    fi
     VM_RSS_KB="$(ps -o rss= -p "$RUN_PROCESS" | tr -d ' ')"
     printf 'vm_rss_kb=%s\n' "$VM_RSS_KB" >>"$ARTIFACTS/run.env"
-    tart exec "$VM" /bin/zsh "/Volumes/My Shared Files/kaji-source/scripts/vm-system-guest.sh"
+    phase "JOURNEY exercising install, normal toggles, and repair"
+    if [[ "$KEEP_RUNNING" == "1" ]]; then
+        tart exec "$VM" /usr/bin/env KAJI_VM_DEBUG_KEEP_APP=1 \
+            /bin/zsh "/Volumes/My Shared Files/kaji-source/scripts/vm-system-guest.sh"
+    else
+        tart exec "$VM" /bin/zsh "/Volumes/My Shared Files/kaji-source/scripts/vm-system-guest.sh"
+    fi
     FAILED=0
-    echo "VM-SYSTEM PASS: artifacts $ARTIFACTS"
+    phase "PASS journey complete; artifacts $ARTIFACTS"
     ;;
 *)
-    echo "usage: $0 [bootstrap|run]" >&2
+    echo "usage: $0 [bootstrap|run|run-visible]" >&2
     exit 2
     ;;
 esac

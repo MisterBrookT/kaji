@@ -66,52 +66,83 @@ final class SleepControlLogicTests: XCTestCase {
         XCTAssertFalse(succeeded)
     }
 
-    func testEnabledHelperIsReusedWithoutAnotherAuthorization() {
-        XCTAssertEqual(SleepController.registrationAction(for: .enabled), .reuse)
-        XCTAssertEqual(SleepController.registrationAction(for: .notRegistered), .register)
-        XCTAssertEqual(SleepController.registrationAction(for: .requiresApproval), .requestApproval)
-    }
-
-    func testApprovalGuidanceRetainsAndResumesRequestedState() {
+    func testRepairGuidanceRetainsPendingTargetUntilCancelled() {
         var flow = SleepApprovalFlow()
 
-        flow.requireApproval(for: true)
+        flow.requireRepair(for: true)
         XCTAssertTrue(flow.isGuidancePresented)
         XCTAssertEqual(flow.pendingTarget, true)
 
         flow.dismissGuidance()
         XCTAssertFalse(flow.isGuidancePresented)
-        XCTAssertNil(flow.consumePendingTarget(ifAuthorized: false))
-        XCTAssertEqual(flow.consumePendingTarget(ifAuthorized: true), true)
-        XCTAssertNil(flow.pendingTarget)
-    }
-
-    func testCancellingApprovalGuidanceDropsPendingRequest() {
-        var flow = SleepApprovalFlow()
-        flow.requireApproval(for: true)
+        XCTAssertEqual(flow.pendingTarget, true)
 
         flow.cancel()
-
-        XCTAssertFalse(flow.isGuidancePresented)
         XCTAssertNil(flow.pendingTarget)
     }
 
     @MainActor
-    func testUnavailableRegisteredHelperRequestsRepair() async {
+    func testFirstInstallPromptsOnceAndSubsequentTogglesReuseHelper() async {
+        let state = SleepEnvironmentState()
+        state.requestSucceeds = true
+        var helperStatus = SleepHelperInstallStatus.notInstalled
+        var installCount = 0
         let environment = SleepController.Environment(
-            status: { .enabled },
-            register: {},
-            unregister: {},
-            request: { _ in false },
-            readState: { false },
-            openSettings: {}
+            status: { helperStatus },
+            install: {
+                installCount += 1
+                helperStatus = .installed
+            },
+            request: { target in state.request(target) },
+            readState: { state.observed }
         )
         let controller = SleepController(previewEnabled: false, environment: environment)
 
         controller.setEnabled(true)
-        while controller.isBusy {
-            await Task.yield()
-        }
+        while controller.isBusy { await Task.yield() }
+        XCTAssertTrue(controller.isEnabled)
+        XCTAssertEqual(installCount, 1)
+
+        controller.setEnabled(false)
+        while controller.isBusy { await Task.yield() }
+        XCTAssertFalse(controller.isEnabled)
+        XCTAssertEqual(installCount, 1)
+        XCTAssertEqual(state.requestCount, 2)
+    }
+
+    @MainActor
+    func testFreshInstallRetriesInitialHelperConnection() async {
+        let state = SleepEnvironmentState()
+        state.succeedOnRequest = 3
+        var helperStatus = SleepHelperInstallStatus.notInstalled
+        let environment = SleepController.Environment(
+            status: { helperStatus },
+            install: { helperStatus = .installed },
+            request: { target in state.request(target) },
+            readState: { state.observed }
+        )
+        let controller = SleepController(previewEnabled: false, environment: environment)
+
+        controller.setEnabled(true)
+        while controller.isBusy { await Task.yield() }
+
+        XCTAssertTrue(controller.isEnabled)
+        XCTAssertEqual(state.requestCount, 3)
+        XCTAssertFalse(controller.approvalFlow.isGuidancePresented)
+    }
+
+    @MainActor
+    func testUnavailableInstalledHelperRequestsRepair() async {
+        let environment = SleepController.Environment(
+            status: { .installed },
+            install: {},
+            request: { _ in false },
+            readState: { false }
+        )
+        let controller = SleepController(previewEnabled: false, environment: environment)
+
+        controller.setEnabled(true)
+        while controller.isBusy { await Task.yield() }
 
         XCTAssertEqual(controller.approvalFlow.guidance, .repair)
         XCTAssertEqual(controller.approvalFlow.pendingTarget, true)
@@ -119,24 +150,14 @@ final class SleepControlLogicTests: XCTestCase {
     }
 
     @MainActor
-    func testRepairReregistersOnceAndSubsequentToggleReusesHelper() async {
+    func testRepairInstallsOnceAndSubsequentToggleReusesHelper() async {
         let state = SleepEnvironmentState()
-        var registered = true
-        var registerCount = 0
-        var unregisterCount = 0
+        var installCount = 0
         let environment = SleepController.Environment(
-            status: { registered ? .enabled : .notRegistered },
-            register: {
-                registerCount += 1
-                registered = true
-            },
-            unregister: {
-                unregisterCount += 1
-                registered = false
-            },
+            status: { .installed },
+            install: { installCount += 1 },
             request: { target in state.request(target) },
-            readState: { state.observed },
-            openSettings: {}
+            readState: { state.observed }
         )
         let controller = SleepController(previewEnabled: false, environment: environment)
 
@@ -148,19 +169,16 @@ final class SleepControlLogicTests: XCTestCase {
         controller.performGuidanceAction()
         while controller.isBusy || !controller.isEnabled { await Task.yield() }
 
-        XCTAssertEqual(unregisterCount, 1)
-        XCTAssertEqual(registerCount, 1)
+        XCTAssertEqual(installCount, 1)
         XCTAssertEqual(state.requestCount, 2)
 
         controller.setEnabled(false)
         while controller.isBusy { await Task.yield() }
 
         XCTAssertFalse(controller.isEnabled)
-        XCTAssertEqual(unregisterCount, 1)
-        XCTAssertEqual(registerCount, 1)
+        XCTAssertEqual(installCount, 1)
         XCTAssertEqual(state.requestCount, 3)
     }
-
 
 }
 
@@ -169,10 +187,16 @@ private final class SleepEnvironmentState: @unchecked Sendable {
     private var _requestSucceeds = false
     private var _observed = false
     private var _requestCount = 0
+    private var _succeedOnRequest: Int?
 
     var requestSucceeds: Bool {
         get { withLock { _requestSucceeds } }
         set { withLock { _requestSucceeds = newValue } }
+    }
+
+    var succeedOnRequest: Int? {
+        get { withLock { _succeedOnRequest } }
+        set { withLock { _succeedOnRequest = newValue } }
     }
 
     var observed: Bool { withLock { _observed } }
@@ -181,8 +205,9 @@ private final class SleepEnvironmentState: @unchecked Sendable {
     func request(_ target: Bool) -> Bool {
         withLock {
             _requestCount += 1
-            if _requestSucceeds { _observed = target }
-            return _requestSucceeds
+            let succeeds = _succeedOnRequest.map { _requestCount >= $0 } ?? _requestSucceeds
+            if succeeds { _observed = target }
+            return succeeds
         }
     }
 
