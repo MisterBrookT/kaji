@@ -5,13 +5,15 @@ import XCTest
 final class ExposureExperimentLogicTests: XCTestCase {
     private let start = Date(timeIntervalSince1970: 1_800_000_000)
 
-    func testExactElapsedPhaseBoundariesAndAutomaticCompletion() {
+    func testExactElapsedPhaseBoundariesAndTreatmentSteadyState() {
         let state = ExposureExperimentState(startedAt: start)
         XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start), .baseline)
         XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval(72 * 60 * 60 - 0.001)), .baseline)
         XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval(72 * 60 * 60)), .treatment)
         XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval((72 + 14 * 24) * 60 * 60 - 0.001)), .treatment)
-        XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval((72 + 14 * 24) * 60 * 60)), .completed)
+        XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval((72 + 14 * 24) * 60 * 60)), .treatment)
+        XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval(30 * 86_400)), .treatment)
+        XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: start.addingTimeInterval(60 * 86_400)), .treatment)
     }
 
     func testRollbackImmediatelyRestoresLegacyAndCannotRestart() {
@@ -26,9 +28,24 @@ final class ExposureExperimentLogicTests: XCTestCase {
         XCTAssertEqual(state.startedAt, originalStart)
     }
 
-    func testBaselineAndCompletedPreserveExistingPagesExactly() {
+    func testTreatmentIsSteadyStateAndManualRollbackRestoresLegacy() {
+        let day30 = start.addingTimeInterval(30 * 86_400)
+        let state = ExposureExperimentState(startedAt: start)
+        XCTAssertEqual(ExposureExperimentLogic.phase(state: state, now: day30), .treatment)
+        XCTAssertFalse(ExposureExperimentLogic.phase(state: state, now: day30).usesLegacyExposure)
+
+        var mutable = state
+        let originalStart = mutable.startedAt
+        ExposureExperimentLogic.rollback(state: &mutable, now: day30)
+        XCTAssertEqual(ExposureExperimentLogic.phase(state: mutable, now: day30), .rolledBack)
+        XCTAssertTrue(ExposureExperimentLogic.phase(state: mutable, now: day30).usesLegacyExposure)
+        ExposureExperimentLogic.start(state: &mutable, now: day30.addingTimeInterval(1))
+        XCTAssertEqual(mutable.startedAt, originalStart)
+    }
+
+    func testBaselineAndRolledBackPreserveExistingPagesExactly() {
         let enabled = Set(KajiModuleID.allCases)
-        for phase in [ExposureExperimentPhase.notStarted, .baseline, .completed, .rolledBack] {
+        for phase in [ExposureExperimentPhase.notStarted, .baseline, .rolledBack] {
             XCTAssertEqual(
                 ExposureExperimentLogic.visiblePopoverModules(phase: phase, enabled: enabled, favorites: [.goals, .work]),
                 ModulePrefsLogic.popoverPages(enabled: enabled)

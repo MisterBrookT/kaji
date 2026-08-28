@@ -4,7 +4,6 @@ public enum ExposureExperimentPhase: String, Codable, Sendable {
     case notStarted
     case baseline
     case treatment
-    case completed
     case rolledBack
 
     public var usesLegacyExposure: Bool {
@@ -31,15 +30,13 @@ public enum ExposureEntrySource: String, Codable, CaseIterable, Sendable {
 
 public enum ExposureExperimentLogic {
     public static let baselineDuration: TimeInterval = 72 * 60 * 60
-    public static let treatmentDuration: TimeInterval = 14 * 24 * 60 * 60
 
     public static func phase(state: ExposureExperimentState, now: Date) -> ExposureExperimentPhase {
         guard let start = state.startedAt else { return .notStarted }
         if let rollback = state.rolledBackAt, rollback <= now { return .rolledBack }
         let elapsed = now.timeIntervalSince(start)
         if elapsed < 0 || elapsed < baselineDuration { return .baseline }
-        if elapsed < baselineDuration + treatmentDuration { return .treatment }
-        return .completed
+        return .treatment
     }
 
     public static func start(state: inout ExposureExperimentState, now: Date) {
@@ -49,7 +46,7 @@ public enum ExposureExperimentLogic {
     }
 
     public static func rollback(state: inout ExposureExperimentState, now: Date) {
-        guard state.startedAt != nil, phase(state: state, now: now) != .completed else { return }
+        guard state.startedAt != nil else { return }
         state.rolledBackAt = now
     }
 
