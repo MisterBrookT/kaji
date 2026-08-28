@@ -43,6 +43,9 @@ struct SettingsView: View {
     @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var mailBriefStore: MailBriefStore
     var onFixedPlanEditorChange: ((Bool) -> Void)? = nil
+    var exposurePhase: ExposureExperimentPhase
+    var onRollbackExposure: () -> Void
+    var onClearExposureData: () -> Void
 
     @State private var selectedScheduleID: UUID?
     @State private var selection: SettingsSection = .general
@@ -58,21 +61,41 @@ struct SettingsView: View {
         fixedPlanStore: FixedPlanStore,
         mailBriefStore: MailBriefStore,
         initialSection: SettingsSection = .general,
+        exposurePhase: ExposureExperimentPhase = .notStarted,
+        onRollbackExposure: @escaping () -> Void = {},
+        onClearExposureData: @escaping () -> Void = {},
         onFixedPlanEditorChange: ((Bool) -> Void)? = nil
     ) {
         self.prefs = prefs
         self.sleepController = sleepController
         self.fixedPlanStore = fixedPlanStore
         self.mailBriefStore = mailBriefStore
+        self.exposurePhase = exposurePhase
+        self.onRollbackExposure = onRollbackExposure
+        self.onClearExposureData = onClearExposureData
         self.onFixedPlanEditorChange = onFixedPlanEditorChange
         _selection = State(initialValue: initialSection)
     }
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
+    private var visibleSections: [SettingsSection] {
+        guard exposurePhase == .treatment else { return SettingsSection.allCases }
+        return SettingsSection.allCases.filter { section in
+            switch section {
+            case .general, .modules, .quota, .cli, .permissions:
+                return true
+            case .work: return prefs.isModuleEnabled(.work)
+            case .goals: return prefs.isModuleEnabled(.goals)
+            case .aiNews: return prefs.isModuleEnabled(.aiNews)
+            case .mailBrief: return prefs.isModuleEnabled(.mailBrief)
+            }
+        }
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            List(SettingsSection.allCases, selection: $selection) { section in
+            List(visibleSections, selection: $selection) { section in
                 Label(section == .permissions ? L10n.t(.permissions, prefs.language) : section.rawValue,
                       systemImage: section.systemImage)
                     .tag(section)
@@ -110,6 +133,9 @@ struct SettingsView: View {
             .accessibilityIdentifier("kaji.sleep-helper.cancel")
         } message: {
             Text(sleepGuidanceMessage)
+        }
+        .onChange(of: prefs.enabledModules) { _ in
+            if !visibleSections.contains(selection) { selection = .modules }
         }
     }
 
@@ -187,6 +213,19 @@ struct SettingsView: View {
                         Text(L10n.t(.sleepRepairMessage, prefs.language))
                             .font(.system(size: 10.5, weight: .semibold, design: .rounded))
                             .foregroundColor(t.amber)
+                    }
+                }
+                if exposurePhase == .baseline || exposurePhase == .treatment {
+                    settingRow(title: "Exposure study") {
+                        Text(exposurePhase == .baseline ? "Baseline" : "Treatment")
+                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                            .foregroundColor(t.mute)
+                        Button("Roll back", action: onRollbackExposure)
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("kaji.exposure.rollback")
+                        Button("Clear data", action: onClearExposureData)
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("kaji.exposure.clear")
                     }
                 }
             }
@@ -528,7 +567,41 @@ struct SettingsView: View {
                 if !lockedOn { prefs.setModule(id, enabled: false) }
             }
             .disabled(lockedOn)
+            if exposurePhase == .treatment, id != .quota, on {
+                Button {
+                    togglePrimaryFavorite(id)
+                } label: {
+                    Image(systemName: prefs.primaryFavorites.contains(id) ? "star.fill" : "star")
+                }
+                .buttonStyle(.plain)
+                .help("Primary favorite")
+                .accessibilityIdentifier("kaji.module.\(id.rawValue).primary")
+            }
+            if exposurePhase == .treatment, id == .work, on {
+                Button {
+                    prefs.showsWorkCompactSignal.toggle()
+                } label: {
+                    Image(systemName: prefs.showsWorkCompactSignal ? "menubar.rectangle" : "rectangle")
+                }
+                .buttonStyle(.plain)
+                .help("Show compact Work signal")
+                .accessibilityIdentifier("kaji.module.work.status-signal")
+            }
         }
+    }
+
+    private func togglePrimaryFavorite(_ id: KajiModuleID) {
+        if let index = prefs.primaryFavorites.firstIndex(of: id) {
+            prefs.primaryFavorites.remove(at: index)
+            return
+        }
+        var favorites = prefs.primaryFavorites
+        if favorites.count == 2 { favorites.removeFirst() }
+        favorites.append(id)
+        prefs.primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+            favorites,
+            enabled: prefs.enabledModules
+        )
     }
 
     private var header: some View {

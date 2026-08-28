@@ -28,6 +28,19 @@ final class Prefs: ObservableObject {
             defaults.set(raw, forKey: Key.enabledModules)
         }
     }
+    @Published var primaryFavorites: [KajiModuleID] {
+        didSet {
+            let normalized = ExposureExperimentLogic.normalizedFavorites(
+                primaryFavorites,
+                enabled: enabledModules
+            )
+            if normalized != primaryFavorites { primaryFavorites = normalized; return }
+            defaults.set(normalized.map(\.rawValue), forKey: Key.primaryFavorites)
+        }
+    }
+    @Published var showsWorkCompactSignal: Bool {
+        didSet { defaults.set(showsWorkCompactSignal, forKey: Key.showsWorkCompactSignal) }
+    }
     @Published var language: Lang {
         didSet { defaults.set(language.rawValue, forKey: Key.language) }
     }
@@ -98,6 +111,8 @@ final class Prefs: ObservableObject {
     enum Key {
         static let visibleProviders = "visibleProviders"
         static let enabledModules = "enabledModules"
+        static let primaryFavorites = "exposureExperimentPrimaryFavorites"
+        static let showsWorkCompactSignal = "exposureExperimentShowsWorkCompactSignal"
         static let language = "language"
         static let menubarStyle = "menubarStyle"
         static let showRemaining = "showRemaining"
@@ -126,7 +141,8 @@ final class Prefs: ObservableObject {
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
             aiNewsRefreshHours, mailBriefHour, mailBriefMinute,
-            mailBriefBatchSize, mailBriefConcurrency, mailBriefModel, goalGrouping
+            mailBriefBatchSize, mailBriefConcurrency, mailBriefModel, goalGrouping,
+            primaryFavorites, showsWorkCompactSignal
         ]
     }
 
@@ -159,13 +175,25 @@ final class Prefs: ObservableObject {
         d.set(true, forKey: Key.visibleProvidersV2)
 
         // lean-modules-v1: first time key is missing → slim default (quota only).
+        let normalizedEnabled: Set<KajiModuleID>
         if d.object(forKey: Key.enabledModules) == nil {
-            enabledModules = ModulePrefsLogic.slimDefault
+            normalizedEnabled = ModulePrefsLogic.slimDefault
             d.set(Array(ModulePrefsLogic.slimDefault.map(\.rawValue)), forKey: Key.enabledModules)
         } else {
             let raw = d.array(forKey: Key.enabledModules) as? [String]
-            enabledModules = ModulePrefsLogic.normalizeEnabledModules(raw)
+            normalizedEnabled = ModulePrefsLogic.normalizeEnabledModules(raw)
         }
+        enabledModules = normalizedEnabled
+
+        let savedFavorites = (d.array(forKey: Key.primaryFavorites) as? [String])?
+            .compactMap(KajiModuleID.init(rawValue:)) ?? [.goals, .work]
+        primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+            savedFavorites,
+            enabled: normalizedEnabled
+        )
+        showsWorkCompactSignal = d.object(forKey: Key.showsWorkCompactSignal) == nil
+            ? true
+            : d.bool(forKey: Key.showsWorkCompactSignal)
 
         let languageResolution = LanguagePrefsLogic.resolve(
             storedRawValue: d.string(forKey: Key.language),
@@ -262,6 +290,10 @@ final class Prefs: ObservableObject {
             next.remove(id)
         }
         enabledModules = ModulePrefsLogic.normalizeEnabledModules(Array(next.map(\.rawValue)))
+        primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+            primaryFavorites,
+            enabled: enabledModules
+        )
     }
 
     var popoverModulePages: [KajiModuleID] {
