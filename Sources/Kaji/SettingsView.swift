@@ -76,6 +76,7 @@ struct SettingsView: View {
                 Label(section == .permissions ? L10n.t(.permissions, prefs.language) : section.rawValue,
                       systemImage: section.systemImage)
                     .tag(section)
+                    .accessibilityIdentifier("kaji.settings.section.\(section.rawValue)")
             }
             .listStyle(.sidebar)
             .frame(minWidth: 170, idealWidth: 190, maxWidth: 210)
@@ -88,6 +89,49 @@ struct SettingsView: View {
         }
         .background(t.bg)
         .frame(minWidth: 640, minHeight: 460)
+        .alert(
+            sleepGuidanceTitle,
+            isPresented: Binding(
+                get: { sleepController.approvalFlow.isGuidancePresented },
+                set: { presented in
+                    if !presented {
+                        sleepController.dismissApprovalGuidance()
+                    }
+                }
+            )
+        ) {
+            Button(sleepGuidanceActionTitle) {
+                sleepController.performGuidanceAction()
+            }
+            .accessibilityIdentifier("kaji.sleep-helper.guidance-action")
+            Button(L10n.t(.cancel, prefs.language), role: .cancel) {
+                sleepController.cancelApprovalRequest()
+            }
+            .accessibilityIdentifier("kaji.sleep-helper.cancel")
+        } message: {
+            Text(sleepGuidanceMessage)
+        }
+    }
+
+    private var sleepGuidanceTitle: String {
+        let key: L10n.K = sleepController.approvalFlow.guidance == .repair
+            ? .sleepRepairTitle
+            : .sleepApprovalTitle
+        return L10n.t(key, prefs.language)
+    }
+
+    private var sleepGuidanceMessage: String {
+        let key: L10n.K = sleepController.approvalFlow.guidance == .repair
+            ? .sleepRepairMessage
+            : .sleepApprovalMessage
+        return L10n.t(key, prefs.language)
+    }
+
+    private var sleepGuidanceActionTitle: String {
+        let key: L10n.K = sleepController.approvalFlow.guidance == .repair
+            ? .repairHelper
+            : .openSystemSettings
+        return L10n.t(key, prefs.language)
     }
 
     private var mainSettings: some View {
@@ -138,7 +182,11 @@ struct SettingsView: View {
                         }
                     }
                     settingRow(title: L10n.t(.keepAwake, prefs.language)) {
-                        segment(preventSleepTitle, on: sleepController.isEnabled) {
+                        segment(
+                            preventSleepTitle,
+                            on: sleepController.isEnabled,
+                            accessibilityIdentifier: "kaji.prevent-sleep.toggle"
+                        ) {
                             sleepController.toggle()
                         }
                         .disabled(sleepController.isBusy)
@@ -730,7 +778,12 @@ struct SettingsView: View {
         .accessibilityLabel(Text(title))
     }
 
-    private func segment(_ title: String, on: Bool, action: @escaping () -> Void) -> some View {
+    private func segment(
+        _ title: String,
+        on: Bool,
+        accessibilityIdentifier: String? = nil,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -746,5 +799,6 @@ struct SettingsView: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(accessibilityIdentifier ?? "")
     }
 }

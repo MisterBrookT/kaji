@@ -60,6 +60,9 @@ final class KajiControlServerTests: XCTestCase {
                 nonce: "exact-test-nonce",
                 render: { surface, selection, outputPath in
                     ["surface": surface, "selection": selection, "path": outputPath]
+                },
+                perform: { action, target in
+                    ["action": action, "target": target as Any]
                 }
             )
         )
@@ -73,6 +76,14 @@ final class KajiControlServerTests: XCTestCase {
             path: "test/render",
             body: ["nonce": "wrong", "surface": "popover", "selection": "quota", "outputPath": "/tmp/x"]
         )
+
+        let rejectedAction = try await rawRequest(
+            automationBase,
+            method: "POST",
+            path: "test/action",
+            body: ["nonce": "wrong", "action": "set-prevent-sleep", "target": true]
+        )
+        XCTAssertEqual(rejectedAction.status, 404)
         XCTAssertEqual(rejected.status, 404)
 
         let accepted = try await rawRequest(
@@ -89,6 +100,20 @@ final class KajiControlServerTests: XCTestCase {
         XCTAssertEqual(accepted.status, 200)
         XCTAssertEqual(accepted.object["selection"] as? String, "launchd")
         XCTAssertEqual(accepted.object["path"] as? String, "/tmp/render.png")
+
+        let action = try await rawRequest(
+            automationBase,
+            method: "POST",
+            path: "test/action",
+            body: [
+                "nonce": "exact-test-nonce",
+                "action": "set-prevent-sleep",
+                "target": true,
+            ]
+        )
+        XCTAssertEqual(action.status, 200)
+        XCTAssertEqual(action.object["action"] as? String, "set-prevent-sleep")
+        XCTAssertEqual(action.object["target"] as? Bool, true)
     }
 
     private func waitUntilReachable(_ url: URL) async throws {

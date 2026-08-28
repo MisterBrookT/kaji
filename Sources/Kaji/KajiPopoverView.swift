@@ -2000,7 +2000,12 @@ struct KajiPopoverView: View {
     private var controlsFooter: some View {
         HStack(spacing: 7) {
             Spacer()
-            iconButton("gearshape", title: L10n.t(.settings, prefs.language), action: controls.onOpenSettings)
+            iconButton(
+                "gearshape",
+                title: L10n.t(.settings, prefs.language),
+                accessibilityIdentifier: "kaji.settings.open",
+                action: controls.onOpenSettings
+            )
             iconButton("power", title: L10n.t(.quit, prefs.language), action: controls.onQuit)
         }
         .frame(height: 32)
@@ -2067,6 +2072,7 @@ struct KajiPopoverView: View {
 
     private func iconButton(_ systemName: String,
                             title: String,
+                            accessibilityIdentifier: String? = nil,
                             action: @escaping () -> Void,
                             filled: Bool = false) -> some View {
         Button(action: action) {
@@ -2084,6 +2090,7 @@ struct KajiPopoverView: View {
         .buttonStyle(.plain)
         .help(title)
         .accessibilityLabel(Text(title))
+        .accessibilityIdentifier(accessibilityIdentifier ?? "")
     }
 
     private func miniButton(_ systemName: String, action: @escaping () -> Void) -> some View {

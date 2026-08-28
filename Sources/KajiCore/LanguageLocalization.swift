@@ -65,6 +65,8 @@ public enum L10n {
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
         case permissions, gmailCredential, gmailCredentialWhy, loginPermission, loginPermissionWhy
         case sleepPermission, sleepPermissionWhy, authorized, notAuthorized, needsReauthorization, authorize
+        case sleepApprovalTitle, sleepApprovalMessage, openSystemSettings, cancel
+        case sleepRepairTitle, sleepRepairMessage, repairHelper
     }
 
     private struct Text {
@@ -181,6 +183,23 @@ public enum L10n {
         .notAuthorized: .init(en: "Not authorized", zh: "未授权", ptBR: "Não autorizado", es: "No autorizado"),
         .needsReauthorization: .init(en: "Needs re-authorization", zh: "需要重新授权", ptBR: "Requer nova autorização", es: "Requiere nueva autorización"),
         .authorize: .init(en: "Authorize", zh: "授权", ptBR: "Autorizar", es: "Autorizar"),
+        .sleepApprovalTitle: .init(en: "Allow Prevent Sleep", zh: "允许 Kaji 防止休眠", ptBR: "Permitir impedir repouso", es: "Permitir impedir reposo"),
+        .sleepApprovalMessage: .init(
+            en: "macOS requires one approval. In Login Items & Extensions, turn on Kaji under App Background Activity, then return here. Later switches will not ask again.",
+            zh: "macOS 需要一次授权。请在“登录项与扩展”的“App 后台活动”中开启 Kaji，然后返回这里；之后切换不再重复询问。",
+            ptBR: "O macOS exige uma aprovação. Em Itens de Início e Extensões, ative o Kaji em Atividade em Segundo Plano e volte aqui. As próximas mudanças não pedirão novamente.",
+            es: "macOS requiere una autorización. En Ítems de inicio y extensiones, activa Kaji en Actividad en segundo plano y vuelve aquí. Los cambios posteriores no volverán a solicitarla."
+        ),
+        .openSystemSettings: .init(en: "Open System Settings", zh: "打开系统设置", ptBR: "Abrir Ajustes do Sistema", es: "Abrir Ajustes del Sistema"),
+        .cancel: .init(en: "Cancel", zh: "取消", ptBR: "Cancelar", es: "Cancelar"),
+        .sleepRepairTitle: .init(en: "Repair Prevent Sleep", zh: "修复防休眠助手", ptBR: "Reparar auxiliar antirrepouso", es: "Reparar asistente antirreposo"),
+        .sleepRepairMessage: .init(
+            en: "The helper from an earlier Kaji build can no longer start. Kaji can replace it now; macOS may then request one approval.",
+            zh: "旧版 Kaji 注册的防休眠助手已经无法启动。Kaji 可以立即替换它；随后 macOS 可能要求一次授权。",
+            ptBR: "O auxiliar de uma versão anterior do Kaji não inicia mais. O Kaji pode substituí-lo agora; depois, o macOS pode pedir uma autorização.",
+            es: "El asistente de una versión anterior de Kaji ya no puede iniciarse. Kaji puede reemplazarlo ahora; después, macOS puede pedir una autorización."
+        ),
+        .repairHelper: .init(en: "Repair Helper", zh: "修复助手", ptBR: "Reparar auxiliar", es: "Reparar asistente"),
     ]
 
     public static func t(_ key: K, _ language: AppLanguage) -> String {

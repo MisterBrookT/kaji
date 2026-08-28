@@ -53,6 +53,7 @@ struct StatusItemView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("kaji.status.quota")
             if let workSlotLabel {
                 Button(action: onWorkClick) {
                     WorkStatusSlot(label: workSlotLabel)

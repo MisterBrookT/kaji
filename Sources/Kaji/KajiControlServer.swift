@@ -10,6 +10,19 @@ final class KajiControlServer {
     struct TestAutomation {
         let nonce: String
         let render: (_ surface: String, _ selection: String, _ outputPath: String) throws -> [String: Any]
+        let perform: (_ action: String, _ target: Bool?) throws -> [String: Any]
+
+        init(
+            nonce: String,
+            render: @escaping (_ surface: String, _ selection: String, _ outputPath: String) throws -> [String: Any],
+            perform: @escaping (_ action: String, _ target: Bool?) throws -> [String: Any] = { _, _ in
+                throw ControlError.invalid("Test action is unavailable")
+            }
+        ) {
+            self.nonce = nonce
+            self.render = render
+            self.perform = perform
+        }
     }
 
     private weak var goals: DailyGoalStore?
@@ -105,18 +118,25 @@ final class KajiControlServer {
         do {
             let components = request.path.split(separator: "/").map(String.init)
             let payload: Any
-            if request.method == "POST", components == ["v1", "test", "render"] {
+            if request.method == "POST",
+               components == ["v1", "test", "render"] || components == ["v1", "test", "action"] {
                 guard let testAutomation else {
                     return .json(status: "404 Not Found", object: ["error": "Unknown local control route"])
                 }
                 let body = try request.jsonBody()
-                guard body["nonce"] as? String == testAutomation.nonce,
-                      let surface = body["surface"] as? String,
-                      let selection = body["selection"] as? String,
-                      let outputPath = body["outputPath"] as? String else {
+                guard body["nonce"] as? String == testAutomation.nonce else {
                     return .json(status: "404 Not Found", object: ["error": "Unknown local control route"])
                 }
-                payload = try testAutomation.render(surface, selection, outputPath)
+                if components.last == "render",
+                   let surface = body["surface"] as? String,
+                   let selection = body["selection"] as? String,
+                   let outputPath = body["outputPath"] as? String {
+                    payload = try testAutomation.render(surface, selection, outputPath)
+                } else if components.last == "action", let action = body["action"] as? String {
+                    payload = try testAutomation.perform(action, body["target"] as? Bool)
+                } else {
+                    return .json(status: "404 Not Found", object: ["error": "Unknown local control route"])
+                }
             } else if request.method == "GET", components == ["v1", "state"] {
                 payload = snapshotProvider()
             } else if request.method == "GET", components == ["v1", "goals"] {
