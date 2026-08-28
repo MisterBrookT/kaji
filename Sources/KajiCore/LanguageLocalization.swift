@@ -65,6 +65,7 @@ public enum L10n {
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
         case permissions, gmailCredential, gmailCredentialWhy, loginPermission, loginPermissionWhy
         case sleepPermission, sleepPermissionWhy, authorized, notAuthorized, needsReauthorization, authorize
+        case cancel, sleepRepairTitle, sleepRepairMessage, repairHelper
     }
 
     private struct Text {
@@ -181,6 +182,15 @@ public enum L10n {
         .notAuthorized: .init(en: "Not authorized", zh: "未授权", ptBR: "Não autorizado", es: "No autorizado"),
         .needsReauthorization: .init(en: "Needs re-authorization", zh: "需要重新授权", ptBR: "Requer nova autorização", es: "Requiere nueva autorización"),
         .authorize: .init(en: "Authorize", zh: "授权", ptBR: "Autorizar", es: "Autorizar"),
+        .cancel: .init(en: "Cancel", zh: "取消", ptBR: "Cancelar", es: "Cancelar"),
+        .sleepRepairTitle: .init(en: "Repair Prevent Sleep", zh: "修复防休眠助手", ptBR: "Reparar auxiliar antirrepouso", es: "Reparar asistente antirreposo"),
+        .sleepRepairMessage: .init(
+            en: "Kaji needs administrator approval to install or update its Prevent Sleep helper. Enter your password once; normal switches will not ask again.",
+            zh: "Kaji 需要管理员授权来安装或更新防休眠助手。输入一次密码后，日常开关不会再重复询问。",
+            ptBR: "O Kaji precisa da aprovação do administrador para instalar ou atualizar o auxiliar antirrepouso. Digite a senha uma vez; as mudanças normais não pedirão novamente.",
+            es: "Kaji necesita aprobación de administrador para instalar o actualizar el asistente antirreposo. Introduce la contraseña una vez; los cambios normales no volverán a pedirla."
+        ),
+        .repairHelper: .init(en: "Repair Helper", zh: "修复助手", ptBR: "Reparar auxiliar", es: "Reparar asistente"),
     ]
 
     public static func t(_ key: K, _ language: AppLanguage) -> String {

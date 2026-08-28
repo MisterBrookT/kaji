@@ -43,6 +43,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         selection: selection,
                         outputPath: outputPath
                     )
+                },
+                perform: { [weak self] action, target in
+                    guard let self else { throw TestUIAutomationError.appUnavailable }
+                    return try self.performTestAction(action, target: target)
                 }
             )
         }
@@ -635,6 +639,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "mailBriefConcurrency": prefs.mailBriefConcurrency,
                 "mailBriefModel": prefs.mailBriefModel.rawValue,
             ],
+            "sleep": [
+                "enabled": sleepController.isEnabled,
+                "busy": sleepController.isBusy,
+                "targetEnabled": jsonOptional(sleepController.targetEnabled),
+                "guidance": jsonOptional(sleepController.approvalFlow.guidance.map(String.init(describing:))),
+                "guidancePresented": sleepController.approvalFlow.isGuidancePresented,
+                "lastError": jsonOptional(sleepController.lastError),
+            ],
             "quota": [
                 "providers": store.providers.map {
                     [
@@ -715,6 +727,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "failed": jobs.count { $0.state == .failed },
             "idle": jobs.count { $0.state == .idle },
             "unloaded": jobs.count { $0.state == .unloaded },
+        ]
+    }
+
+    private func performTestAction(_ action: String, target: Bool?) throws -> [String: Any] {
+        guard ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_ARTIFACTS"] != nil else {
+            throw TestUIAutomationError.disabled
+        }
+        switch action {
+        case "set-prevent-sleep":
+            guard let target else { throw TestUIAutomationError.invalidAction }
+            sleepController.setEnabled(target)
+        case "perform-sleep-guidance":
+            sleepController.performGuidanceAction()
+        case "cancel-sleep-guidance":
+            sleepController.cancelApprovalRequest()
+        default:
+            throw TestUIAutomationError.invalidAction
+        }
+        return [
+            "action": action,
+            "accepted": true,
         ]
     }
 
@@ -970,6 +1003,7 @@ private enum TestUIAutomationError: Error {
     case appUnavailable
     case disabled
     case invalidOutputPath
+    case invalidAction
     case invalidSelection
     case invalidSurface
     case renderFailed
