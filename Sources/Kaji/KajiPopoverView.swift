@@ -88,6 +88,8 @@ struct KajiPopoverView: View {
     let controls: KajiPopoverControls
     let maxContentHeight: CGFloat
     let onContentSizeChange: ((CGSize) -> Void)?
+    var exposurePhase: ExposureExperimentPhase = .notStarted
+    var onExposureEvent: (ExposureStudyEvent, KajiModuleID?, ExposureEntrySource?) -> Void = { _, _, _ in }
     /// Offscreen snapshots (ImageRenderer) often paint ScrollView as empty —
     /// pass `false` for screenshot harnesses.
     var scrollsContent: Bool = true
@@ -115,6 +117,8 @@ struct KajiPopoverView: View {
     @State private var measuredTotalHeight: CGFloat = 0
     @State private var measuredScrollHeight: CGFloat = 0
     @FocusState private var noteFieldFocused: Bool
+    @State private var previousPanel: KajiModuleID?
+    @State private var previousPanelOpenedAt: Date?
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -128,7 +132,13 @@ struct KajiPopoverView: View {
             measuredChrome: panelChromeHeight
         )
     }
-    private var pages: [KajiModuleID] { prefs.popoverModulePages }
+    private var pages: [KajiModuleID] {
+        ExposureExperimentLogic.visiblePopoverModules(
+            phase: exposurePhase,
+            enabled: prefs.enabledModules,
+            favorites: prefs.primaryFavorites
+        )
+    }
     private var panel: KajiModuleID {
         get { navigation.panel }
         nonmutating set { navigation.panel = newValue }
@@ -166,10 +176,19 @@ struct KajiPopoverView: View {
         .onChange(of: prefs.enabledModules) { _ in
             clampPanelToEnabledPages()
         }
-        .onChange(of: panel) { _ in
+        .onChange(of: panel) { newPanel in
             controls.onDismissDetail()
             noteHoverGeneration += 1
             dismissNoteCard()
+            let now = Date()
+            if previousPanel != nil,
+               previousPanel != newPanel,
+               let openedAt = previousPanelOpenedAt,
+               now.timeIntervalSince(openedAt) <= 5 {
+                onExposureEvent(.quickSwitch, newPanel, nil)
+            }
+            previousPanel = newPanel
+            previousPanelOpenedAt = now
         }
         .onChange(of: focusedGoalID) { newValue in
             if let previousFocusedGoalID,
@@ -228,7 +247,16 @@ struct KajiPopoverView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    @ViewBuilder
     private var header: some View {
+        if exposurePhase == .treatment {
+            treatmentHeader
+        } else {
+            legacyHeader
+        }
+    }
+
+    private var legacyHeader: some View {
         HStack(spacing: 8) {
             if pages.count > 1 {
                 arrow("chevron.left") { move(-1) }
@@ -243,6 +271,43 @@ struct KajiPopoverView: View {
                 .foregroundColor(t.ash)
             if pages.count > 1 {
                 arrow("chevron.right") { move(1) }
+            }
+        }
+    }
+
+    private var treatmentHeader: some View {
+        HStack(spacing: 5) {
+            ForEach(pages, id: \.self) { module in
+                Button(moduleTitle(module)) {
+                    panel = module
+                    onExposureEvent(.popoverOpen, module, .primary)
+                }
+                .buttonStyle(.plain)
+                .font(.system(size: 10.5, weight: panel == module ? .bold : .semibold, design: .rounded))
+                .foregroundColor(panel == module ? t.cream : t.ash)
+                .accessibilityIdentifier("kaji.primary.\(module.rawValue)")
+            }
+            Spacer(minLength: 4)
+            let more = ExposureExperimentLogic.moreModules(
+                enabled: prefs.enabledModules,
+                favorites: prefs.primaryFavorites
+            )
+            if !more.isEmpty {
+                Menu {
+                    ForEach(more, id: \.self) { module in
+                        Button(moduleTitle(module)) {
+                            panel = module
+                            onExposureEvent(.popoverOpen, module, .more)
+                        }
+                    }
+                } label: {
+                    Text("More")
+                        .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                }
+                .menuStyle(.borderlessButton)
+                .fixedSize()
+                .onTapGesture { onExposureEvent(.moreOpen, nil, nil) }
+                .accessibilityIdentifier("kaji.more")
             }
         }
     }
@@ -2011,8 +2076,10 @@ struct KajiPopoverView: View {
         .frame(height: 32)
     }
 
-    private var panelTitle: String {
-        switch panel {
+    private var panelTitle: String { moduleTitle(panel) }
+
+    private func moduleTitle(_ module: KajiModuleID) -> String {
+        switch module {
         case .quota: return "Quota"
         case .work: return "Work / Break"
         case .system: return "System"
@@ -2048,6 +2115,9 @@ struct KajiPopoverView: View {
     }
 
     private func clampPanelToEnabledPages() {
+        if exposurePhase == .treatment, prefs.enabledModules.contains(panel) {
+            return
+        }
         let list = pages
         if list.isEmpty {
             panel = .quota
