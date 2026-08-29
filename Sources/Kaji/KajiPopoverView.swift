@@ -80,7 +80,6 @@ struct KajiPopoverView: View {
     @ObservedObject var systemMonitor: SystemMonitor
     @ObservedObject var dailyGoals: DailyGoalStore
     @ObservedObject var fixedPlanStore: FixedPlanStore
-    @ObservedObject var aiNewsStore: AIHotNewsStore
     @ObservedObject var mailBriefStore: MailBriefStore
     @ObservedObject var launchdJobStore: LaunchdJobStore
     @ObservedObject var navigation: PopoverNavigation
@@ -104,8 +103,6 @@ struct KajiPopoverView: View {
     @State private var goalCreationTagName = GoalTag.personal.rawValue
     @State private var goalCreationTagColor: UInt32 = 0x8E6AD8
     @State private var goalCreationNote = ""
-    @State private var hoveredNewsID: String?
-    @State private var newsHoverGeneration = 0
     @State private var hoveredNoteGoalID: UUID?
     @State private var hoveredNoteHorizon: GoalHorizon = .today
     @State private var noteHoverGeneration = 0
@@ -323,8 +320,6 @@ struct KajiPopoverView: View {
             systemPanel
         case .goals:
             goalsPanel
-        case .aiNews:
-            aiNewsPanel
         case .mailBrief:
             mailBriefPanel
         case .launchd:
@@ -478,35 +473,6 @@ struct KajiPopoverView: View {
         }
     }
 
-    private var aiNewsPanel: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            switch aiNewsStore.state {
-            case .loading where aiNewsStore.topics.isEmpty:
-                HStack { Spacer(); ProgressView(); Text(L10n.t(.loading, prefs.language)); Spacer() }.padding(24)
-            case .failed where aiNewsStore.topics.isEmpty:
-                Button(L10n.t(.retry, prefs.language)) { aiNewsStore.refresh(force: true) }
-                    .frame(maxWidth: .infinity).padding(20)
-            case .empty:
-                Text(L10n.t(.noHotNews, prefs.language)).foregroundColor(t.mute).frame(maxWidth: .infinity).padding(24)
-            default:
-                ForEach(aiNewsStore.topics) { topic in
-                    aiNewsRow(topic)
-                }
-            }
-            if aiNewsStore.state == .stale {
-                Text("AI HOT unavailable · cached results")
-                    .font(.system(size: 9, weight: .medium)).foregroundColor(t.mute)
-            }
-            HStack {
-                Button { aiNewsStore.refresh(force: true) } label: {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
-                }.buttonStyle(.plain).help(L10n.t(.refreshNow, prefs.language))
-                Spacer()
-                Link("\(L10n.t(.dataSource, prefs.language)): AI HOT", destination: URL(string: "https://aihot.virxact.com")!)
-                    .font(.system(size: 9, weight: .medium)).foregroundColor(t.mute)
-            }.padding(.top, 3)
-        }
-    }
 
     private var mailBriefPanel: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -751,96 +717,6 @@ struct KajiPopoverView: View {
         }
     }
 
-
-
-    private func aiNewsRow(_ topic: AIHotTopic) -> some View {
-        Button {
-            aiNewsStore.markRead(topic)
-            NSWorkspace.shared.open(topic.originalURL)
-        } label: {
-            HStack(alignment: .top, spacing: 8) {
-                Text(String(format: "%02d", topic.rank))
-                    .font(.system(size: 10, weight: .bold, design: .monospaced)).foregroundColor(t.ash).frame(width: 20)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(topic.title).font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(t.cream).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(topic.latestAt.formatted(.relative(presentation: .numeric)))
-                        .font(.system(size: 8.5, weight: .medium)).foregroundColor(t.mute).lineLimit(1)
-                }
-            }.padding(7).background(RoundedRectangle(cornerRadius: 7).fill(t.panel.opacity(0.7)))
-                .opacity(aiNewsStore.readTopicIDs.contains(topic.id) ? 0.58 : 1)
-        }
-        .buttonStyle(.plain)
-        .onHover { inside in updateNewsHover(topic, inside: inside) }
-        .popover(
-            isPresented: Binding(
-                get: { hoveredNewsID == topic.id },
-                set: {
-                    if !$0, hoveredNewsID == topic.id {
-                        newsHoverGeneration += 1
-                        hoveredNewsID = nil
-                    }
-                }
-            ),
-            arrowEdge: .trailing
-        ) {
-            aiNewsDetail(topic)
-                .onHover { updateNewsDetailHover(inside: $0) }
-        }
-    }
-
-    private func aiNewsDetail(_ topic: AIHotTopic) -> some View {
-        let story = topic.storyPublicID.flatMap { aiNewsStore.hoveredStoryByID[$0] }
-        let sourceNames = topic.sourceNames.isEmpty ? [topic.sourceName] : topic.sourceNames
-        let sourceSummary = sourceNames.prefix(3).joined(separator: " · ")
-        return VStack(alignment: .leading, spacing: 7) {
-            Text(topic.title)
-                .font(.system(size: 12, weight: .bold))
-                .fixedSize(horizontal: false, vertical: true)
-            Divider()
-            ScrollView {
-                Text(story?.digest ?? story?.latest ?? L10n.t(.loading, prefs.language))
-                    .font(.system(size: 10))
-                    .textSelection(.enabled)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 320)
-            Divider()
-            Text(sourceSummary)
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(t.mute)
-                .lineLimit(2)
-            Text("\(topic.sourceCount) \(L10n.t(.sources, prefs.language)) · \(topic.latestAt.formatted(.relative(presentation: .numeric)))")
-                .font(.system(size: 8.5, weight: .medium))
-                .foregroundColor(t.mute)
-            Link("AI HOT", destination: topic.aiHotURL).font(.system(size: 9, weight: .semibold))
-        }.padding(12).frame(width: 250, alignment: .leading)
-    }
-
-    private func updateNewsHover(_ topic: AIHotTopic, inside: Bool) {
-        let hadActiveTopic = hoveredNewsID != nil
-        newsHoverGeneration += 1
-        let generation = newsHoverGeneration
-        let delay = inside
-            ? HoverDisclosurePolicy.openDelay(hasActiveTopic: hadActiveTopic)
-            : HoverDisclosurePolicy.closeDelay
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            guard generation == newsHoverGeneration else { return }
-            if inside { hoveredNewsID = topic.id; aiNewsStore.loadStory(for: topic) }
-            else if hoveredNewsID == topic.id { hoveredNewsID = nil }
-        }
-    }
-
-    private func updateNewsDetailHover(inside: Bool) {
-        newsHoverGeneration += 1
-        guard !inside else { return }
-        let generation = newsHoverGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + HoverDisclosurePolicy.closeDelay) {
-            guard generation == newsHoverGeneration else { return }
-            hoveredNewsID = nil
-        }
-    }
 
     private func scheduleGoalRow(_ schedule: ScheduledGoal) -> some View {
         let completed = fixedPlanStore.isCompleted(schedule)
@@ -2084,7 +1960,6 @@ struct KajiPopoverView: View {
         case .work: return "Work / Break"
         case .system: return "System"
         case .goals: return "Goals"
-        case .aiNews: return L10n.t(.aiNews, prefs.language)
         case .mailBrief: return "Mail Brief"
         case .launchd: return "Background Tasks"
         }

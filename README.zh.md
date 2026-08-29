@@ -52,7 +52,6 @@ Release **不**附 `.app.zip`（未签名浏览器下载易被 Gatekeeper 拦）
 | **Work / Break** | 关 | 专注计时、菜单栏倒计时、休息遮罩 |
 | **System** | 关 | CPU / 内存、磁盘分类、顶部进程 |
 | **Goals** | 关 | Today / Week / Vision / Schedule、说明、标签与热力图 |
-| **AI News** | 关 | AI HOT Top 10、hover 摘要与来源信息 |
 | **Pet** | 桥接 | 可选 Navi：`~/Library/Application Support/Kaji/pet-state.json` |
 
 主题只有 **Mono**（黑白灰，浅色 / 深色）。

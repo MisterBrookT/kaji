@@ -52,7 +52,6 @@ As Releases não incluem `.app.zip`. Downloads sem assinatura feitos pelo navega
 | **Work / Break** | desligado | Timer de foco, contagem regressiva na barra e sobreposição de pausa |
 | **System** | desligado | CPU / memória, categorias de disco e processos principais |
 | **Goals** | desligado | Today / Week / Vision / Schedule, notas, etiquetas e mapa de calor |
-| **AI News** | desligado | Top 10 do AI HOT, resumos no hover e contexto das fontes |
 | **Pet** | ponte | Navi opcional via `~/Library/Application Support/Kaji/pet-state.json` |
 
 Tema: somente **Mono** (preto / branco / cinza, claro e escuro).

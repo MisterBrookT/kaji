@@ -54,14 +54,14 @@ final class ExposureExperimentLogicTests: XCTestCase {
     }
 
     func testTreatmentPrimaryAndMoreAreStableBoundedAndExcludeDisabled() {
-        let enabled: Set<KajiModuleID> = [.quota, .work, .system, .goals, .aiNews]
+        let enabled: Set<KajiModuleID> = [.quota, .work, .system, .goals]
         XCTAssertEqual(
-            ExposureExperimentLogic.primaryModules(enabled: enabled, favorites: [.goals, .work, .aiNews]),
+            ExposureExperimentLogic.primaryModules(enabled: enabled, favorites: [.goals, .work]),
             [.quota, .goals, .work]
         )
         XCTAssertEqual(
             ExposureExperimentLogic.moreModules(enabled: enabled, favorites: [.goals, .work]),
-            [.system, .aiNews]
+            [.system]
         )
         XCTAssertEqual(
             ExposureExperimentLogic.primaryModules(enabled: [.quota, .goals], favorites: [.work, .goals]),

@@ -52,7 +52,6 @@ Las Releases no incluyen `.app.zip`: Gatekeeper bloquea las descargas sin firma 
 | **Work / Break** | desactivado | Temporizador de enfoque, cuenta regresiva en la barra y superposición de descanso |
 | **System** | desactivado | CPU / memoria, categorías de disco y procesos principales |
 | **Goals** | desactivado | Today / Week / Vision / Schedule, notas, etiquetas y mapa de calor |
-| **AI News** | desactivado | Top 10 de AI HOT, resúmenes al pasar el cursor y contexto de fuentes |
 | **Pet** | puente | Navi opcional mediante `~/Library/Application Support/Kaji/pet-state.json` |
 
 Tema: solo **Mono** (negro / blanco / gris, claro y oscuro).

@@ -10,10 +10,10 @@ PREFS_DOMAIN="dev.kaji"
 NONCE="$(uuidgen)-$(uuidgen)"
 PORT="$(jot -r 1 40000 59999)"
 SMOKE_DOMAIN="dev.kaji.ui-smoke.$NONCE"
-SEED_MODULES=(quota work system goals aiNews mailBrief launchd)
+SEED_MODULES=(quota work system goals mailBrief launchd)
 SEED_LANGUAGE=en
-PAGE_IDS="quota|work|system|goals|aiNews|mailBrief|launchd|launchd:application|launchd:appleSystem"
-SETTINGS_SECTIONS="General|Modules|Work|Goals|Quota|AI News|Mail Brief|CLI|Permissions"
+PAGE_IDS="quota|work|system|goals|mailBrief|launchd|launchd:application|launchd:appleSystem"
+SETTINGS_SECTIONS="General|Modules|Work|Goals|Quota|Mail Brief|CLI|Permissions"
 
 seed_modules_plist_array() {
     local joined

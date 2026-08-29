@@ -59,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
-    private let aiNewsStore: AIHotNewsStore
     private let mailBriefStore: MailBriefStore
     private let launchdJobStore = LaunchdJobStore()
     private let exposureStudy: ExposureStudyStore
@@ -76,9 +75,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs = Prefs(defaults: defaults)
         dailyGoals = DailyGoalStore(defaults: defaults)
         fixedPlanStore = FixedPlanStore(defaults: defaults)
-        aiNewsStore = AIHotNewsStore(
-            cacheURL: cacheDirectory?.appendingPathComponent("ai-news-cache-v1.json")
-        )
         mailBriefStore = MailBriefStore(
             cacheURL: cacheDirectory?.appendingPathComponent("mail-brief-cache-v1.json")
         )
@@ -142,11 +138,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         exposureStudy.didChangePhase
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildExposureSurfaces() }
-            .store(in: &cancellables)
-        prefs.$aiNewsRefreshHours
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] hours in self?.aiNewsStore.updateRefreshHours(hours) }
             .store(in: &cancellables)
         Publishers.CombineLatest4(prefs.$mailBriefHour, prefs.$mailBriefMinute,
                                   prefs.$mailBriefBatchSize, prefs.$mailBriefConcurrency)
@@ -256,7 +247,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             systemMonitor.stop()
         }
-        aiNewsStore.setEnabled(modules.contains(.aiNews), refreshHours: prefs.aiNewsRefreshHours)
         mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
                                   batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
                                   model: prefs.mailBriefModel)
@@ -276,7 +266,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
         breakWatchdogTimer?.invalidate()
         closeBreakOverlay()
-        aiNewsStore.stop()
         mailBriefStore.stop()
         launchdJobStore.stop()
         controlServer.stop()
@@ -287,9 +276,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from hitting the network on every menubar interaction.
         updateChecker.checkIfDue()
         dailyGoals.refreshPeriodBoundaries()
-        if prefs.isModuleEnabled(.aiNews) {
-            aiNewsStore.setEnabled(true, refreshHours: prefs.aiNewsRefreshHours)
-        }
         if prefs.isModuleEnabled(.mailBrief) { mailBriefStore.evaluateSchedule() }
     }
 
@@ -304,14 +290,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: presentedWorkSlotLabel,
                                   goalsSlotLabel: usesLegacyExposure ? goalsStatusSlotLabel : nil,
-                                  showsAINewsSlot: usesLegacyExposure && prefs.isModuleEnabled(.aiNews),
                                   mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
                                   showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
                                   launchdStatus: usesLegacyExposure ? launchdStatus : nil,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
                                   onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                  onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
                                   onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
                                   onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
         hostingView = KajiHostingView(rootView: view)
@@ -332,14 +316,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: presentedWorkSlotLabel,
                                                goalsSlotLabel: usesLegacyExposure ? goalsStatusSlotLabel : nil,
-                                               showsAINewsSlot: usesLegacyExposure && prefs.isModuleEnabled(.aiNews),
                                                mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
                                                showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
                                                launchdStatus: usesLegacyExposure ? launchdStatus : nil,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
                                                onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                               onAINewsClick: { [weak self] in self?.showPopover(.aiNews) },
                                                onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
                                                onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
         statusItem.length = statusItemLength
@@ -403,7 +385,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let goalsStatusSlotLabel {
                 length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
             }
-            if prefs.isModuleEnabled(.aiNews) { length += 20 }
             if prefs.isModuleEnabled(.mailBrief) {
                 length += 22 + CGFloat(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: mailBriefStore.actCount)?.count ?? 0) * 7
             }
@@ -510,7 +491,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .aiNews, .mailBrief, .launchd:
+        case .work, .goalsToday, .mailBrief, .launchd:
             return .quota
         }
     }
@@ -523,8 +504,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
-        case .aiNews:
-            return popoverNavigation.panel == .aiNews
         case .mailBrief:
             return popoverNavigation.panel == .mailBrief
         case .launchd:
@@ -549,8 +528,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
-        case .aiNews:
-            popoverNavigation.panel = prefs.isModuleEnabled(.aiNews) ? .aiNews : .quota
         case .mailBrief:
             popoverNavigation.panel = prefs.isModuleEnabled(.mailBrief) ? .mailBrief : .quota
         case .launchd:
@@ -563,7 +540,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .quota: .quota
         case .work: .work
         case .goalsToday: .goals
-        case .aiNews: .aiNews
         case .mailBrief: .mailBrief
         case .launchd: .launchd
         }
@@ -585,7 +561,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
-                                      aiNewsStore: aiNewsStore,
                                       mailBriefStore: mailBriefStore,
                                       launchdJobStore: launchdJobStore,
                                       navigation: popoverNavigation,
@@ -682,7 +657,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "autoCleanEnabled": prefs.autoCleanEnabled,
                 "launchAtLogin": prefs.launchAtLogin,
                 "preventSleep": prefs.preventSleep,
-                "aiNewsRefreshHours": prefs.aiNewsRefreshHours,
                 "mailBriefHour": prefs.mailBriefHour,
                 "mailBriefMinute": prefs.mailBriefMinute,
                 "mailBriefBatchSize": prefs.mailBriefBatchSize,
@@ -745,12 +719,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 "activity": jsonValue(dailyGoals.heatmapDays),
                 "schedules": jsonValue(fixedPlanStore.schedules),
-            ],
-            "aiNews": [
-                "state": String(describing: aiNewsStore.state),
-                "topics": jsonValue(aiNewsStore.topics),
-                "readTopicIDs": aiNewsStore.readTopicIDs.sorted(),
-                "lastSuccessfulRefresh": jsonOptional(aiNewsStore.lastSuccessfulRefresh?.timeIntervalSince1970),
             ],
             "mailBrief": [
                 "state": String(describing: mailBriefStore.state),

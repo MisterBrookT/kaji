@@ -25,14 +25,12 @@ struct StatusItemView: View {
     var workSlotLabel: String? = nil
     /// Optional today's completion summary (`n/n`) when Goals is enabled.
     var goalsSlotLabel: String? = nil
-    var showsAINewsSlot: Bool = false
     var mailBriefSlotLabel: String? = nil
     var showsMailBriefSlot: Bool = false
     var launchdStatus: LaunchdMenuBarStatus? = nil
     var onQuotaClick: () -> Void = {}
     var onWorkClick: () -> Void = {}
     var onGoalsClick: () -> Void = {}
-    var onAINewsClick: () -> Void = {}
     var onMailBriefClick: () -> Void = {}
     var onLaunchdClick: () -> Void = {}
 
@@ -67,15 +65,6 @@ struct StatusItemView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-            }
-            if showsAINewsSlot {
-                Button(action: onAINewsClick) {
-                    Image(systemName: "newspaper")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(scheme == .dark ? .white : .black)
-                        .frame(width: 15, height: 18)
-                        .contentShape(Rectangle())
-                }.buttonStyle(.plain)
             }
             if showsMailBriefSlot {
                 Button(action: onMailBriefClick) {
