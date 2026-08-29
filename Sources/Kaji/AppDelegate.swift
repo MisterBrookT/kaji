@@ -131,10 +131,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildExposureSurfaces() }
             .store(in: &cancellables)
-        prefs.$showsWorkCompactSignal
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.updateStatusItem() }
-            .store(in: &cancellables)
         exposureStudy.didChangePhase
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildExposureSurfaces() }
@@ -296,7 +292,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let view = StatusItemView(providers: menuBarProviders,
                                   showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil,
-                                  workSlotLabel: presentedWorkSlotLabel,
+                                  workSlotLabel: workStatusSlotLabel,
                                   goalsSlotLabel: goalsStatusSlotLabel,
                                   mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
                                   showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
@@ -322,7 +318,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hostingView?.rootView = StatusItemView(providers: menuBarProviders,
                                                showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil,
-                                               workSlotLabel: presentedWorkSlotLabel,
+                                               workSlotLabel: workStatusSlotLabel,
                                                goalsSlotLabel: goalsStatusSlotLabel,
                                                mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
                                                showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
@@ -336,11 +332,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var usesLegacyExposure: Bool { exposureStudy.phase.usesLegacyExposure }
-
-    private var presentedWorkSlotLabel: String? {
-        guard usesLegacyExposure || prefs.showsWorkCompactSignal else { return nil }
-        return workStatusSlotLabel
-    }
 
     private func rebuildExposureSurfaces() {
         updateStatusItem()
@@ -388,7 +379,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let shown = max(1, min(3, menuBarProviders.count))
         var length = CGFloat(shown) * 26 + 6
         // Compact monospaced `MM:SS` to the right of the rings (~40pt).
-        if presentedWorkSlotLabel != nil {
+        if workStatusSlotLabel != nil {
             length += 40
         }
         if let goalsStatusSlotLabel {

@@ -38,9 +38,6 @@ final class Prefs: ObservableObject {
             defaults.set(normalized.map(\.rawValue), forKey: Key.primaryFavorites)
         }
     }
-    @Published var showsWorkCompactSignal: Bool {
-        didSet { defaults.set(showsWorkCompactSignal, forKey: Key.showsWorkCompactSignal) }
-    }
     @Published var language: Lang {
         didSet { defaults.set(language.rawValue, forKey: Key.language) }
     }
@@ -105,7 +102,6 @@ final class Prefs: ObservableObject {
         static let visibleProviders = "visibleProviders"
         static let enabledModules = "enabledModules"
         static let primaryFavorites = "exposureExperimentPrimaryFavorites"
-        static let showsWorkCompactSignal = "exposureExperimentShowsWorkCompactSignal"
         static let language = "language"
         static let menubarStyle = "menubarStyle"
         static let showRemaining = "showRemaining"
@@ -134,7 +130,7 @@ final class Prefs: ObservableObject {
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
             mailBriefHour, mailBriefMinute,
             mailBriefBatchSize, mailBriefConcurrency, mailBriefModel, goalGrouping,
-            primaryFavorites, showsWorkCompactSignal
+            primaryFavorites
         ]
     }
 
@@ -142,6 +138,9 @@ final class Prefs: ObservableObject {
         self.defaults = defaults
         let d = defaults
         d.removeObject(forKey: "mcpEnabled")
+        // Work compact-signal toggle removed in the settings simplification:
+        // hardcoded always-on, matching the shipped default. Drop the orphan value.
+        d.removeObject(forKey: "exposureExperimentShowsWorkCompactSignal")
         let hadExistingPreferences = Key.existingPreferenceKeys.contains {
             d.object(forKey: $0) != nil
         }
@@ -183,10 +182,6 @@ final class Prefs: ObservableObject {
             savedFavorites,
             enabled: normalizedEnabled
         )
-        showsWorkCompactSignal = d.object(forKey: Key.showsWorkCompactSignal) == nil
-            ? true
-            : d.bool(forKey: Key.showsWorkCompactSignal)
-
         let languageResolution = LanguagePrefsLogic.resolve(
             storedRawValue: d.string(forKey: Key.language),
             hadExistingPreferences: hadExistingPreferences,
