@@ -280,7 +280,6 @@ final class PopoverRenderFixture {
     let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
     let fixedPlanStore: FixedPlanStore
-    let aiNewsStore: AIHotNewsStore
     let mailBriefStore: MailBriefStore
     let launchdJobStore: LaunchdJobStore
     let navigation = PopoverNavigation()
@@ -316,20 +315,6 @@ final class PopoverRenderFixture {
                 ),
             ],
             updated: Date(timeIntervalSince1970: 1_700_000_000)
-        )
-        aiNewsStore = AIHotNewsStore(
-            previewTopics: [
-                AIHotTopic(
-                    rank: 1, id: "fixture-ai-topic", title: "Fixture AI headline",
-                    sourceName: "Fixture Source", sourceCount: 1, signalCount: 1,
-                    sourceNames: ["Fixture Source"],
-                    latestAt: Date(timeIntervalSince1970: 1_700_000_000),
-                    aiHotURL: URL(string: "https://example.invalid/fixture-ai")!,
-                    originalURL: URL(string: "https://example.invalid/fixture-source")!,
-                    storyPublicID: nil
-                ),
-            ],
-            cacheURL: cacheDirectory.appendingPathComponent("ai-news-cache-v1.json")
         )
         mailBriefStore = MailBriefStore(
             previewGeneration: MailBriefGeneration(
@@ -367,7 +352,6 @@ final class PopoverRenderFixture {
     }
 
     func tearDown() {
-        aiNewsStore.stop()
         mailBriefStore.stop()
         removeDefaultsSuite(defaults, named: suiteName)
         try? FileManager.default.removeItem(at: cacheDirectory)
@@ -389,7 +373,6 @@ final class PopoverRenderFixture {
             systemMonitor: systemMonitor,
             dailyGoals: dailyGoals,
             fixedPlanStore: fixedPlanStore,
-            aiNewsStore: aiNewsStore,
             mailBriefStore: mailBriefStore,
             launchdJobStore: launchdJobStore,
             navigation: navigation,

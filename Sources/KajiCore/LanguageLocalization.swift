@@ -49,7 +49,7 @@ public enum LanguagePrefsLogic {
 public enum L10n {
     public enum K: CaseIterable, Sendable {
         case fiveHQuota, week, quit, stale, waiting, needPython
-        case refreshNow, quitApp, settings, advancedSettings, appearance, language, providers, show
+        case quitApp, settings, advancedSettings, appearance, language, providers, show
         case hide, on, off
         case usage, showUsed, showRemaining
         case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
@@ -59,8 +59,7 @@ public enum L10n {
         case launchAtLogin
         case modules, modulesHint
         case cliIntegrationHint, cliExamplePrompt, copyPrompt
-        case moduleQuota, moduleWork, moduleSystem, moduleGoals, moduleAINews
-        case aiNews, dataSource, updated, loading, noHotNews, retry, sources, refreshInterval
+        case moduleQuota, moduleWork, moduleSystem, moduleGoals
         case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
         case permissions, gmailCredential, gmailCredentialWhy, loginPermission, loginPermissionWhy
@@ -96,7 +95,6 @@ public enum L10n {
             ptBR: "Requer Python 3 · execute  xcode-select --install",
             es: "Requiere Python 3 · ejecuta  xcode-select --install"
         ),
-        .refreshNow: .init(en: "Refresh Now", zh: "立即刷新", ptBR: "Atualizar agora", es: "Actualizar ahora"),
         .quitApp: .init(en: "Quit Kaji", zh: "退出 Kaji", ptBR: "Sair do Kaji", es: "Salir de Kaji"),
         .settings: .init(en: "Settings", zh: "设置", ptBR: "Ajustes", es: "Ajustes"),
         .advancedSettings: .init(en: "Advanced", zh: "高级设置", ptBR: "Avançado", es: "Avanzado"),
@@ -153,15 +151,6 @@ public enum L10n {
         .moduleWork: .init(en: "Work / Break", zh: "Work / Break", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
         .moduleSystem: .init(en: "System", zh: "System", ptBR: "Sistema", es: "Sistema"),
         .moduleGoals: .init(en: "Goals", zh: "Goals", ptBR: "Metas", es: "Metas"),
-        .moduleAINews: .init(en: "AI News", zh: "AI 新闻", ptBR: "Notícias de IA", es: "Noticias de IA"),
-        .aiNews: .init(en: "AI News", zh: "AI 新闻", ptBR: "Notícias de IA", es: "Noticias de IA"),
-        .dataSource: .init(en: "Data source", zh: "数据来源", ptBR: "Fonte de dados", es: "Fuente de datos"),
-        .updated: .init(en: "Updated", zh: "更新于", ptBR: "Atualizado", es: "Actualizado"),
-        .loading: .init(en: "Loading…", zh: "加载中…", ptBR: "Carregando…", es: "Cargando…"),
-        .noHotNews: .init(en: "No hot news", zh: "暂无热点", ptBR: "Sem notícias em alta", es: "Sin noticias destacadas"),
-        .retry: .init(en: "Retry", zh: "重试", ptBR: "Tentar novamente", es: "Reintentar"),
-        .sources: .init(en: "sources", zh: "个来源", ptBR: "fontes", es: "fuentes"),
-        .refreshInterval: .init(en: "Refresh", zh: "刷新间隔", ptBR: "Atualização", es: "Actualización"),
         .goalGroup: .init(en: "Group", zh: "分组", ptBR: "Agrupar", es: "Agrupar"),
         .goalGroupingNone: .init(en: "No Grouping", zh: "不分组", ptBR: "Sem agrupamento", es: "Sin agrupar"),
         .goalGroupingByTag: .init(en: "By Tag", zh: "按标签", ptBR: "Por etiqueta", es: "Por etiqueta"),

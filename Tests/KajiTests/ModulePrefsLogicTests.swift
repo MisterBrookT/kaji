@@ -67,16 +67,11 @@ final class ModulePrefsLogicTests: XCTestCase {
         XCTAssertEqual(pages, KajiModuleID.stableOrder)
     }
 
-    func testAIHotDefaultsOffAndAppearsAfterGoalsWhenEnabled() {
-        XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.aiNews))
-        XCTAssertEqual(ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .aiNews]), [.quota, .goals, .aiNews])
-    }
-
-    func testMailBriefDefaultsOffAndAppearsAfterAINewsWhenEnabled() {
+    func testMailBriefDefaultsOffAndAppearsLastWhenEnabled() {
         XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.mailBrief))
         XCTAssertEqual(
-            ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .aiNews, .mailBrief]),
-            [.quota, .goals, .aiNews, .mailBrief]
+            ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .mailBrief]),
+            [.quota, .goals, .mailBrief]
         )
     }
 

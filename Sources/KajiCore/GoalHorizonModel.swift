@@ -229,7 +229,6 @@ public enum MenuBarDestination: Equatable, Sendable {
     case quota
     case work
     case goalsToday
-    case aiNews
     case mailBrief
     case launchd
 }
@@ -254,7 +253,6 @@ public enum MenuBarSlotLogic {
         case .quota, .background: .quota
         case .work: .work
         case .goals: .goalsToday
-        case .aiNews: .aiNews
         case .mailBrief: .mailBrief
         case .launchd: .launchd
         }
@@ -292,7 +290,6 @@ public enum MenuBarSlot: Equatable, Sendable {
     case quota
     case work
     case goals
-    case aiNews
     case mailBrief
     case launchd
     case background

@@ -183,7 +183,6 @@ struct Snap {
             let systemMonitor = SystemMonitor()
             let dailyGoals = goalsMode ? makeGoalsStore() : DailyGoalStore()
             let fixedPlanStore = FixedPlanStore()
-            let aiNewsStore = AIHotNewsStore()
             let mailBriefStore = mailMode
                 ? MailBriefStore(previewGeneration: makeMailGeneration())
                 : MailBriefStore(cacheURL: URL(fileURLWithPath: "/tmp/kaji-snapshot-mail.json"))
@@ -211,7 +210,6 @@ struct Snap {
                 systemMonitor: systemMonitor,
                 dailyGoals: dailyGoals,
                 fixedPlanStore: fixedPlanStore,
-                aiNewsStore: aiNewsStore,
                 mailBriefStore: mailBriefStore,
                 launchdJobStore: launchdJobStore,
                 navigation: navigation,

@@ -298,11 +298,16 @@ final class QuotaStore: ObservableObject {
 
     /// The provider closest to its limit — drives the menubar indicator.
     var mostConstrained: ProviderView? {
-        providers
-            .filter { $0.fiveHourPercent != nil }
-            .max { ($0.fiveHourPercent ?? 0) < ($1.fiveHourPercent ?? 0) }
+        Self.mostConstrained(in: providers)
     }
 
-
-
+    /// The provider closest to its limit among a given set.
+    /// Providers without five-hour data are skipped; ties go to the earlier one.
+    static func mostConstrained(in providers: [ProviderView]) -> ProviderView? {
+        providers.reduce(nil) { best, candidate in
+            guard let percent = candidate.fiveHourPercent else { return best }
+            guard let best, let bestPercent = best.fiveHourPercent else { return candidate }
+            return percent > bestPercent ? candidate : best
+        }
+    }
 }

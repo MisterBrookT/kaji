@@ -7,7 +7,7 @@
 
 **Kaji 是 AI 时代 Mac 上离个人最近的状态与控制层。**
 
-它关注一天中真正值得知道的动态。这些动态包括 AI quota、专注节奏、Goals、机器状态、AI News，以及未来运行中的 agents。它们被放到一个随时可见、一次动作即可抵达的位置。
+它关注一天中真正值得知道的动态。这些动态包括 AI quota、专注节奏、Goals、机器状态，以及未来运行中的 agents。它们被放到一个随时可见、一次动作即可抵达的位置。
 
 ![Kaji in the menu bar](../assets/readme-hero-20260724.jpg)
 
