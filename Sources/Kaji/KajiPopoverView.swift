@@ -292,7 +292,10 @@ struct KajiPopoverView: View {
             if !more.isEmpty {
                 Menu {
                     ForEach(more, id: \.self) { module in
-                        Button(moduleTitle(module)) {
+                        Button(MoreMenuItemFormatter.label(
+                            title: moduleTitle(module),
+                            detail: moreDetail(module)
+                        )) {
                             panel = module
                             onExposureEvent(.popoverOpen, module, .more)
                         }
@@ -1965,6 +1968,39 @@ struct KajiPopoverView: View {
         }
     }
 
+    /// One-line live status for the More menu. Drawn only from stores this
+    /// view already observes; `nil` renders the bare title.
+    private func moreDetail(_ module: KajiModuleID) -> String? {
+        switch module {
+        case .quota:
+            return nil
+        case .work:
+            return workPrimaryClock
+        case .system:
+            return systemValue(systemMonitor.snapshot.cpuPercent)
+        case .goals:
+            return MenuBarSlotLogic.goalsLabel(
+                enabled: prefs.isModuleEnabled(.goals),
+                goals: dailyGoals.todayGoalEntries,
+                scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
+                scheduledTotal: fixedPlanStore.todayScheduledEntries.count
+            )
+        case .mailBrief:
+            return MenuBarSlotLogic.mailBriefLabel(
+                enabled: true,
+                actCount: mailBriefStore.actCount
+            )
+        case .launchd:
+            let summary = launchdJobStore.snapshot.installedSummary
+            return MoreMenuItemFormatter.launchdDetail(
+                MenuBarSlotLogic.launchdStatus(
+                    enabled: prefs.isModuleEnabled(.launchd),
+                    runningCount: summary.runningCount,
+                    failedCount: summary.failedCount
+                )
+            )
+        }
+    }
 
     private var workPrimaryClock: String {
         switch workSession.phase {
