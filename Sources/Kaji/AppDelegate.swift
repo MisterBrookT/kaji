@@ -261,6 +261,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.providers.filter { prefs.isVisible($0.id) }
     }
 
+    /// What the menubar actually draws: every visible ring on the legacy
+    /// rollback path, or exactly the single most-constrained provider in
+    /// treatment. Empty means no provider has data yet — StatusItemView then
+    /// falls back to its placeholder single ring.
+    private var menuBarProviders: [ProviderView] {
+        guard !usesLegacyExposure else { return visibleProviders }
+        guard let leader = QuotaStore.mostConstrained(in: visibleProviders) else { return [] }
+        return [leader]
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         closeDetailPopover()
         store.stop()
@@ -285,11 +295,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         guard let button = statusItem.button else { return }
 
-        let view = StatusItemView(providers: visibleProviders,
+        let view = StatusItemView(providers: menuBarProviders,
                                   showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: presentedWorkSlotLabel,
-                                  goalsSlotLabel: usesLegacyExposure ? goalsStatusSlotLabel : nil,
+                                  goalsSlotLabel: goalsStatusSlotLabel,
                                   mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
                                   showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
                                   launchdStatus: usesLegacyExposure ? launchdStatus : nil,
@@ -311,11 +321,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func updateStatusItem() {
-        hostingView?.rootView = StatusItemView(providers: visibleProviders,
+        hostingView?.rootView = StatusItemView(providers: menuBarProviders,
                                                showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: presentedWorkSlotLabel,
-                                               goalsSlotLabel: usesLegacyExposure ? goalsStatusSlotLabel : nil,
+                                               goalsSlotLabel: goalsStatusSlotLabel,
                                                mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
                                                showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
                                                launchdStatus: usesLegacyExposure ? launchdStatus : nil,
@@ -375,16 +385,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var statusItemLength: CGFloat {
-        let count = max(1, min(4, visibleProviders.count))
+        let count = max(1, min(4, menuBarProviders.count))
         var length = CGFloat(count) * 26 + 6
         // Compact monospaced `MM:SS` to the right of the rings (~40pt).
         if presentedWorkSlotLabel != nil {
             length += 40
         }
+        if let goalsStatusSlotLabel {
+            length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
+        }
         if usesLegacyExposure {
-            if let goalsStatusSlotLabel {
-                length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
-            }
             if prefs.isModuleEnabled(.mailBrief) {
                 length += 22 + CGFloat(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: mailBriefStore.actCount)?.count ?? 0) * 7
             }
