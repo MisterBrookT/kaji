@@ -13,7 +13,7 @@ SMOKE_DOMAIN="dev.kaji.ui-smoke.$NONCE"
 SEED_MODULES=(quota work system goals mailBrief launchd)
 SEED_LANGUAGE=en
 PAGE_IDS="quota|work|system|goals|mailBrief|launchd|launchd:application|launchd:appleSystem"
-SETTINGS_SECTIONS="General|Modules|Work|Goals|Quota|Mail Brief|CLI|Permissions"
+SETTINGS_SECTIONS="General|Modules|Work|Quota|Mail Brief|Permissions"
 
 seed_modules_plist_array() {
     local joined
