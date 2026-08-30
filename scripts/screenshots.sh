@@ -38,7 +38,7 @@ swiftc -O $FILES scripts/snapshot.swift \
   -framework AppKit -framework SwiftUI -framework ServiceManagement \
   -o /tmp/kaji-snap -target "$TARGET"
 
-if [[ "$LANG_ARG" == "mail" || "$LANG_ARG" == "settings" ]]; then
+if [[ "$LANG_ARG" == "settings" ]]; then
   echo "==> rendering $LANG_ARG light + dark verification"
   /tmp/kaji-snap both "$LANG_ARG" zh
   echo "==> wrote /tmp/$LANG_ARG-{light,dark}.png"

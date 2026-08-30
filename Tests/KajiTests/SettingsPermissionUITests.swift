@@ -13,8 +13,6 @@ final class SettingsPermissionUITests: XCTestCase {
         let suiteName = "dev.blackblue.Kaji.UITest.SleepPermission.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defaults.set(AppLanguage.zh.rawValue, forKey: "language")
-        let cacheURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kaji-sleep-ui-\(UUID().uuidString).json")
         let environment = SleepController.Environment(
             status: { .installed },
             install: {},
@@ -32,14 +30,12 @@ final class SettingsPermissionUITests: XCTestCase {
         window.contentView = NSHostingView(rootView: SettingsView(
             prefs: Prefs(defaults: defaults),
             sleepController: controller,
-            fixedPlanStore: FixedPlanStore(defaults: defaults),
-            mailBriefStore: MailBriefStore(cacheURL: cacheURL)
+            fixedPlanStore: FixedPlanStore(defaults: defaults)
         ))
         window.contentView?.layoutSubtreeIfNeeded()
         defer {
             window.orderOut(nil)
             defaults.removePersistentDomain(forName: suiteName)
-            try? FileManager.default.removeItem(at: cacheURL)
         }
 
         try await Task.sleep(for: .milliseconds(150))

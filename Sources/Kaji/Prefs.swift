@@ -30,7 +30,7 @@ final class Prefs: ObservableObject {
     }
     @Published var primaryFavorites: [KajiModuleID] {
         didSet {
-            let normalized = ExposureExperimentLogic.normalizedFavorites(
+            let normalized = ModulePrefsLogic.normalizedFavorites(
                 primaryFavorites,
                 enabled: enabledModules
             )
@@ -74,29 +74,6 @@ final class Prefs: ObservableObject {
     @Published var preventSleep: Bool {
         didSet { defaults.set(preventSleep, forKey: Key.preventSleep) }
     }
-    @Published var mailBriefHour: Int {
-        didSet { defaults.set(min(23, max(0, mailBriefHour)), forKey: Key.mailBriefHour) }
-    }
-    @Published var mailBriefMinute: Int {
-        didSet { defaults.set(min(59, max(0, mailBriefMinute)), forKey: Key.mailBriefMinute) }
-    }
-    @Published var mailBriefBatchSize: Int {
-        didSet {
-            let value = MailBriefBatchPolicy.batchSize(mailBriefBatchSize)
-            if value != mailBriefBatchSize { mailBriefBatchSize = value; return }
-            defaults.set(value, forKey: Key.mailBriefBatchSize)
-        }
-    }
-    @Published var mailBriefConcurrency: Int {
-        didSet {
-            let value = MailBriefBatchPolicy.concurrency(mailBriefConcurrency)
-            if value != mailBriefConcurrency { mailBriefConcurrency = value; return }
-            defaults.set(value, forKey: Key.mailBriefConcurrency)
-        }
-    }
-    @Published var mailBriefModel: MailBriefModel {
-        didSet { defaults.set(mailBriefModel.rawValue, forKey: Key.mailBriefModel) }
-    }
 
     enum Key {
         static let visibleProviders = "visibleProviders"
@@ -116,11 +93,6 @@ final class Prefs: ObservableObject {
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
         static let preferencesInitialized = "preferencesInitialized"
-        static let mailBriefHour = "mailBriefHour"
-        static let mailBriefMinute = "mailBriefMinute"
-        static let mailBriefBatchSize = "mailBriefBatchSize"
-        static let mailBriefConcurrency = "mailBriefConcurrency"
-        static let mailBriefModel = "mailBriefModel"
         static let goalGrouping = "goalGrouping"
 
         static let existingPreferenceKeys = [
@@ -128,9 +100,7 @@ final class Prefs: ObservableObject {
             showRemaining, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
             visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
-            mailBriefHour, mailBriefMinute,
-            mailBriefBatchSize, mailBriefConcurrency, mailBriefModel, goalGrouping,
-            primaryFavorites
+            goalGrouping, primaryFavorites
         ]
     }
 
@@ -138,9 +108,6 @@ final class Prefs: ObservableObject {
         self.defaults = defaults
         let d = defaults
         d.removeObject(forKey: "mcpEnabled")
-        // Work compact-signal toggle removed in the settings simplification:
-        // hardcoded always-on, matching the shipped default. Drop the orphan value.
-        d.removeObject(forKey: "exposureExperimentShowsWorkCompactSignal")
         let hadExistingPreferences = Key.existingPreferenceKeys.contains {
             d.object(forKey: $0) != nil
         }
@@ -178,7 +145,7 @@ final class Prefs: ObservableObject {
 
         let savedFavorites = (d.array(forKey: Key.primaryFavorites) as? [String])?
             .compactMap(KajiModuleID.init(rawValue:)) ?? [.goals, .work]
-        primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+        primaryFavorites = ModulePrefsLogic.normalizedFavorites(
             savedFavorites,
             enabled: normalizedEnabled
         )
@@ -235,12 +202,6 @@ final class Prefs: ObservableObject {
         } else {
             preventSleep = false
         }
-        mailBriefHour = d.object(forKey: Key.mailBriefHour) == nil ? 9 : min(23, max(0, d.integer(forKey: Key.mailBriefHour)))
-        mailBriefMinute = d.object(forKey: Key.mailBriefMinute) == nil ? 0 : min(59, max(0, d.integer(forKey: Key.mailBriefMinute)))
-        mailBriefBatchSize = MailBriefBatchPolicy.batchSize(d.object(forKey: Key.mailBriefBatchSize) == nil ? 10 : d.integer(forKey: Key.mailBriefBatchSize))
-        mailBriefConcurrency = MailBriefBatchPolicy.concurrency(d.object(forKey: Key.mailBriefConcurrency) == nil ? 2 : d.integer(forKey: Key.mailBriefConcurrency))
-        mailBriefModel = MailBriefModel.normalize(d.string(forKey: Key.mailBriefModel))
-        d.set(mailBriefModel.rawValue, forKey: Key.mailBriefModel)
         d.set(true, forKey: Key.preferencesInitialized)
     }
 
@@ -275,15 +236,12 @@ final class Prefs: ObservableObject {
             next.remove(id)
         }
         enabledModules = ModulePrefsLogic.normalizeEnabledModules(Array(next.map(\.rawValue)))
-        primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+        primaryFavorites = ModulePrefsLogic.normalizedFavorites(
             primaryFavorites,
             enabled: enabledModules
         )
     }
 
-    var popoverModulePages: [KajiModuleID] {
-        ModulePrefsLogic.popoverPages(enabled: enabledModules)
-    }
 }
 
 // MARK: - Menu-bar style (option B: single meaningful case)

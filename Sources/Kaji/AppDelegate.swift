@@ -59,9 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
-    private let mailBriefStore: MailBriefStore
     private let launchdJobStore = LaunchdJobStore()
-    private let exposureStudy: ExposureStudyStore
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -70,24 +68,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.init(defaults: .standard)
     }
 
-    init(defaults: UserDefaults, cacheDirectory: URL? = nil, store: QuotaStore? = nil) {
+    init(defaults: UserDefaults, store: QuotaStore? = nil) {
         self.store = store ?? QuotaStore()
         prefs = Prefs(defaults: defaults)
         dailyGoals = DailyGoalStore(defaults: defaults)
         fixedPlanStore = FixedPlanStore(defaults: defaults)
-        mailBriefStore = MailBriefStore(
-            cacheURL: cacheDirectory?.appendingPathComponent("mail-brief-cache-v1.json")
-        )
-        exposureStudy = ExposureStudyStore(
-            fileURL: cacheDirectory?.appendingPathComponent("exposure-study-v1.json")
-        )
         super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Establish the visible app surface before any optional module can probe
-        // credentials. A stale keychain ACL must never prevent the status item.
-        exposureStudy.startIfNeeded()
+        // Establish the visible app surface before starting optional module lifecycles.
         setupStatusItem()
         setupPopover()
 
@@ -129,34 +119,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &cancellables)
         prefs.$primaryFavorites
             .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.rebuildExposureSurfaces() }
-            .store(in: &cancellables)
-        exposureStudy.didChangePhase
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.rebuildExposureSurfaces() }
-            .store(in: &cancellables)
-        Publishers.CombineLatest4(prefs.$mailBriefHour, prefs.$mailBriefMinute,
-                                  prefs.$mailBriefBatchSize, prefs.$mailBriefConcurrency)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] hour, minute, batchSize, concurrency in
-                guard let self else { return }
-                self.mailBriefStore.setEnabled(self.prefs.isModuleEnabled(.mailBrief), hour: hour, minute: minute,
-                                               batchSize: batchSize, concurrency: concurrency,
-                                               model: self.prefs.mailBriefModel)
-            }.store(in: &cancellables)
-        prefs.$mailBriefModel
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] model in
-                guard let self else { return }
-                self.mailBriefStore.setEnabled(self.prefs.isModuleEnabled(.mailBrief),
-                    hour: self.prefs.mailBriefHour, minute: self.prefs.mailBriefMinute,
-                    batchSize: self.prefs.mailBriefBatchSize, concurrency: self.prefs.mailBriefConcurrency,
-                    model: model)
-            }.store(in: &cancellables)
-        mailBriefStore.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
+            .sink { [weak self] _ in self?.rebuildMenuSurfaces() }
             .store(in: &cancellables)
         launchdJobStore.objectWillChange
             .receive(on: RunLoop.main)
@@ -243,9 +206,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             systemMonitor.stop()
         }
-        mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
-                                  batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
-                                  model: prefs.mailBriefModel)
         let launchdEnabled = modules.contains(.launchd)
         launchdJobStore.setEnabled(launchdEnabled)
         if launchdEnabled { launchdJobStore.refreshStatus() }
@@ -270,7 +230,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
         breakWatchdogTimer?.invalidate()
         closeBreakOverlay()
-        mailBriefStore.stop()
         launchdJobStore.stop()
         controlServer.stop()
     }
@@ -280,7 +239,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from hitting the network on every menubar interaction.
         updateChecker.checkIfDue()
         dailyGoals.refreshPeriodBoundaries()
-        if prefs.isModuleEnabled(.mailBrief) { mailBriefStore.evaluateSchedule() }
     }
 
     // MARK: - Status item
@@ -294,14 +252,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
                                   goalsSlotLabel: goalsStatusSlotLabel,
-                                  mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
-                                  showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
-                                  launchdStatus: usesLegacyExposure ? launchdStatus : nil,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                  onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
-                                  onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -320,20 +273,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
                                                goalsSlotLabel: goalsStatusSlotLabel,
-                                               mailBriefSlotLabel: usesLegacyExposure ? MenuBarSlotLogic.mailBriefLabel(enabled: prefs.isModuleEnabled(.mailBrief), actCount: mailBriefStore.actCount) : nil,
-                                               showsMailBriefSlot: usesLegacyExposure && prefs.isModuleEnabled(.mailBrief),
-                                               launchdStatus: usesLegacyExposure ? launchdStatus : nil,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                               onMailBriefClick: { [weak self] in self?.showPopover(.mailBrief) },
-                                               onLaunchdClick: { [weak self] in self?.showPopover(.launchd) })
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
         statusItem.length = statusItemLength
     }
 
-    private var usesLegacyExposure: Bool { exposureStudy.phase.usesLegacyExposure }
 
-    private func rebuildExposureSurfaces() {
+    private func rebuildMenuSurfaces() {
         updateStatusItem()
         rebuildPopoverContentIfShown()
     }
@@ -364,14 +311,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private var launchdStatus: LaunchdMenuBarStatus? {
-        let summary = launchdJobStore.snapshot.installedSummary
-        return MenuBarSlotLogic.launchdStatus(
-            enabled: prefs.isModuleEnabled(.launchd),
-            runningCount: summary.runningCount,
-            failedCount: summary.failedCount
-        )
-    }
 
     private var statusItemLength: CGFloat {
         // 21pt ring + 5pt gap per visible ring (up to 3), + 6pt padding —
@@ -384,14 +323,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let goalsStatusSlotLabel {
             length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
-        }
-        if usesLegacyExposure {
-            if prefs.isModuleEnabled(.mailBrief) {
-                length += 22 + CGFloat(MenuBarSlotLogic.mailBriefLabel(enabled: true, actCount: mailBriefStore.actCount)?.count ?? 0) * 7
-            }
-            if let launchdStatus {
-                length += 22 + CGFloat(String(launchdStatus.count).count) * 7
-            }
         }
         return length
     }
@@ -422,9 +353,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyPopoverDestination(destination)
             return
         }
-        let openedModule = module(for: destination)
-        exposureStudy.record(.popoverOpen, module: openedModule, source: .statusItem)
-        exposureStudy.recordStatusWidth(Int(statusItemLength.rounded(.up)))
         popoverNavigation.launchdCategory = .userAgent
 
 
@@ -492,7 +420,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .mailBrief, .launchd:
+        case .work, .goalsToday, .launchd:
             return .quota
         }
     }
@@ -505,8 +433,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
-        case .mailBrief:
-            return popoverNavigation.panel == .mailBrief
         case .launchd:
             return popoverNavigation.panel == .launchd
         }
@@ -529,22 +455,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
-        case .mailBrief:
-            popoverNavigation.panel = prefs.isModuleEnabled(.mailBrief) ? .mailBrief : .quota
         case .launchd:
             popoverNavigation.panel = prefs.isModuleEnabled(.launchd) ? .launchd : .quota
         }
     }
 
-    private func module(for destination: MenuBarDestination) -> KajiModuleID {
-        switch destination {
-        case .quota: .quota
-        case .work: .work
-        case .goalsToday: .goals
-        case .mailBrief: .mailBrief
-        case .launchd: .launchd
-        }
-    }
 
     private func makePopoverContentController(maxContentHeight: CGFloat? = nil) -> NSHostingController<AnyView> {
 
@@ -562,17 +477,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
-                                      mailBriefStore: mailBriefStore,
                                       launchdJobStore: launchdJobStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
                                       onContentSizeChange: { [weak self] size in
                                           self?.resizePopoverContent(to: size)
-                                      },
-                                      exposurePhase: exposureStudy.phase,
-                                      onExposureEvent: { [weak self] event, module, source in
-                                          self?.exposureStudy.record(event, module: module, source: source)
                                       })
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         let controller = KajiHostingController(rootView: AnyView(content))
@@ -658,11 +568,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "autoCleanEnabled": prefs.autoCleanEnabled,
                 "launchAtLogin": prefs.launchAtLogin,
                 "preventSleep": prefs.preventSleep,
-                "mailBriefHour": prefs.mailBriefHour,
-                "mailBriefMinute": prefs.mailBriefMinute,
-                "mailBriefBatchSize": prefs.mailBriefBatchSize,
-                "mailBriefConcurrency": prefs.mailBriefConcurrency,
-                "mailBriefModel": prefs.mailBriefModel.rawValue,
             ],
             "sleep": [
                 "enabled": sleepController.isEnabled,
@@ -720,15 +625,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 "activity": jsonValue(dailyGoals.heatmapDays),
                 "schedules": jsonValue(fixedPlanStore.schedules),
-            ],
-            "mailBrief": [
-                "state": String(describing: mailBriefStore.state),
-                "connected": mailBriefStore.isConnected,
-                "canModify": mailBriefStore.canModify,
-                "nextDue": jsonOptional(mailBriefStore.nextDue?.timeIntervalSince1970),
-                "generation": jsonValue(mailBriefStore.generation),
-                "replyDrafts": mailBriefStore.replyDrafts,
-                "runRecords": jsonValue(mailBriefStore.runRecords),
             ],
             "launchd": [
                 "userAgent": controlCategorySnapshot(.userAgent),
@@ -822,11 +718,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 prefs: prefs,
                 sleepController: sleepController,
                 fixedPlanStore: fixedPlanStore,
-                mailBriefStore: mailBriefStore,
-                initialSection: section,
-                exposurePhase: exposureStudy.phase,
-                onRollbackExposure: { [weak self] in self?.rollbackExposureExperiment() },
-                onClearExposureData: { [weak self] in self?.exposureStudy.clearAggregates() }
+                initialSection: section
             ))
             view.configureKajiHost()
             view.frame = NSRect(x: 0, y: 0, width: 760, height: 560)
@@ -874,14 +766,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSNull()
     }
 
-    private func rollbackExposureExperiment() {
-        exposureStudy.rollback()
-        closeDetailPopover()
-        if popover.isShown { popover.performClose(nil) }
-        settingsWindow?.close()
-        settingsWindow = nil
-        rebuildExposureSurfaces()
-    }
 
     private func openSettings() {
         if let settingsWindow {
@@ -894,10 +778,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prefs: prefs,
             sleepController: sleepController,
             fixedPlanStore: fixedPlanStore,
-            mailBriefStore: mailBriefStore,
-            exposurePhase: exposureStudy.phase,
-            onRollbackExposure: { [weak self] in self?.rollbackExposureExperiment() },
-            onClearExposureData: { [weak self] in self?.exposureStudy.clearAggregates() }
         ))
 
         controller.view.configureKajiHost()

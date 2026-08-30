@@ -229,7 +229,6 @@ public enum MenuBarDestination: Equatable, Sendable {
     case quota
     case work
     case goalsToday
-    case mailBrief
     case launchd
 }
 
@@ -253,15 +252,10 @@ public enum MenuBarSlotLogic {
         case .quota, .background: .quota
         case .work: .work
         case .goals: .goalsToday
-        case .mailBrief: .mailBrief
         case .launchd: .launchd
         }
     }
 
-    public static func mailBriefLabel(enabled: Bool, actCount: Int) -> String? {
-        guard enabled, actCount > 0 else { return nil }
-        return String(actCount)
-    }
 
     public static func launchdStatus(
         enabled: Bool,
@@ -290,7 +284,6 @@ public enum MenuBarSlot: Equatable, Sendable {
     case quota
     case work
     case goals
-    case mailBrief
     case launchd
     case background
 }

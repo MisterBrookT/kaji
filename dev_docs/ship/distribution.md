@@ -88,13 +88,6 @@ For GitHub Actions notarized releases:
 
 Safer alternative: App Store Connect API key for `notarytool`.
 
-## Signing Identity and Keychain Authorization
-
-Signing identity is not only a Gatekeeper concern; it decides how often the user is asked for their login keychain password.
-
-The Mail Brief Gmail credential lives in the login keychain. Under ad-hoc signing there is no stable code identity, so its ACL is bound to the executable path. Rebuilding in place is fine, but the same credential written by one location is not readable from another, and macOS then asks for the password. The current mitigation trusts both locations the app actually runs from — the installed bundle and the repository `dist/` bundle — and every automatic keychain access is non-interactive, degrading to "needs re-authorization" instead of prompting. Interaction is permitted only when the user clicks Authorize in Settings.
-
-That is the ceiling for ad-hoc builds: no surprise prompts, one deliberate click to restore access. Authorization that genuinely survives arbitrary relocation and every future version requires a stable identity via `KAJI_CODESIGN_IDENTITY` (see above). Adopting a Developer ID for release builds therefore removes a recurring user-facing annoyance, not just a Gatekeeper warning. Whether to enroll is still open.
 
 ## References
 

@@ -19,7 +19,6 @@ Feature specs、bug-fix notes、implementation plans、单次 UI 调整和逐版
 | --- | --- |
 | [product/vision.md](product/vision.md) | Kaji 在 AI 时代的长期位置 |
 | [product/2026-08-05-popover-visualization-decision.md](product/2026-08-05-popover-visualization-decision.md) | Popover 与圆环的可视化架构选择 |
-| [product/2026-08-08-mail-brief-executor-adr.md](product/2026-08-08-mail-brief-executor-adr.md) | Gmail、Codex 与本地数据的执行边界 |
 | [product/2026-08-26-launchd-visibility-boundary.md](product/2026-08-26-launchd-visibility-boundary.md) | launchd 后台任务模块的只读范围与刷新边界 |
 
 ### Design

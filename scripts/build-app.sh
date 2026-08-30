@@ -62,24 +62,6 @@ else
 PLIST
 fi
 
-# OAuth client IDs for installed apps are public identifiers, but they remain
-# release configuration rather than source defaults. Inject after the tracked
-# plist is copied so assembly cannot overwrite the configured value.
-INSTALLED_PLIST="/Applications/Kaji.app/Contents/Info.plist"
-if [[ -z "${KAJI_GOOGLE_OAUTH_CLIENT_ID:-}" && -f "${INSTALLED_PLIST}" ]]; then
-	KAJI_GOOGLE_OAUTH_CLIENT_ID=$(/usr/libexec/PlistBuddy -c "Print :KajiGoogleOAuthClientID" "${INSTALLED_PLIST}" 2>/dev/null || true)
-fi
-if [[ -z "${KAJI_GOOGLE_OAUTH_CLIENT_SECRET:-}" && -f "${INSTALLED_PLIST}" ]]; then
-	KAJI_GOOGLE_OAUTH_CLIENT_SECRET=$(/usr/libexec/PlistBuddy -c "Print :KajiGoogleOAuthClientSecret" "${INSTALLED_PLIST}" 2>/dev/null || true)
-fi
-if [[ -n "${KAJI_GOOGLE_OAUTH_CLIENT_ID:-}" ]]; then
-	/usr/libexec/PlistBuddy -c "Set :KajiGoogleOAuthClientID ${KAJI_GOOGLE_OAUTH_CLIENT_ID}" \
-		"${BUNDLE}/Contents/Info.plist"
-fi
-if [[ -n "${KAJI_GOOGLE_OAUTH_CLIENT_SECRET:-}" ]]; then
-	/usr/libexec/PlistBuddy -c "Set :KajiGoogleOAuthClientSecret ${KAJI_GOOGLE_OAUTH_CLIENT_SECRET}" \
-		"${BUNDLE}/Contents/Info.plist"
-fi
 
 # App icon (Finder / Applications / installer — the agent has no dock icon).
 if [[ -f "Resources/AppIcon.icns" ]]; then

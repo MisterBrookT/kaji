@@ -48,45 +48,40 @@ final class ModulePrefsLogicTests: XCTestCase {
         XCTAssertEqual(result, ModulePrefsLogic.slimDefault)
     }
 
-    // MARK: - popoverPages
+    // MARK: - Primary and More modules
 
-    func testPopoverPages_quotaOnly() {
-        let pages = ModulePrefsLogic.popoverPages(enabled: [.quota])
-        XCTAssertEqual(pages, [.quota])
-    }
-
-    func testPopoverPages_stableOrder_skipsDisabled() {
-        let pages = ModulePrefsLogic.popoverPages(enabled: [.goals, .quota, .work])
-        XCTAssertEqual(pages, [.quota, .work, .goals])
-    }
-
-    func testPopoverPages_allEnabled_fullOrder() {
-        let pages = ModulePrefsLogic.popoverPages(
-            enabled: Set(KajiModuleID.allCases)
-        )
-        XCTAssertEqual(pages, KajiModuleID.stableOrder)
-    }
-
-    func testMailBriefDefaultsOffAndAppearsLastWhenEnabled() {
-        XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.mailBrief))
+    func testNormalizedFavoritesDropsQuotaDisabledAndDuplicatesAndCapsAtTwo() {
+        let enabled: Set<KajiModuleID> = [.quota, .work, .system, .goals]
         XCTAssertEqual(
-            ModulePrefsLogic.popoverPages(enabled: [.quota, .goals, .mailBrief]),
-            [.quota, .goals, .mailBrief]
+            ModulePrefsLogic.normalizedFavorites(
+                [.quota, .goals, .work, .goals, .system],
+                enabled: enabled
+            ),
+            [.goals, .work]
         )
-    }
-
-    func testLaunchdDefaultsOffAndAppearsLastWhenEnabled() {
-        XCTAssertFalse(ModulePrefsLogic.normalizeEnabledModules(nil).contains(.launchd))
         XCTAssertEqual(
-            ModulePrefsLogic.popoverPages(enabled: [.quota, .launchd]),
-            [.quota, .launchd]
+            ModulePrefsLogic.normalizedFavorites([.work, .goals], enabled: [.quota, .goals]),
+            [.goals]
         )
     }
 
-    func testPopoverPages_ignoresQuotaMissingInSet_byCallerContract() {
-        // popoverPages assumes normalize already ran; if quota absent, pages
-        // simply omit it (normalize is the gate). Documented contract.
-        let pages = ModulePrefsLogic.popoverPages(enabled: [.work])
-        XCTAssertEqual(pages, [.work])
+    func testPrimaryModulesAreQuotaFirstAndFavoriteOrdered() {
+        XCTAssertEqual(
+            ModulePrefsLogic.primaryModules(
+                enabled: [.quota, .work, .system, .goals],
+                favorites: [.goals, .work]
+            ),
+            [.quota, .goals, .work]
+        )
+    }
+
+    func testMoreModulesUseStableOrderAndExcludePrimaryModules() {
+        XCTAssertEqual(
+            ModulePrefsLogic.moreModules(
+                enabled: [.quota, .work, .system, .goals, .launchd],
+                favorites: [.goals, .work]
+            ),
+            [.system, .launchd]
+        )
     }
 }
