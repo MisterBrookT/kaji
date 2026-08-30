@@ -225,10 +225,16 @@ public enum GoalHorizonLogic {
 
 }
 
+public enum GoalMenuBarDisplayStyle: String, Codable, Sendable, Equatable {
+    case incompleteCount
+    case todayFraction
+}
+
 public enum MenuBarDestination: Equatable, Sendable {
     case quota
     case work
     case goalsToday
+    case system
 }
 
 public enum MenuBarSlotLogic {
@@ -245,12 +251,24 @@ public enum MenuBarSlotLogic {
         let fixedDone = fixedPlanCompleted == true ? 1 : 0
         return "\(summary.completed + fixedDone + scheduledCompleted)/\(summary.total + fixedTotal + scheduledTotal)"
     }
+    public static func incompleteCount(
+        goals: [GoalItem],
+        scheduledCompleted: Int = 0,
+        scheduledTotal: Int = 0
+    ) -> Int {
+        let incompleteGoals = goals.filter {
+            !$0.isDone && !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        return incompleteGoals + max(0, scheduledTotal - scheduledCompleted)
+    }
+
 
     public static func destination(for slot: MenuBarSlot) -> MenuBarDestination {
         switch slot {
         case .quota, .background: .quota
         case .work: .work
         case .goals: .goalsToday
+        case .system: .system
         }
     }
 
@@ -260,5 +278,6 @@ public enum MenuBarSlot: Equatable, Sendable {
     case quota
     case work
     case goals
+    case system
     case background
 }

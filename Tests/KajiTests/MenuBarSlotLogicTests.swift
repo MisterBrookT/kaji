@@ -42,11 +42,29 @@ final class MenuBarSlotLogicTests: XCTestCase {
     func testEmptyGoalsStillShowsEntryPoint() {
         XCTAssertEqual(MenuBarSlotLogic.goalsLabel(enabled: true, goals: []), "0/0")
     }
+    func testIncompleteCountIncludesAllOpenGoalsAndActiveSchedules() {
+        let goals = [
+            GoalItem(id: UUID(), title: "Open today", isDone: false),
+            GoalItem(id: UUID(), title: "Open long-term", isDone: false),
+            GoalItem(id: UUID(), title: "Done", isDone: true),
+            GoalItem(id: UUID(), title: "   ", isDone: false),
+        ]
+        XCTAssertEqual(
+            MenuBarSlotLogic.incompleteCount(
+                goals: goals,
+                scheduledCompleted: 1,
+                scheduledTotal: 4
+            ),
+            5
+        )
+    }
+
 
     func testSlotDestinations() {
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .quota), .quota)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .work), .work)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .goals), .goalsToday)
+        XCTAssertEqual(MenuBarSlotLogic.destination(for: .system), .system)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .background), .quota)
     }
 

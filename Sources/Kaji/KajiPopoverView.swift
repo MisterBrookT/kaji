@@ -510,12 +510,73 @@ struct KajiPopoverView: View {
 
     private var systemPanel: some View {
         VStack(alignment: .leading, spacing: 10) {
+            systemLoadOverview
+            topProcesses
             diskOverview
             diskCategoryBreakdown
         }
         .onAppear {
+            systemMonitor.refresh()
             systemMonitor.scanDiskInsights()
         }
+    }
+
+    private var systemLoadOverview: some View {
+        let snapshot = systemMonitor.snapshot
+        return VStack(alignment: .leading, spacing: 8) {
+            sectionHeader("系统负载", detail: snapshot.hasSample ? "实时" : "采集中", image: "cpu")
+            HStack(spacing: 8) {
+                systemMetric("CPU", snapshot.cpuPercent)
+                systemMetric("内存", snapshot.memoryPercent)
+                systemMetric("磁盘", snapshot.diskPercent)
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(t.panel.opacity(0.78)))
+    }
+
+    private func systemMetric(_ title: String, _ value: Double) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(title)
+                .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.mute)
+            Text(String(format: "%.0f%%", value))
+                .font(.system(size: 17, weight: .bold, design: .monospaced))
+                .monospacedDigit()
+                .foregroundColor(t.cream)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var topProcesses: some View {
+        let processes = systemMonitor.snapshot.topProcesses
+        return VStack(alignment: .leading, spacing: 7) {
+            sectionHeader("进程", detail: "CPU / 内存", image: "list.bullet")
+            if processes.isEmpty {
+                Text(systemMonitor.isRefreshing ? "正在采集进程…" : "暂无进程数据")
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, minHeight: 24, alignment: .center)
+            } else {
+                ForEach(processes.prefix(5)) { process in
+                    HStack(spacing: 8) {
+                        Text(process.command)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text(String(format: "%.1f%%", process.cpu))
+                            .frame(width: 48, alignment: .trailing)
+                        Text(String(format: "%.1f%%", process.memory))
+                            .frame(width: 48, alignment: .trailing)
+                    }
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundColor(t.cream)
+                }
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(t.panel.opacity(0.62)))
     }
 
     private var diskOverview: some View {

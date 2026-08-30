@@ -14,6 +14,12 @@ import KajiCore
 // shows roughly how full each window is.
 //
 // Glyphs are always adaptive mono (system Light / Dark) — no Color product path.
+struct SystemLoadSnapshot: Equatable {
+    let cpuPercent: Double
+    let memoryPercent: Double
+    let diskPercent: Double
+}
+
 struct StatusItemView: View {
     let providers: [ProviderView]
     var showRemaining: Bool = false
@@ -21,14 +27,18 @@ struct StatusItemView: View {
     /// corner of the glyph as a passive "update available" cue (open popover ->
     /// "Update to vX" to act on it). No notification permission needed.
     var updateAvailable: Bool = false
-    /// Optional work countdown (`MM:SS`) to the right of the rings.
+    /// Optional work countdown in the user's selected display style.
     /// `nil` when the work module is disabled — no slot rendered.
     var workSlotLabel: String? = nil
-    /// Optional today's completion summary (`n/n`) when Goals is enabled.
+    var workSlotShowsIcon: Bool = false
+    /// Optional Goals summary when Goals is enabled.
     var goalsSlotLabel: String? = nil
+    /// Optional live system load bars when System is enabled.
+    var systemSlotSnapshot: SystemLoadSnapshot? = nil
     var onQuotaClick: () -> Void = {}
     var onWorkClick: () -> Void = {}
     var onGoalsClick: () -> Void = {}
+    var onSystemClick: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
@@ -50,7 +60,8 @@ struct StatusItemView: View {
             .accessibilityIdentifier("kaji.status.quota")
             if let workSlotLabel {
                 Button(action: onWorkClick) {
-                    WorkStatusSlot(label: workSlotLabel)
+                    WorkStatusSlot(label: workSlotLabel,
+                                   showsIcon: workSlotShowsIcon)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -61,6 +72,14 @@ struct StatusItemView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            }
+            if let systemSlotSnapshot {
+                Button(action: onSystemClick) {
+                    SystemStatusSlot(snapshot: systemSlotSnapshot)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("kaji.status.system")
             }
         }
         .padding(.horizontal, 3)
@@ -100,6 +119,44 @@ private struct GoalsStatusSlot: View {
         .padding(.horizontal, 2)
     }
 }
+private struct SystemStatusSlot: View {
+    let snapshot: SystemLoadSnapshot
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var base: Color {
+        scheme == .dark ? .white : .black
+    }
+
+    var body: some View {
+        VStack(spacing: 3) {
+            loadBar(snapshot.cpuPercent)
+            loadBar(snapshot.memoryPercent)
+            loadBar(snapshot.diskPercent)
+        }
+        .frame(width: 16, height: 21)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("CPU \(rounded(snapshot.cpuPercent))%, memory \(rounded(snapshot.memoryPercent))%, disk \(rounded(snapshot.diskPercent))%")
+    }
+
+    private func loadBar(_ percent: Double) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(base.opacity(0.22))
+                Capsule()
+                    .fill(base.opacity(0.65))
+                    .frame(width: geometry.size.width * min(max(percent / 100, 0), 1))
+            }
+        }
+        .frame(height: 3)
+    }
+
+    private func rounded(_ value: Double) -> Int {
+        Int(value.rounded())
+    }
+}
+
 
 // MARK: - WorkStatusSlot
 //
@@ -107,6 +164,7 @@ private struct GoalsStatusSlot: View {
 // never shows the string "BREAK" (spec §4).
 private struct WorkStatusSlot: View {
     let label: String
+    let showsIcon: Bool
 
     @Environment(\.colorScheme) private var scheme
 
@@ -115,12 +173,18 @@ private struct WorkStatusSlot: View {
     }
 
     var body: some View {
-        Text(label)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(color)
-            .monospacedDigit()
-            .lineLimit(1)
-            .fixedSize()
+        HStack(spacing: 2) {
+            if showsIcon {
+                Image(systemName: "clock")
+                    .font(.system(size: 9, weight: .medium))
+            }
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+        }
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 

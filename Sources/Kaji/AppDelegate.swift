@@ -104,6 +104,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
+        prefs.$workTimeDisplayStyle
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        prefs.$goalMenuBarDisplayStyle
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
         prefs.$visibleProviders
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildPopoverContentIfShown() }
@@ -149,6 +157,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
         workSession.$breakRemaining
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        systemMonitor.$snapshot
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
@@ -242,10 +254,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
+                                  workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                   goalsSlotLabel: goalsStatusSlotLabel,
+                                  systemSlotSnapshot: systemStatusSlotSnapshot,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                  onSystemClick: { [weak self] in self?.showPopover(.system) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -263,10 +278,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
+                                               workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                                goalsSlotLabel: goalsStatusSlotLabel,
+                                               systemSlotSnapshot: systemStatusSlotSnapshot,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                               onSystemClick: { [weak self] in self?.showPopover(.system) })
         statusItem.length = statusItemLength
     }
 
@@ -289,18 +307,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             workEnabled: prefs.isModuleEnabled(.work),
             phase: phase,
             focusRemaining: focusRemaining,
-            breakRemaining: workSession.breakRemaining
+            breakRemaining: workSession.breakRemaining,
+            displayStyle: prefs.workTimeDisplayStyle
         )
     }
 
     private var goalsStatusSlotLabel: String? {
-        MenuBarSlotLogic.goalsLabel(
-            enabled: prefs.isModuleEnabled(.goals),
-            goals: dailyGoals.todayGoalEntries,
-            scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
-            scheduledTotal: fixedPlanStore.todayScheduledEntries.count
-        )
+        guard prefs.isModuleEnabled(.goals) else { return nil }
+        switch prefs.goalMenuBarDisplayStyle {
+        case .incompleteCount:
+            return String(MenuBarSlotLogic.incompleteCount(
+                goals: dailyGoals.allGoalEntries,
+                scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
+                scheduledTotal: fixedPlanStore.todayScheduledEntries.count
+            ))
+        case .todayFraction:
+            return MenuBarSlotLogic.goalsLabel(
+                enabled: true,
+                goals: dailyGoals.todayGoalEntries,
+                scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
+                scheduledTotal: fixedPlanStore.todayScheduledEntries.count
+            )
+        }
     }
+
+    private var systemStatusSlotSnapshot: SystemLoadSnapshot? {
+        guard prefs.isModuleEnabled(.system) else { return nil }
+        let snapshot = systemMonitor.snapshot
+        return SystemLoadSnapshot(cpuPercent: snapshot.cpuPercent,
+                                  memoryPercent: snapshot.memoryPercent,
+                                  diskPercent: snapshot.diskPercent)
+    }
+
 
 
     private var statusItemLength: CGFloat {
@@ -308,12 +346,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the pre-round-2 multi-ring formula, restored.
         let shown = max(1, min(3, menuBarProviders.count))
         var length = CGFloat(shown) * 26 + 6
-        // Compact monospaced `MM:SS` to the right of the rings (~40pt).
-        if workStatusSlotLabel != nil {
-            length += 40
+        if let workStatusSlotLabel {
+            let iconWidth: CGFloat = prefs.workTimeDisplayStyle == .minutesOnly ? 11 : 0
+            length += 5 + iconWidth + CGFloat(workStatusSlotLabel.count) * 7
         }
         if let goalsStatusSlotLabel {
-            length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
+            length += 21 + CGFloat(goalsStatusSlotLabel.count) * 7
+        }
+        if systemStatusSlotSnapshot != nil {
+            length += 21
         }
         return length
     }
@@ -410,7 +451,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday:
+        case .work, .goalsToday, .system:
             return .quota
         }
     }
@@ -423,6 +464,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
+        case .system:
+            return popoverNavigation.panel == .system
         }
     }
 
@@ -443,6 +486,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
+        case .system:
+            guard prefs.isModuleEnabled(.system) else {
+                popoverNavigation.panel = .quota
+                break
+            }
+            popoverNavigation.panel = .system
         }
     }
 

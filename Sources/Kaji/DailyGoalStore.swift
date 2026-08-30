@@ -85,6 +85,11 @@ final class DailyGoalStore: ObservableObject {
 
     var goals: [DailyGoal] { visibleGoals(for: .today) }
     var todayGoalEntries: [DailyGoal] { state.today }
+    var allGoalEntries: [DailyGoal] {
+        let merged = state.today + state.week + state.longTerm + state.yesterdayPending
+        var seen = Set<UUID>()
+        return merged.filter { seen.insert($0.id).inserted }
+    }
     var completedCount: Int { summary(for: .today).completed }
     var history: [String: DailyGoalHistoryDay] { state.history }
     var pendingGoals: [DailyGoal] {
