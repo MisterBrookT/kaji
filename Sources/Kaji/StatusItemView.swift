@@ -4,11 +4,12 @@ import KajiCore
 // MARK: - StatusItemView
 //
 // The compact menubar indicator: one concentric DOUBLE ring per visible
-// provider, side by side. Each glyph carries the provider's identity AND two
-// quota signals at once:
-//   - CENTER  = the provider mark.
-//   - OUTER arc = the 5-hour window.
-//   - INNER arc = the 7-day window.
+// provider, side by side — up to three, most-constrained first. Each glyph
+// carries the provider's identity AND two quota signals at once:
+//   - CENTER = the provider mark.
+//   - OUTER arc = the 7-day window (dimmer — supportive context).
+//   - INNER arc = the 5-hour window (bright, near-limit thickened — the
+//     actionable number).
 // The exact % lives in the popover (click the item); the arc length already
 // shows roughly how full each window is.
 //
@@ -169,8 +170,11 @@ private struct WorkStatusSlot: View {
 
 // MARK: - DualRing
 //
-// Two concentric trim arcs (outer 5h, inner 7d) around a center provider logo.
-// Sized for the menubar (~21pt).
+// Two concentric trim arcs around a center provider logo, sized for the
+// menubar (~21pt). OUTER = the 7-day window (dimmer — supportive context);
+// INNER = the 5-hour window (bright `base`, thickened when near-limit — the
+// actionable number). The 5-hour signal sits at the center of the glyph, so
+// the urgent number stays the visually dominant one.
 private struct DualRing: View {
     let provider: ProviderView?
     let showRemaining: Bool
@@ -183,7 +187,7 @@ private struct DualRing: View {
     private let gap: CGFloat = 1.3
 
     private var base: Color { scheme == .dark ? .white : .black }
-    private var innerColor: Color { base.opacity(0.65) }
+    private var weekColor: Color { base.opacity(0.65) }
     private var trackColor: Color { base.opacity(0.22) }
 
     private var fiveFraction: Double {
@@ -198,11 +202,13 @@ private struct DualRing: View {
 
     var body: some View {
         ZStack {
-            ring(inset: 0,
-                 lineWidth: nearLimit ? outerLW + 0.9 : outerLW,
+            // OUTER = 7-day arc: dimmer, normal width.
+            ring(inset: 0, lineWidth: outerLW,
+                 fraction: weekFraction, color: weekColor)
+            // INNER = 5-hour arc: bright, thickened when near-limit.
+            ring(inset: outerLW + gap,
+                 lineWidth: nearLimit ? innerLW + 0.9 : innerLW,
                  fraction: fiveFraction, color: base)
-            ring(inset: outerLW + gap, lineWidth: innerLW,
-                 fraction: weekFraction, color: innerColor)
             if let provider {
                 ProviderLogo(key: provider.id, color: base, size: 9)
             }

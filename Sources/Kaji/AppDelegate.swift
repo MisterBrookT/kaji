@@ -261,14 +261,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.providers.filter { prefs.isVisible($0.id) }
     }
 
-    /// What the menubar actually draws: every visible ring on the legacy
-    /// rollback path, or exactly the single most-constrained provider in
-    /// treatment. Empty means no provider has data yet — StatusItemView then
-    /// falls back to its placeholder single ring.
+    /// What the menubar draws: up to three visible providers, most-constrained
+    /// first (5-hour used fraction). Restores multi-provider visibility that
+    /// round 2 collapsed to a single ring. Empty means no provider has data
+    /// yet — StatusItemView then falls back to its placeholder single ring.
     private var menuBarProviders: [ProviderView] {
-        guard !usesLegacyExposure else { return visibleProviders }
-        guard let leader = QuotaStore.mostConstrained(in: visibleProviders) else { return [] }
-        return [leader]
+        QuotaStore.mostConstrained(in: visibleProviders, count: 3)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -385,8 +383,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private var statusItemLength: CGFloat {
-        let count = max(1, min(4, menuBarProviders.count))
-        var length = CGFloat(count) * 26 + 6
+        // 21pt ring + 5pt gap per visible ring (up to 3), + 6pt padding —
+        // the pre-round-2 multi-ring formula, restored.
+        let shown = max(1, min(3, menuBarProviders.count))
+        var length = CGFloat(shown) * 26 + 6
         // Compact monospaced `MM:SS` to the right of the rings (~40pt).
         if presentedWorkSlotLabel != nil {
             length += 40
