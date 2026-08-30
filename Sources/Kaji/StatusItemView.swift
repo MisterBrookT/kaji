@@ -30,9 +30,9 @@ struct StatusItemView: View {
     /// Optional work countdown in the user's selected display style.
     /// `nil` when the work module is disabled — no slot rendered.
     var workSlotLabel: String? = nil
+    var workSlotShowsIcon: Bool = false
     /// Optional Goals summary when Goals is enabled.
     var goalsSlotLabel: String? = nil
-    var goalsSlotShowsCalendar: Bool = false
     /// Optional live system load bars when System is enabled.
     var systemSlotSnapshot: SystemLoadSnapshot? = nil
     var onQuotaClick: () -> Void = {}
@@ -60,15 +60,15 @@ struct StatusItemView: View {
             .accessibilityIdentifier("kaji.status.quota")
             if let workSlotLabel {
                 Button(action: onWorkClick) {
-                    WorkStatusSlot(label: workSlotLabel)
+                    WorkStatusSlot(label: workSlotLabel,
+                                   showsIcon: workSlotShowsIcon)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
             if let goalsSlotLabel {
                 Button(action: onGoalsClick) {
-                    GoalsStatusSlot(label: goalsSlotLabel,
-                                    showsCalendar: goalsSlotShowsCalendar)
+                    GoalsStatusSlot(label: goalsSlotLabel)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -98,7 +98,6 @@ struct StatusItemView: View {
 
 private struct GoalsStatusSlot: View {
     let label: String
-    let showsCalendar: Bool
 
     @Environment(\.colorScheme) private var scheme
 
@@ -108,10 +107,8 @@ private struct GoalsStatusSlot: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            if showsCalendar {
-                Image(systemName: "calendar")
-                    .font(.system(size: 10, weight: .medium))
-            }
+            Image(systemName: "calendar")
+                .font(.system(size: 10, weight: .medium))
             Text(label)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .monospacedDigit()
@@ -167,6 +164,7 @@ private struct SystemStatusSlot: View {
 // never shows the string "BREAK" (spec §4).
 private struct WorkStatusSlot: View {
     let label: String
+    let showsIcon: Bool
 
     @Environment(\.colorScheme) private var scheme
 
@@ -175,12 +173,18 @@ private struct WorkStatusSlot: View {
     }
 
     var body: some View {
-        Text(label)
-            .font(.system(size: 11, weight: .medium, design: .monospaced))
-            .foregroundStyle(color)
-            .monospacedDigit()
-            .lineLimit(1)
-            .fixedSize()
+        HStack(spacing: 2) {
+            if showsIcon {
+                Image(systemName: "clock")
+                    .font(.system(size: 9, weight: .medium))
+            }
+            Text(label)
+                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+        }
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .fixedSize()
     }
 }
 

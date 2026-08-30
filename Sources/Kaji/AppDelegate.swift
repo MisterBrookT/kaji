@@ -254,8 +254,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
+                                  workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                   goalsSlotLabel: goalsStatusSlotLabel,
-                                  goalsSlotShowsCalendar: goalsStatusSlotShowsCalendar,
                                   systemSlotSnapshot: systemStatusSlotSnapshot,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
@@ -278,8 +278,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
+                                               workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                                goalsSlotLabel: goalsStatusSlotLabel,
-                                               goalsSlotShowsCalendar: goalsStatusSlotShowsCalendar,
                                                systemSlotSnapshot: systemStatusSlotSnapshot,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
@@ -331,9 +331,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private var goalsStatusSlotShowsCalendar: Bool {
-        prefs.goalMenuBarDisplayStyle == .todayFraction
-    }
     private var systemStatusSlotSnapshot: SystemLoadSnapshot? {
         guard prefs.isModuleEnabled(.system) else { return nil }
         let snapshot = systemMonitor.snapshot
@@ -350,11 +347,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let shown = max(1, min(3, menuBarProviders.count))
         var length = CGFloat(shown) * 26 + 6
         if let workStatusSlotLabel {
-            length += 5 + CGFloat(workStatusSlotLabel.count) * 7
+            let iconWidth: CGFloat = prefs.workTimeDisplayStyle == .minutesOnly ? 11 : 0
+            length += 5 + iconWidth + CGFloat(workStatusSlotLabel.count) * 7
         }
         if let goalsStatusSlotLabel {
-            let iconWidth: CGFloat = goalsStatusSlotShowsCalendar ? 12 : 0
-            length += 9 + iconWidth + CGFloat(goalsStatusSlotLabel.count) * 7
+            length += 21 + CGFloat(goalsStatusSlotLabel.count) * 7
         }
         if systemStatusSlotSnapshot != nil {
             length += 21
