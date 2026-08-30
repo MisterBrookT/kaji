@@ -59,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
-    private let mailBriefStore: MailBriefStore
     private let launchdJobStore = LaunchdJobStore()
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
@@ -69,20 +68,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.init(defaults: .standard)
     }
 
-    init(defaults: UserDefaults, cacheDirectory: URL? = nil, store: QuotaStore? = nil) {
+    init(defaults: UserDefaults, store: QuotaStore? = nil) {
         self.store = store ?? QuotaStore()
         prefs = Prefs(defaults: defaults)
         dailyGoals = DailyGoalStore(defaults: defaults)
         fixedPlanStore = FixedPlanStore(defaults: defaults)
-        mailBriefStore = MailBriefStore(
-            cacheURL: cacheDirectory?.appendingPathComponent("mail-brief-cache-v1.json")
-        )
         super.init()
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Establish the visible app surface before any optional module can probe
-        // credentials. A stale keychain ACL must never prevent the status item.
+        // Establish the visible app surface before starting optional module lifecycles.
         setupStatusItem()
         setupPopover()
 
@@ -125,29 +120,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.$primaryFavorites
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildMenuSurfaces() }
-            .store(in: &cancellables)
-        Publishers.CombineLatest4(prefs.$mailBriefHour, prefs.$mailBriefMinute,
-                                  prefs.$mailBriefBatchSize, prefs.$mailBriefConcurrency)
-            .receive(on: RunLoop.main)
-            .sink { [weak self] hour, minute, batchSize, concurrency in
-                guard let self else { return }
-                self.mailBriefStore.setEnabled(self.prefs.isModuleEnabled(.mailBrief), hour: hour, minute: minute,
-                                               batchSize: batchSize, concurrency: concurrency,
-                                               model: self.prefs.mailBriefModel)
-            }.store(in: &cancellables)
-        prefs.$mailBriefModel
-            .removeDuplicates()
-            .receive(on: RunLoop.main)
-            .sink { [weak self] model in
-                guard let self else { return }
-                self.mailBriefStore.setEnabled(self.prefs.isModuleEnabled(.mailBrief),
-                    hour: self.prefs.mailBriefHour, minute: self.prefs.mailBriefMinute,
-                    batchSize: self.prefs.mailBriefBatchSize, concurrency: self.prefs.mailBriefConcurrency,
-                    model: model)
-            }.store(in: &cancellables)
-        mailBriefStore.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
             .store(in: &cancellables)
         launchdJobStore.objectWillChange
             .receive(on: RunLoop.main)
@@ -234,9 +206,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             systemMonitor.stop()
         }
-        mailBriefStore.setEnabled(modules.contains(.mailBrief), hour: prefs.mailBriefHour, minute: prefs.mailBriefMinute,
-                                  batchSize: prefs.mailBriefBatchSize, concurrency: prefs.mailBriefConcurrency,
-                                  model: prefs.mailBriefModel)
         let launchdEnabled = modules.contains(.launchd)
         launchdJobStore.setEnabled(launchdEnabled)
         if launchdEnabled { launchdJobStore.refreshStatus() }
@@ -261,7 +230,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
         breakWatchdogTimer?.invalidate()
         closeBreakOverlay()
-        mailBriefStore.stop()
         launchdJobStore.stop()
         controlServer.stop()
     }
@@ -271,7 +239,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from hitting the network on every menubar interaction.
         updateChecker.checkIfDue()
         dailyGoals.refreshPeriodBoundaries()
-        if prefs.isModuleEnabled(.mailBrief) { mailBriefStore.evaluateSchedule() }
     }
 
     // MARK: - Status item
@@ -453,7 +420,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .mailBrief, .launchd:
+        case .work, .goalsToday, .launchd:
             return .quota
         }
     }
@@ -466,8 +433,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
-        case .mailBrief:
-            return popoverNavigation.panel == .mailBrief
         case .launchd:
             return popoverNavigation.panel == .launchd
         }
@@ -490,8 +455,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
-        case .mailBrief:
-            popoverNavigation.panel = prefs.isModuleEnabled(.mailBrief) ? .mailBrief : .quota
         case .launchd:
             popoverNavigation.panel = prefs.isModuleEnabled(.launchd) ? .launchd : .quota
         }
@@ -514,7 +477,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
-                                      mailBriefStore: mailBriefStore,
                                       launchdJobStore: launchdJobStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
@@ -606,11 +568,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "autoCleanEnabled": prefs.autoCleanEnabled,
                 "launchAtLogin": prefs.launchAtLogin,
                 "preventSleep": prefs.preventSleep,
-                "mailBriefHour": prefs.mailBriefHour,
-                "mailBriefMinute": prefs.mailBriefMinute,
-                "mailBriefBatchSize": prefs.mailBriefBatchSize,
-                "mailBriefConcurrency": prefs.mailBriefConcurrency,
-                "mailBriefModel": prefs.mailBriefModel.rawValue,
             ],
             "sleep": [
                 "enabled": sleepController.isEnabled,
@@ -668,15 +625,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 },
                 "activity": jsonValue(dailyGoals.heatmapDays),
                 "schedules": jsonValue(fixedPlanStore.schedules),
-            ],
-            "mailBrief": [
-                "state": String(describing: mailBriefStore.state),
-                "connected": mailBriefStore.isConnected,
-                "canModify": mailBriefStore.canModify,
-                "nextDue": jsonOptional(mailBriefStore.nextDue?.timeIntervalSince1970),
-                "generation": jsonValue(mailBriefStore.generation),
-                "replyDrafts": mailBriefStore.replyDrafts,
-                "runRecords": jsonValue(mailBriefStore.runRecords),
             ],
             "launchd": [
                 "userAgent": controlCategorySnapshot(.userAgent),
@@ -770,7 +718,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 prefs: prefs,
                 sleepController: sleepController,
                 fixedPlanStore: fixedPlanStore,
-                mailBriefStore: mailBriefStore,
                 initialSection: section
             ))
             view.configureKajiHost()
@@ -831,7 +778,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prefs: prefs,
             sleepController: sleepController,
             fixedPlanStore: fixedPlanStore,
-            mailBriefStore: mailBriefStore
         ))
 
         controller.view.configureKajiHost()

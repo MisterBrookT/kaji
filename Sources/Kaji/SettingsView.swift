@@ -7,7 +7,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case modules = "Modules"
     case work = "Work"
     case quota = "Quota"
-    case mailBrief = "Mail Brief"
     case permissions = "Permissions"
 
     var id: String { rawValue }
@@ -17,7 +16,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .modules: "square.grid.2x2"
         case .work: "timer"
         case .quota: "gauge.with.dots.needle.67percent"
-        case .mailBrief: "envelope"
         case .permissions: "lock.shield"
         }
     }
@@ -35,11 +33,8 @@ struct SettingsView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var sleepController: SleepController
     @ObservedObject var fixedPlanStore: FixedPlanStore
-    @ObservedObject var mailBriefStore: MailBriefStore
 
     @State private var selection: SettingsSection = .general
-    @State private var showsMailRunHistory = false
-    @State private var gmailPermission: PermissionState = .notAuthorized
     @State private var loginPermission: PermissionState = .notAuthorized
     @State private var sleepPermission: PermissionState = .notAuthorized
 
@@ -48,13 +43,11 @@ struct SettingsView: View {
         prefs: Prefs,
         sleepController: SleepController,
         fixedPlanStore: FixedPlanStore,
-        mailBriefStore: MailBriefStore,
         initialSection: SettingsSection = .general,
     ) {
         self.prefs = prefs
         self.sleepController = sleepController
         self.fixedPlanStore = fixedPlanStore
-        self.mailBriefStore = mailBriefStore
         _selection = State(initialValue: initialSection)
     }
     @Environment(\.colorScheme) private var scheme
@@ -67,8 +60,6 @@ struct SettingsView: View {
                 return true
             case .work:
                 return prefs.isModuleEnabled(.work)
-            case .mailBrief:
-                return prefs.isModuleEnabled(.mailBrief)
             }
         }
     }
@@ -145,7 +136,6 @@ struct SettingsView: View {
                     moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
                     moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
-                    moduleRow(.mailBrief, title: "Mail Brief", lockedOn: false)
                     moduleRow(.launchd, title: "Background Tasks", lockedOn: false)
                 }
             }
@@ -199,14 +189,6 @@ struct SettingsView: View {
             if selection == .permissions {
                 settingBlock(title: L10n.t(.permissions, prefs.language)) {
                     VStack(alignment: .leading, spacing: 12) {
-                        permissionRow(
-                            title: L10n.t(.gmailCredential, prefs.language),
-                            why: L10n.t(.gmailCredentialWhy, prefs.language),
-                            status: gmailPermission
-                        ) {
-                            try? MailBriefCredentialStore.authorizeAccess()
-                            refreshPermissions()
-                        }
                         permissionRow(
                             title: L10n.t(.loginPermission, prefs.language),
                             why: L10n.t(.loginPermissionWhy, prefs.language),
@@ -262,70 +244,11 @@ struct SettingsView: View {
                     }
                 }
             }
-            if selection == .mailBrief {
-                settingBlock(title: "Mail Brief") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        settingRow(title: "Gmail") {
-                            if mailBriefStore.isConnected {
-                                Text(mailBriefStore.accountLabel ?? "Connected")
-                                    .font(.system(size: 10, weight: .medium)).foregroundColor(t.mute)
-                                Button("Disconnect") { mailBriefStore.disconnect() }.buttonStyle(.plain)
-                            } else {
-                                Button("Connect") { mailBriefStore.connect() }.buttonStyle(.plain)
-                            }
-                        }
-                        settingRow(title: "Daily") {
-                            Picker("Hour", selection: $prefs.mailBriefHour) {
-                                ForEach(0..<24, id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-                            }.labelsHidden().frame(width: 64)
-                            Text(":")
-                            Picker("Minute", selection: $prefs.mailBriefMinute) {
-                                ForEach([0, 15, 30, 45], id: \.self) { Text(String(format: "%02d", $0)).tag($0) }
-                            }.labelsHidden().frame(width: 64)
-                        }
-                        settingRow(title: "Batch") {
-                            Picker("Batch", selection: $prefs.mailBriefBatchSize) {
-                                ForEach(MailBriefBatchPolicy.allowedBatchSizes, id: \.self) { Text("\($0)").tag($0) }
-                            }.labelsHidden().frame(width: 72)
-                            Text("threads / run").font(.system(size: 9.5)).foregroundColor(t.mute)
-                        }
-                        settingRow(title: "Concurrency") {
-                            Picker("Concurrency", selection: $prefs.mailBriefConcurrency) {
-                                ForEach(MailBriefBatchPolicy.allowedConcurrency, id: \.self) { Text("\($0)").tag($0) }
-                            }.labelsHidden().frame(width: 72)
-                            Text("parallel batches").font(.system(size: 9.5)).foregroundColor(t.mute)
-                        }
-                        settingRow(title: "Model") {
-                            Picker("Model", selection: $prefs.mailBriefModel) {
-                                ForEach(MailBriefModel.allCases, id: \.self) { model in
-                                    Text(model.displayName).tag(model)
-                                }
-                            }.labelsHidden().pickerStyle(.menu)
-                        }
-                        settingRow(title: "Run") {
-                            Button("Generate now") { mailBriefStore.generateNow() }
-                                .buttonStyle(.plain).disabled(!mailBriefStore.isConnected || mailBriefStore.state == .running)
-                        }
-                        mailRunActivity
-                        if let error = mailBriefStore.lastError {
-                            Text(error).font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute)
-                        }
-                        Text("Email content is sent to your signed-in Codex service. Archive, Flag and Trash require Gmail modify permission.")
-                            .font(.system(size: 9.5, weight: .medium)).foregroundColor(t.mute)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-            }
         }
         .padding(24)
     }
 
     private func refreshPermissions() {
-        switch MailBriefCredentialStore.authorizationStatus() {
-        case .authorized: gmailPermission = .authorized
-        case .notAuthorized: gmailPermission = .notAuthorized
-        case .needsReauthorization: gmailPermission = .needsReauthorization
-        }
         switch LoginItemManager.authorizationStatus {
         case .authorized: loginPermission = .authorized
         case .notAuthorized: loginPermission = .notAuthorized
@@ -369,113 +292,6 @@ struct SettingsView: View {
         }
     }
 
-    private var mailRunActivity: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Divider().overlay(t.track)
-            HStack {
-                Text("Last run")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                Spacer()
-                if mailBriefStore.runRecords.count > 1 {
-                    Button(showsMailRunHistory ? "Hide history" : "Recent runs") {
-                        showsMailRunHistory.toggle()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.mute)
-                }
-            }
-            if let latest = mailBriefStore.runRecords.first {
-                mailRunRow(latest, detailed: true)
-                if showsMailRunHistory {
-                    ForEach(Array(mailBriefStore.runRecords.dropFirst())) { record in
-                        Divider().overlay(t.track.opacity(0.7))
-                        mailRunRow(record, detailed: false)
-                    }
-                }
-            } else {
-                Text("Not run yet")
-                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                    .foregroundColor(t.ash)
-            }
-        }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 8).fill(t.panel.opacity(0.55)))
-    }
-
-    private func mailRunRow(_ record: MailBriefRunRecord, detailed: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 6) {
-                Text(mailRunStatus(record))
-                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                    .foregroundColor(t.cream)
-                Text("· \(mailRunTrigger(record.trigger)) · \(mailRunTime(record))")
-                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
-                    .foregroundColor(t.mute)
-                Spacer(minLength: 0)
-            }
-            if let summary = mailRunSummary(record) {
-                Text(summary)
-                    .font(.system(size: detailed ? 10 : 9.5, weight: .medium, design: .rounded))
-                    .foregroundColor(t.mute)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .help(mailRunAbsoluteTime(record))
-    }
-
-    private func mailRunStatus(_ record: MailBriefRunRecord) -> String {
-        switch record.status {
-        case .running:
-            switch record.stage {
-            case .connecting: "Connecting"
-            case .fetching: "Fetching Inbox"
-            case .classifying: "Classifying"
-            case .publishing: "Publishing"
-            case .finished: "Running"
-            }
-        case .succeeded: "Succeeded"
-        case .failed: "Failed"
-        case .cancelled: record.safeErrorCode == "interrupted" ? "Interrupted" : "Cancelled"
-        }
-    }
-
-    private func mailRunTrigger(_ trigger: MailBriefRunTrigger) -> String {
-        switch trigger { case .automatic: "Automatic"; case .manual: "Manual"; case .catchUp: "Catch-up" }
-    }
-
-    private func mailRunSummary(_ record: MailBriefRunRecord) -> String? {
-        guard let inbox = record.snapshotInboxCount else {
-            return record.safeErrorCode.map { "Stopped before Inbox fetch · \($0.replacingOccurrences(of: "_", with: " "))" }
-        }
-        if record.status == .running {
-            let target = record.newOrChangedCount ?? inbox
-            return "Inbox \(inbox) · classified \(record.classifiedCount) / \(target)"
-        }
-        var values = ["Inbox \(inbox)"]
-        if let changed = record.newOrChangedCount { values.append("new/changed \(changed)") }
-        if let reused = record.reusedCount { values.append("reused \(reused)") }
-        if let published = record.publishedCount { values.append("published \(published)") }
-        if record.status == .failed, let error = record.safeErrorCode {
-            values.append(error.replacingOccurrences(of: "_", with: " "))
-        }
-        return values.joined(separator: " · ")
-    }
-
-    private func mailRunTime(_ record: MailBriefRunRecord) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: record.finishedAt ?? record.startedAt, relativeTo: Date())
-    }
-
-    private func mailRunAbsoluteTime(_ record: MailBriefRunRecord) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium; formatter.timeStyle = .medium
-        let start = formatter.string(from: record.startedAt)
-        guard let end = record.finishedAt else { return "Started \(start)" }
-        return "Started \(start) · Finished \(formatter.string(from: end))"
-    }
 
 
     private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {

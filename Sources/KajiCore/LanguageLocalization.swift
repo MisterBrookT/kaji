@@ -62,7 +62,7 @@ public enum L10n {
         case moduleQuota, moduleWork, moduleSystem, moduleGoals
         case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
-        case permissions, gmailCredential, gmailCredentialWhy, loginPermission, loginPermissionWhy
+        case permissions, loginPermission, loginPermissionWhy
         case sleepPermission, sleepPermissionWhy, authorized, notAuthorized, needsReauthorization, authorize
         case cancel, sleepRepairTitle, sleepRepairMessage, repairHelper
     }
@@ -162,8 +162,6 @@ public enum L10n {
         .goalGroupThisWeek: .init(en: "This Week", zh: "本周", ptBR: "Esta semana", es: "Esta semana"),
         .goalGroupEarlier: .init(en: "Earlier", zh: "更早", ptBR: "Anteriores", es: "Anteriores"),
         .permissions: .init(en: "Permissions", zh: "授权", ptBR: "Autorizações", es: "Permisos"),
-        .gmailCredential: .init(en: "Gmail credential", zh: "Gmail 凭据", ptBR: "Credencial do Gmail", es: "Credencial de Gmail"),
-        .gmailCredentialWhy: .init(en: "Reads Gmail securely for Mail Brief.", zh: "安全读取 Gmail 以生成邮件简报。", ptBR: "Lê o Gmail com segurança para o resumo.", es: "Lee Gmail de forma segura para el resumen."),
         .loginPermission: .init(en: "Launch at login", zh: "登录时启动", ptBR: "Iniciar ao entrar", es: "Iniciar al entrar"),
         .loginPermissionWhy: .init(en: "Keeps Kaji available after you sign in.", zh: "登录 Mac 后自动保持 Kaji 可用。", ptBR: "Mantém o Kaji disponível após entrar.", es: "Mantiene Kaji disponible tras iniciar sesión."),
         .sleepPermission: .init(en: "Prevent sleep helper", zh: "防休眠助手", ptBR: "Auxiliar antirrepouso", es: "Asistente antirreposo"),

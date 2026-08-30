@@ -70,9 +70,9 @@ private func removeDefaultsSuite(_ defaults: UserDefaults, named suiteName: Stri
 /// If `setupStatusItem()` ever stops wiring that closure, this reaches a
 /// stale default (`{}`) and every assertion after it fails for real.
 ///
-/// The harness gives the real `AppDelegate` a unique `UserDefaults` suite and
-/// temporary cache directory. Production still uses `.standard`; tests never
-/// read or write the app's real defaults domain.
+/// The harness gives the real `AppDelegate` a unique `UserDefaults` suite.
+/// Production still uses `.standard`; tests never read or write the app's real
+/// defaults domain.
 
 @MainActor
 final class KajiUIHarness {
@@ -80,7 +80,6 @@ final class KajiUIHarness {
 
     private let suiteName: String
     private let defaults: UserDefaults
-    private let cacheDirectory: URL
 
     init() {
         _ = NSApplication.shared
@@ -91,13 +90,9 @@ final class KajiUIHarness {
             preconditionFailure("failed to create isolated defaults suite")
         }
         defaults = isolatedDefaults
-        cacheDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kaji-ui-test-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
 
         appDelegate = AppDelegate(
             defaults: defaults,
-            cacheDirectory: cacheDirectory,
             store: QuotaStore(previewProviders: [
                 ProviderView(
                     id: "claude", mark: "C", displayName: "Fixture Claude",
@@ -142,7 +137,7 @@ final class KajiUIHarness {
 
     /// Must be called at the end of every test that constructs a harness:
     /// closes the popover, stops timers/network stores, removes the real
-    /// `NSStatusItem`, and deletes the isolated defaults/cache world.
+    /// `NSStatusItem`, and deletes the isolated defaults world.
     func tearDown() {
         if appDelegate.popover?.isShown == true {
             appDelegate.popover.performClose(nil)
@@ -154,7 +149,6 @@ final class KajiUIHarness {
             NSStatusBar.system.removeStatusItem(statusItem)
         }
         removeDefaultsSuite(defaults, named: suiteName)
-        try? FileManager.default.removeItem(at: cacheDirectory)
     }
 
     /// Invokes the real click handler the status item's hosted
@@ -280,13 +274,11 @@ final class PopoverRenderFixture {
     let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
     let fixedPlanStore: FixedPlanStore
-    let mailBriefStore: MailBriefStore
     let launchdJobStore: LaunchdJobStore
     let navigation = PopoverNavigation()
 
     private let suiteName: String
     private let defaults: UserDefaults
-    private let cacheDirectory: URL
 
     init() {
         suiteName = "dev.blackblue.Kaji.PopoverRender.\(UUID().uuidString)"
@@ -294,9 +286,6 @@ final class PopoverRenderFixture {
             preconditionFailure("failed to create isolated defaults suite")
         }
         defaults = isolatedDefaults
-        cacheDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kaji-popover-render-\(UUID().uuidString)", isDirectory: true)
-        try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
 
         prefs = Prefs(defaults: defaults)
         dailyGoals = DailyGoalStore(defaults: defaults)
@@ -316,24 +305,6 @@ final class PopoverRenderFixture {
             ],
             updated: Date(timeIntervalSince1970: 1_700_000_000)
         )
-        mailBriefStore = MailBriefStore(
-            previewGeneration: MailBriefGeneration(
-                generationID: UUID(uuidString: "00000000-0000-0000-0000-000000000001")!,
-                briefDay: "2026-01-01",
-                createdAt: Date(timeIntervalSince1970: 1_700_000_000),
-                entries: [
-                    MailBriefEntry(
-                        threadID: "fixture-mail", subject: "Fixture mail subject",
-                        sender: "Fixture Sender", gmailURL: nil, level: 2, bucket: .act,
-                        summaryZH: "Fixture mail summary", reasonZH: "Fixture mail reason",
-                        suggestedAction: .reply, deadline: nil, confidence: .high,
-                        goalTitleZH: nil
-                    ),
-                ],
-                snapshotInboxThreadCount: 1
-            ),
-            cacheDirectory: cacheDirectory
-        )
         launchdJobStore = LaunchdJobStore(initialSnapshot: LaunchdJobSnapshot(jobs: [
             LaunchdJob(label: "dev.kaji.fixture", pid: 4242, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
             LaunchdJob(label: "com.example.failed", pid: nil, lastExitCode: 1, isInstalledUserAgent: true, state: .failed),
@@ -352,9 +323,7 @@ final class PopoverRenderFixture {
     }
 
     func tearDown() {
-        mailBriefStore.stop()
         removeDefaultsSuite(defaults, named: suiteName)
-        try? FileManager.default.removeItem(at: cacheDirectory)
     }
 
     func view(
@@ -373,7 +342,6 @@ final class PopoverRenderFixture {
             systemMonitor: systemMonitor,
             dailyGoals: dailyGoals,
             fixedPlanStore: fixedPlanStore,
-            mailBriefStore: mailBriefStore,
             launchdJobStore: launchdJobStore,
             navigation: navigation,
             controls: KajiPopoverControls(

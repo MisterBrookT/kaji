@@ -123,40 +123,6 @@ struct Snap {
         return store
     }
 
-    static func makeMailGeneration() -> MailBriefGeneration {
-        let entries = [
-            MailBriefEntry(threadID: "1", subject: "Message to KDD 2026 Workshop Authors Accepted",
-                           sender: "AIDataSci 2026", gmailURL: nil, level: 3, bucket: .act,
-                           summaryZH: "KDD 2026 Workshop 投稿已接收，需要确认作者信息。",
-                           reasonZH: "录用通知，需要在截止日前完成确认。", suggestedAction: .reply,
-                           deadline: Date(timeIntervalSinceNow: 2 * 86_400), confidence: .high,
-                           goalTitleZH: "确认 KDD Workshop 作者信息"),
-            MailBriefEntry(threadID: "2", subject: "Tuesday Poster Session",
-                           sender: "KDD Events Team", gmailURL: nil, level: 3, bucket: .act,
-                           summaryZH: "周二 Poster Session 时间与展位安排已更新。",
-                           reasonZH: "行程发生变化。", suggestedAction: .createGoal,
-                           deadline: nil, confidence: .high, goalTitleZH: "更新 KDD Poster 行程"),
-            MailBriefEntry(threadID: "3", subject: "WISE 2026 Invitation Letter Request for Visa Support",
-                           sender: "Microsoft CMT", gmailURL: nil, level: 2, bucket: .act,
-                           summaryZH: "WISE 2026 签证邀请函需要补充护照信息。",
-                           reasonZH: "材料不完整会影响签证进度。", suggestedAction: .reply,
-                           deadline: Date(timeIntervalSinceNow: 5 * 86_400), confidence: .high,
-                           goalTitleZH: "补充 WISE 签证材料"),
-            MailBriefEntry(threadID: "4", subject: "AAAI 2027 revision received",
-                           sender: "OpenReview", gmailURL: nil, level: 2, bucket: .watch,
-                           summaryZH: "AAAI 2027 修订稿已成功提交，无需立即操作。",
-                           reasonZH: "系统回执。", suggestedAction: .none,
-                           deadline: nil, confidence: .high, goalTitleZH: nil),
-            MailBriefEntry(threadID: "5", subject: "Your Nexitaly service expires in 3 days",
-                           sender: "Nexitaly", gmailURL: nil, level: 1, bucket: .watch,
-                           summaryZH: "Nexitaly 服务将在 3 天后到期。",
-                           reasonZH: "可能需要续费。", suggestedAction: .watch,
-                           deadline: Date(timeIntervalSinceNow: 3 * 86_400), confidence: .medium,
-                           goalTitleZH: nil),
-        ]
-        return MailBriefGeneration(briefDay: "2026-08-25", entries: entries,
-                                   snapshotInboxThreadCount: 32, classifierModelID: MailBriefModel.defaultValue.rawValue)
-    }
 
     static func main() {
         MainActor.assumeIsolated {
@@ -165,7 +131,6 @@ struct Snap {
             let goalsMode = args.contains("goals")
             let workMode = args.contains("work")
             let breakMode = args.contains("break")
-            let mailMode = args.contains("mail")
             let launchdMode = args.contains("launchd")
             let settingsMode = args.contains("settings")
             let lang: Lang = args.contains("zh") ? .zh : .en
@@ -174,7 +139,6 @@ struct Snap {
             prefs.showRemaining = showRemaining
             if goalsMode { prefs.enabledModules = [.quota, .goals] }
             if workMode || breakMode { prefs.enabledModules = [.quota, .work] }
-            if mailMode { prefs.enabledModules = [.quota, .mailBrief] }
             if launchdMode { prefs.enabledModules = [.quota, .launchd] }
 
             let store = QuotaStore(previewProviders: mocks, updated: Date())
@@ -183,9 +147,6 @@ struct Snap {
             let systemMonitor = SystemMonitor()
             let dailyGoals = goalsMode ? makeGoalsStore() : DailyGoalStore()
             let fixedPlanStore = FixedPlanStore()
-            let mailBriefStore = mailMode
-                ? MailBriefStore(previewGeneration: makeMailGeneration())
-                : MailBriefStore(cacheURL: URL(fileURLWithPath: "/tmp/kaji-snapshot-mail.json"))
             let launchdJobStore = LaunchdJobStore(initialSnapshot: LaunchdJobSnapshot(jobs: [
                 LaunchdJob(label: "com.bubu.lisa-daemon", pid: 65368, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
                 LaunchdJob(label: "dev.bubu.hub-sync", pid: 842, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
@@ -196,7 +157,6 @@ struct Snap {
             let navigation = PopoverNavigation()
             if goalsMode { navigation.panel = .goals }
             if workMode || breakMode { navigation.panel = .work }
-            if mailMode { navigation.panel = .mailBrief }
             if launchdMode { navigation.panel = .launchd }
             let controls = KajiPopoverControls(
                 onOpenSettings: {},
@@ -210,7 +170,6 @@ struct Snap {
                 systemMonitor: systemMonitor,
                 dailyGoals: dailyGoals,
                 fixedPlanStore: fixedPlanStore,
-                mailBriefStore: mailBriefStore,
                 launchdJobStore: launchdJobStore,
                 navigation: navigation,
                 controls: controls,
@@ -254,8 +213,7 @@ struct Snap {
             let settings = SettingsView(
                 prefs: prefs,
                 sleepController: SleepController(previewEnabled: false),
-                fixedPlanStore: fixedPlanStore,
-                mailBriefStore: mailBriefStore
+                fixedPlanStore: fixedPlanStore
             )
             .frame(width: 760, height: 560)
 
@@ -264,11 +222,6 @@ struct Snap {
                 let size = NSSize(width: 760, height: 560)
                 renderHosting(settings, appearance: .darkAqua, scheme: .dark, size: size, to: "/tmp/settings-dark.png")
                 renderHosting(settings, appearance: .aqua, scheme: .light, size: size, to: "/tmp/settings-light.png")
-                return
-            }
-            if mailMode {
-                render(popover, appearance: .darkAqua, scheme: .dark, to: "/tmp/mail-dark.png")
-                render(popover, appearance: .aqua, scheme: .light, to: "/tmp/mail-light.png")
                 return
             }
             if launchdMode {

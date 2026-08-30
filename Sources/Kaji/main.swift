@@ -12,10 +12,7 @@ let delegate = MainActor.assumeIsolated {
     let environment = ProcessInfo.processInfo.environment
     if let nonce = environment["KAJI_UI_SMOKE_NONCE"],
        let defaults = UserDefaults(suiteName: "dev.kaji.ui-smoke.\(nonce)") {
-        let cacheDirectory = environment["KAJI_UI_SMOKE_ARTIFACTS"].map {
-            URL(fileURLWithPath: $0, isDirectory: true)
-        }
-        return AppDelegate(defaults: defaults, cacheDirectory: cacheDirectory)
+        return AppDelegate(defaults: defaults)
     }
     return AppDelegate()
 }
