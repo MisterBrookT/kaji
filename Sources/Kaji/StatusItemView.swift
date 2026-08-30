@@ -14,6 +14,12 @@ import KajiCore
 // shows roughly how full each window is.
 //
 // Glyphs are always adaptive mono (system Light / Dark) — no Color product path.
+struct SystemLoadSnapshot: Equatable {
+    let cpuPercent: Double
+    let memoryPercent: Double
+    let diskPercent: Double
+}
+
 struct StatusItemView: View {
     let providers: [ProviderView]
     var showRemaining: Bool = false
@@ -26,9 +32,12 @@ struct StatusItemView: View {
     var workSlotLabel: String? = nil
     /// Optional today's completion summary (`n/n`) when Goals is enabled.
     var goalsSlotLabel: String? = nil
+    /// Optional live system load bars when System is enabled.
+    var systemSlotSnapshot: SystemLoadSnapshot? = nil
     var onQuotaClick: () -> Void = {}
     var onWorkClick: () -> Void = {}
     var onGoalsClick: () -> Void = {}
+    var onSystemClick: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
@@ -61,6 +70,14 @@ struct StatusItemView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+            }
+            if let systemSlotSnapshot {
+                Button(action: onSystemClick) {
+                    SystemStatusSlot(snapshot: systemSlotSnapshot)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("kaji.status.system")
             }
         }
         .padding(.horizontal, 3)
@@ -100,6 +117,44 @@ private struct GoalsStatusSlot: View {
         .padding(.horizontal, 2)
     }
 }
+private struct SystemStatusSlot: View {
+    let snapshot: SystemLoadSnapshot
+
+    @Environment(\.colorScheme) private var scheme
+
+    private var base: Color {
+        scheme == .dark ? .white : .black
+    }
+
+    var body: some View {
+        VStack(spacing: 3) {
+            loadBar(snapshot.cpuPercent)
+            loadBar(snapshot.memoryPercent)
+            loadBar(snapshot.diskPercent)
+        }
+        .frame(width: 24, height: 21)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("CPU \(rounded(snapshot.cpuPercent))%, memory \(rounded(snapshot.memoryPercent))%, disk \(rounded(snapshot.diskPercent))%")
+    }
+
+    private func loadBar(_ percent: Double) -> some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(base.opacity(0.22))
+                Capsule()
+                    .fill(base.opacity(0.65))
+                    .frame(width: geometry.size.width * min(max(percent / 100, 0), 1))
+            }
+        }
+        .frame(height: 3)
+    }
+
+    private func rounded(_ value: Double) -> Int {
+        Int(value.rounded())
+    }
+}
+
 
 // MARK: - WorkStatusSlot
 //

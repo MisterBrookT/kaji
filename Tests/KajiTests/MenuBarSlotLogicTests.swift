@@ -47,6 +47,7 @@ final class MenuBarSlotLogicTests: XCTestCase {
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .quota), .quota)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .work), .work)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .goals), .goalsToday)
+        XCTAssertEqual(MenuBarSlotLogic.destination(for: .system), .system)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .background), .quota)
     }
 

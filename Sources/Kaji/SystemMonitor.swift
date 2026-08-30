@@ -120,7 +120,14 @@ final class SystemMonitor: ObservableObject {
     }
 
     func start() {
+        guard timer == nil else { return }
+        refresh()
         scanDiskInsights()
+        timer = Timer.scheduledTimer(withTimeInterval: 30, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.refresh()
+            }
+        }
     }
 
     func stop() {

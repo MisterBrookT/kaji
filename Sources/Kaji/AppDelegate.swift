@@ -152,6 +152,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
+        systemMonitor.$snapshot
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
         prefs.$launchAtLogin
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -243,9 +247,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
                                   goalsSlotLabel: goalsStatusSlotLabel,
+                                  systemSlotSnapshot: systemStatusSlotSnapshot,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                  onSystemClick: { [weak self] in self?.showPopover(.system) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -264,9 +270,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
                                                goalsSlotLabel: goalsStatusSlotLabel,
+                                               systemSlotSnapshot: systemStatusSlotSnapshot,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                               onSystemClick: { [weak self] in self?.showPopover(.system) })
         statusItem.length = statusItemLength
     }
 
@@ -301,6 +309,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             scheduledTotal: fixedPlanStore.todayScheduledEntries.count
         )
     }
+    private var systemStatusSlotSnapshot: SystemLoadSnapshot? {
+        guard prefs.isModuleEnabled(.system) else { return nil }
+        let snapshot = systemMonitor.snapshot
+        return SystemLoadSnapshot(cpuPercent: snapshot.cpuPercent,
+                                  memoryPercent: snapshot.memoryPercent,
+                                  diskPercent: snapshot.diskPercent)
+    }
+
 
 
     private var statusItemLength: CGFloat {
@@ -314,6 +330,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let goalsStatusSlotLabel {
             length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
+        }
+        if systemStatusSlotSnapshot != nil {
+            length += 29
         }
         return length
     }
@@ -410,7 +429,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday:
+        case .work, .goalsToday, .system:
             return .quota
         }
     }
@@ -423,6 +442,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
+        case .system:
+            return popoverNavigation.panel == .system
         }
     }
 
@@ -443,6 +464,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
+        case .system:
+            guard prefs.isModuleEnabled(.system) else {
+                popoverNavigation.panel = .quota
+                break
+            }
+            popoverNavigation.panel = .system
         }
     }
 
