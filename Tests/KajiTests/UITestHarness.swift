@@ -274,7 +274,6 @@ final class PopoverRenderFixture {
     let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
     let fixedPlanStore: FixedPlanStore
-    let launchdJobStore: LaunchdJobStore
     let navigation = PopoverNavigation()
 
     private let suiteName: String
@@ -305,11 +304,6 @@ final class PopoverRenderFixture {
             ],
             updated: Date(timeIntervalSince1970: 1_700_000_000)
         )
-        launchdJobStore = LaunchdJobStore(initialSnapshot: LaunchdJobSnapshot(jobs: [
-            LaunchdJob(label: "dev.kaji.fixture", pid: 4242, lastExitCode: 0, isInstalledUserAgent: true, state: .running),
-            LaunchdJob(label: "com.example.failed", pid: nil, lastExitCode: 1, isInstalledUserAgent: true, state: .failed),
-            LaunchdJob(label: "com.apple.fixture", pid: nil, lastExitCode: 0, isInstalledUserAgent: false, state: .idle),
-        ]))
         workSession = WorkSessionController(prefs: prefs)
         prefs.enabledModules = Set(KajiModuleID.allCases)
         _ = try? dailyGoals.addGoal(
@@ -342,7 +336,6 @@ final class PopoverRenderFixture {
             systemMonitor: systemMonitor,
             dailyGoals: dailyGoals,
             fixedPlanStore: fixedPlanStore,
-            launchdJobStore: launchdJobStore,
             navigation: navigation,
             controls: KajiPopoverControls(
                 onOpenSettings: {},

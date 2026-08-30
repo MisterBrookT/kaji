@@ -2,7 +2,7 @@
 
 Kaji is one application shell composed of first-party modules. The shell owns shared lifecycle and presentation concerns. Each module owns a distinct signal or control surface.
 
-Current module identifiers include Quota, Work, System, Goals, and Background Tasks. Quota is the small default experience. Optional modules are enabled through preferences and appear only when selected.
+Current module identifiers include Quota, Work, System, and Goals. Quota is the small default experience. Optional modules are enabled through preferences and appear only when selected.
 
 ## Why capabilities are opt-in
 

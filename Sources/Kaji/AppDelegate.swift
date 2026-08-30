@@ -59,7 +59,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
     let fixedPlanStore: FixedPlanStore
     let popoverNavigation = PopoverNavigation()
-    private let launchdJobStore = LaunchdJobStore()
     private var breakWindows: [NSWindow] = []
     private var breakWatchdogTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
@@ -120,10 +119,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         prefs.$primaryFavorites
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildMenuSurfaces() }
-            .store(in: &cancellables)
-        launchdJobStore.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in DispatchQueue.main.async { self?.updateStatusItem() } }
             .store(in: &cancellables)
         dailyGoals.objectWillChange
             .receive(on: RunLoop.main)
@@ -206,9 +201,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             systemMonitor.stop()
         }
-        let launchdEnabled = modules.contains(.launchd)
-        launchdJobStore.setEnabled(launchdEnabled)
-        if launchdEnabled { launchdJobStore.refreshStatus() }
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -230,7 +222,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         store.stop()
         breakWatchdogTimer?.invalidate()
         closeBreakOverlay()
-        launchdJobStore.stop()
         controlServer.stop()
     }
 
@@ -353,7 +344,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             applyPopoverDestination(destination)
             return
         }
-        popoverNavigation.launchdCategory = .userAgent
 
 
         // AppKit's first fitting pass can leave the initial SwiftUI page offset.
@@ -420,7 +410,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .launchd:
+        case .work, .goalsToday:
             return .quota
         }
     }
@@ -433,8 +423,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
-        case .launchd:
-            return popoverNavigation.panel == .launchd
         }
     }
 
@@ -455,8 +443,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
-        case .launchd:
-            popoverNavigation.panel = prefs.isModuleEnabled(.launchd) ? .launchd : .quota
         }
     }
 
@@ -477,7 +463,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
-                                      launchdJobStore: launchdJobStore,
                                       navigation: popoverNavigation,
                                       controls: controls,
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
@@ -626,22 +611,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "activity": jsonValue(dailyGoals.heatmapDays),
                 "schedules": jsonValue(fixedPlanStore.schedules),
             ],
-            "launchd": [
-                "userAgent": controlCategorySnapshot(.userAgent),
-                "application": controlCategorySnapshot(.application),
-                "appleSystem": controlCategorySnapshot(.appleSystem),
-            ],
-        ]
-    }
 
-    private func controlCategorySnapshot(_ category: LaunchdJobCategory) -> [String: Any] {
-        let jobs = launchdJobStore.snapshot.jobs(in: category)
-        return [
-            "total": jobs.count,
-            "running": jobs.count { $0.state == .running },
-            "failed": jobs.count { $0.state == .failed },
-            "idle": jobs.count { $0.state == .idle },
-            "unloaded": jobs.count { $0.state == .unloaded },
         ]
     }
 
@@ -687,21 +657,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hostingView.layoutSubtreeIfNeeded()
             size = try writePNG(view: hostingView, to: outputURL)
         case "popover":
-            let parts = selection.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-            guard let pageID = parts.first,
-                  let page = KajiModuleID(rawValue: pageID),
-                  prefs.enabledModules.contains(page),
-                  parts.count <= 2 else {
+            guard let page = KajiModuleID(rawValue: selection),
+                  prefs.enabledModules.contains(page) else {
                 throw TestUIAutomationError.invalidSelection
-            }
-            if parts.count == 2 {
-                guard page == .launchd,
-                      let category = LaunchdJobCategory(rawValue: parts[1]) else {
-                    throw TestUIAutomationError.invalidSelection
-                }
-                popoverNavigation.launchdCategory = category
-            } else if page == .launchd {
-                popoverNavigation.launchdCategory = .userAgent
             }
             popoverNavigation.panel = page
             if page == .goals { popoverNavigation.goalHorizon = .today }
@@ -897,19 +855,13 @@ extension AppDelegate: NSWindowDelegate {
         settingsWindow = nil
     }
 }
-extension AppDelegate: NSPopoverDelegate {
-    func popoverWillShow(_ notification: Notification) {
-        guard let openingPopover = notification.object as? NSPopover,
-              openingPopover === popover else { return }
-        launchdJobStore.setPopoverVisible(true)
-    }
 
+extension AppDelegate: NSPopoverDelegate {
     func popoverWillClose(_ notification: Notification) {
         guard let closingPopover = notification.object as? NSPopover else { return }
         if closingPopover === detailPopover {
             detailPopover = nil
         } else if closingPopover === popover {
-            launchdJobStore.setPopoverVisible(false)
             closeDetailPopover()
         }
     }

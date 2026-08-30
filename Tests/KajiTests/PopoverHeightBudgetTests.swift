@@ -97,7 +97,6 @@ final class PopoverHeightBudgetTests: XCTestCase {
             systemMonitor: fixture.systemMonitor,
             dailyGoals: fixture.dailyGoals,
             fixedPlanStore: fixture.fixedPlanStore,
-            launchdJobStore: fixture.launchdJobStore,
             navigation: fixture.navigation,
             controls: KajiPopoverControls(
                 onOpenSettings: {}, onQuit: {},

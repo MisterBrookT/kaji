@@ -10,9 +10,9 @@ PREFS_DOMAIN="dev.kaji"
 NONCE="$(uuidgen)-$(uuidgen)"
 PORT="$(jot -r 1 40000 59999)"
 SMOKE_DOMAIN="dev.kaji.ui-smoke.$NONCE"
-SEED_MODULES=(quota work system goals launchd)
+SEED_MODULES=(quota work system goals)
 SEED_LANGUAGE=en
-PAGE_IDS="quota|work|system|goals|launchd|launchd:application|launchd:appleSystem"
+PAGE_IDS="quota|work|system|goals"
 SETTINGS_SECTIONS="General|Modules|Work|Quota|Permissions"
 
 seed_modules_plist_array() {
@@ -46,7 +46,6 @@ codesign --force --sign - "$HELPER" >/dev/null
 export KAJI_UI_SMOKE_NONCE="$NONCE"
 export KAJI_UI_SMOKE_PORT="$PORT"
 export KAJI_UI_SMOKE_ARTIFACTS="$ARTIFACTS"
-export KAJI_UI_SMOKE_AUDIT_LAUNCHD_REFRESH=1
 APP_ARGS=(
     -enabledModules "$(seed_modules_plist_array)"
     -language "$SEED_LANGUAGE"
@@ -66,12 +65,6 @@ fi
 
 "$HELPER" "$KAJI_PID" "$ARTIFACTS" "$NONCE" "$PORT" "$PAGE_IDS" "$SETTINGS_SECTIONS" \
     "$ROOT/scripts/ui-smoke.swift" "$ROOT/scripts/ui-smoke.sh"
-
-if ! /usr/bin/grep -q 'KAJI_UI_SMOKE launchd-refresh' "$ARTIFACTS/kaji.stdout.log"; then
-    printf '%s\n' 'UI-SMOKE FAIL: Background Tasks module never refreshed live launchd state' >&2
-    exit 1
-fi
-printf '%s\n' 'ASSERT launchd-refresh: PASS live refresh ran in the owned app process'
 
 PREFS_MD5_AFTER=$(defaults export "$PREFS_DOMAIN" - 2>/dev/null | md5 -q || echo "no-domain")
 PREFS_ENABLED_AFTER=$(defaults read "$PREFS_DOMAIN" enabledModules 2>/dev/null || echo "<missing>")

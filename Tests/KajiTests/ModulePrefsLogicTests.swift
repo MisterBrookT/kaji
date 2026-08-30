@@ -78,10 +78,10 @@ final class ModulePrefsLogicTests: XCTestCase {
     func testMoreModulesUseStableOrderAndExcludePrimaryModules() {
         XCTAssertEqual(
             ModulePrefsLogic.moreModules(
-                enabled: [.quota, .work, .system, .goals, .launchd],
+                enabled: [.quota, .work, .system, .goals],
                 favorites: [.goals, .work]
             ),
-            [.system, .launchd]
+            [.system]
         )
     }
 }

@@ -103,21 +103,6 @@ func waitForServer(port: UInt16) throws -> [String: Any] {
     throw lastError ?? SmokeError(description: "test control server did not become ready")
 }
 
-func waitForLaunchdSnapshot(port: UInt16, initial: [String: Any]) throws -> [String: Any] {
-    var state = initial
-    let deadline = Date().addingTimeInterval(3)
-    while Date() < deadline {
-        if let launchd = state["launchd"] as? [String: Any],
-           let user = launchd["userAgent"] as? [String: Any],
-           (user["total"] as? Int ?? 0) > 0 {
-            return state
-        }
-        Thread.sleep(forTimeInterval: 0.1)
-        let result = try request(port: port, method: "GET", path: "state")
-        if result.status == 200 { state = result.object }
-    }
-    return state
-}
 
 func assertPNG(_ path: String, label: String) throws {
     guard let image = NSImage(contentsOfFile: path),
@@ -195,14 +180,7 @@ func run() throws {
     let before = try DesktopState.capture()
     try assertNoSystemAuthPrompt("before render")
 
-    var state = try waitForServer(port: port)
-    state = try waitForLaunchdSnapshot(port: port, initial: state)
-    if let launchd = state["launchd"] as? [String: Any],
-       let user = launchd["userAgent"] as? [String: Any] {
-        print("ASSERT launchd-state: PASS My Tasks total=\(user["total"] ?? "?") running=\(user["running"] ?? "?") failed=\(user["failed"] ?? "?") idle=\(user["idle"] ?? "?") unloaded=\(user["unloaded"] ?? "?")")
-    } else {
-        throw SmokeError(description: "ASSERT launchd-state: FAIL control snapshot omitted launchd.userAgent")
-    }
+    _ = try waitForServer(port: port)
 
     let statusPath = URL(fileURLWithPath: artifacts).appendingPathComponent("status.png").path
     _ = try render(port: port, nonce: nonce, surface: "status", selection: "status", outputPath: statusPath)
