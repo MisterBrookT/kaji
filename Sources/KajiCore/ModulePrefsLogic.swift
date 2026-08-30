@@ -43,9 +43,31 @@ public enum ModulePrefsLogic {
         return enabled
     }
 
-    /// Popover pages = enabled modules in `stableOrder`.
-    /// Assumes the caller already ran `normalizeEnabledModules` when loading prefs.
-    public static func popoverPages(enabled: Set<KajiModuleID>) -> [KajiModuleID] {
-        KajiModuleID.stableOrder.filter { enabled.contains($0) }
+    /// Keep at most two enabled, non-quota favorites in insertion order.
+    public static func normalizedFavorites(
+        _ favorites: [KajiModuleID],
+        enabled: Set<KajiModuleID>
+    ) -> [KajiModuleID] {
+        var seen = Set<KajiModuleID>()
+        return favorites.filter { module in
+            module != .quota && enabled.contains(module) && seen.insert(module).inserted
+        }.prefix(2).map { $0 }
+    }
+
+    /// Quota plus the user's two menu-bar favorites.
+    public static func primaryModules(
+        enabled: Set<KajiModuleID>,
+        favorites: [KajiModuleID]
+    ) -> [KajiModuleID] {
+        [.quota] + normalizedFavorites(favorites, enabled: enabled)
+    }
+
+    /// Enabled modules not already promoted to the primary menu-bar surface.
+    public static func moreModules(
+        enabled: Set<KajiModuleID>,
+        favorites: [KajiModuleID]
+    ) -> [KajiModuleID] {
+        let primary = Set(primaryModules(enabled: enabled, favorites: favorites))
+        return KajiModuleID.stableOrder.filter { enabled.contains($0) && !primary.contains($0) }
     }
 }

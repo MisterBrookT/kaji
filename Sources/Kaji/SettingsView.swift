@@ -36,9 +36,6 @@ struct SettingsView: View {
     @ObservedObject var sleepController: SleepController
     @ObservedObject var fixedPlanStore: FixedPlanStore
     @ObservedObject var mailBriefStore: MailBriefStore
-    var exposurePhase: ExposureExperimentPhase
-    var onRollbackExposure: () -> Void
-    var onClearExposureData: () -> Void
 
     @State private var selection: SettingsSection = .general
     @State private var showsMailRunHistory = false
@@ -53,30 +50,25 @@ struct SettingsView: View {
         fixedPlanStore: FixedPlanStore,
         mailBriefStore: MailBriefStore,
         initialSection: SettingsSection = .general,
-        exposurePhase: ExposureExperimentPhase = .notStarted,
-        onRollbackExposure: @escaping () -> Void = {},
-        onClearExposureData: @escaping () -> Void = {},
     ) {
         self.prefs = prefs
         self.sleepController = sleepController
         self.fixedPlanStore = fixedPlanStore
         self.mailBriefStore = mailBriefStore
-        self.exposurePhase = exposurePhase
-        self.onRollbackExposure = onRollbackExposure
-        self.onClearExposureData = onClearExposureData
         _selection = State(initialValue: initialSection)
     }
     @Environment(\.colorScheme) private var scheme
     private var t: KajiTheme { .resolve(scheme) }
 
     private var visibleSections: [SettingsSection] {
-        guard exposurePhase == .treatment else { return SettingsSection.allCases }
-        return SettingsSection.allCases.filter { section in
+        SettingsSection.allCases.filter { section in
             switch section {
             case .general, .modules, .quota, .permissions:
                 return true
-            case .work: return prefs.isModuleEnabled(.work)
-            case .mailBrief: return prefs.isModuleEnabled(.mailBrief)
+            case .work:
+                return prefs.isModuleEnabled(.work)
+            case .mailBrief:
+                return prefs.isModuleEnabled(.mailBrief)
             }
         }
     }
@@ -202,45 +194,7 @@ struct SettingsView: View {
                             .foregroundColor(t.amber)
                     }
                 }
-                if exposurePhase == .baseline || exposurePhase == .treatment {
-                    settingRow(title: "Exposure study") {
-                        Text(exposurePhase == .baseline ? "Baseline" : "Treatment")
-                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                            .foregroundColor(t.mute)
-                        Button("Roll back", action: onRollbackExposure)
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("kaji.exposure.rollback")
-                        Button("Clear data", action: onClearExposureData)
-                            .buttonStyle(.plain)
-                            .accessibilityIdentifier("kaji.exposure.clear")
-                    }
-                }
             }
-                settingBlock(title: "CLI") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(L10n.t(.cliIntegrationHint, prefs.language))
-                            .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                            .foregroundColor(t.mute)
-                            .fixedSize(horizontal: false, vertical: true)
-                        HStack(spacing: 8) {
-                            Text(L10n.t(.cliExamplePrompt, prefs.language))
-                                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
-                                .foregroundColor(t.cream)
-                                .textSelection(.enabled)
-                            Spacer()
-                            Button(L10n.t(.copyPrompt, prefs.language)) {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(
-                                    L10n.t(.cliExamplePrompt, prefs.language),
-                                    forType: .string
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 9.5, weight: .semibold, design: .rounded))
-                            .foregroundColor(t.cream)
-                        }
-                    }
-                }
             }
             if selection == .permissions {
                 settingBlock(title: L10n.t(.permissions, prefs.language)) {
@@ -535,7 +489,7 @@ struct SettingsView: View {
                 if !lockedOn { prefs.setModule(id, enabled: false) }
             }
             .disabled(lockedOn)
-            if exposurePhase == .treatment, id != .quota, on {
+            if id != .quota, on {
                 segment(
                     L10n.t(.showInBar, prefs.language),
                     on: prefs.primaryFavorites.contains(id),
@@ -555,7 +509,7 @@ struct SettingsView: View {
         var favorites = prefs.primaryFavorites
         if favorites.count == 2 { favorites.removeFirst() }
         favorites.append(id)
-        prefs.primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+        prefs.primaryFavorites = ModulePrefsLogic.normalizedFavorites(
             favorites,
             enabled: prefs.enabledModules
         )

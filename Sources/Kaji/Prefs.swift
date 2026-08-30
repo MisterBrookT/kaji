@@ -30,7 +30,7 @@ final class Prefs: ObservableObject {
     }
     @Published var primaryFavorites: [KajiModuleID] {
         didSet {
-            let normalized = ExposureExperimentLogic.normalizedFavorites(
+            let normalized = ModulePrefsLogic.normalizedFavorites(
                 primaryFavorites,
                 enabled: enabledModules
             )
@@ -138,9 +138,6 @@ final class Prefs: ObservableObject {
         self.defaults = defaults
         let d = defaults
         d.removeObject(forKey: "mcpEnabled")
-        // Work compact-signal toggle removed in the settings simplification:
-        // hardcoded always-on, matching the shipped default. Drop the orphan value.
-        d.removeObject(forKey: "exposureExperimentShowsWorkCompactSignal")
         let hadExistingPreferences = Key.existingPreferenceKeys.contains {
             d.object(forKey: $0) != nil
         }
@@ -178,7 +175,7 @@ final class Prefs: ObservableObject {
 
         let savedFavorites = (d.array(forKey: Key.primaryFavorites) as? [String])?
             .compactMap(KajiModuleID.init(rawValue:)) ?? [.goals, .work]
-        primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+        primaryFavorites = ModulePrefsLogic.normalizedFavorites(
             savedFavorites,
             enabled: normalizedEnabled
         )
@@ -275,15 +272,12 @@ final class Prefs: ObservableObject {
             next.remove(id)
         }
         enabledModules = ModulePrefsLogic.normalizeEnabledModules(Array(next.map(\.rawValue)))
-        primaryFavorites = ExposureExperimentLogic.normalizedFavorites(
+        primaryFavorites = ModulePrefsLogic.normalizedFavorites(
             primaryFavorites,
             enabled: enabledModules
         )
     }
 
-    var popoverModulePages: [KajiModuleID] {
-        ModulePrefsLogic.popoverPages(enabled: enabledModules)
-    }
 }
 
 // MARK: - Menu-bar style (option B: single meaningful case)

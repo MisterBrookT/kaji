@@ -87,8 +87,6 @@ struct KajiPopoverView: View {
     let controls: KajiPopoverControls
     let maxContentHeight: CGFloat
     let onContentSizeChange: ((CGSize) -> Void)?
-    var exposurePhase: ExposureExperimentPhase = .notStarted
-    var onExposureEvent: (ExposureStudyEvent, KajiModuleID?, ExposureEntrySource?) -> Void = { _, _, _ in }
     /// Offscreen snapshots (ImageRenderer) often paint ScrollView as empty —
     /// pass `false` for screenshot harnesses.
     var scrollsContent: Bool = true
@@ -114,8 +112,6 @@ struct KajiPopoverView: View {
     @State private var measuredTotalHeight: CGFloat = 0
     @State private var measuredScrollHeight: CGFloat = 0
     @FocusState private var noteFieldFocused: Bool
-    @State private var previousPanel: KajiModuleID?
-    @State private var previousPanelOpenedAt: Date?
     @Environment(\.colorScheme) private var scheme
 
     private var t: KajiTheme { .resolve(scheme) }
@@ -130,8 +126,7 @@ struct KajiPopoverView: View {
         )
     }
     private var pages: [KajiModuleID] {
-        ExposureExperimentLogic.visiblePopoverModules(
-            phase: exposurePhase,
+        ModulePrefsLogic.primaryModules(
             enabled: prefs.enabledModules,
             favorites: prefs.primaryFavorites
         )
@@ -143,9 +138,6 @@ struct KajiPopoverView: View {
     private var selectedLaunchdCategory: LaunchdJobCategory {
         get { navigation.launchdCategory }
         nonmutating set { navigation.launchdCategory = newValue }
-    }
-    private var pageIndex: Int {
-        pages.firstIndex(of: panel) ?? 0
     }
 
     var body: some View {
@@ -173,19 +165,10 @@ struct KajiPopoverView: View {
         .onChange(of: prefs.enabledModules) { _ in
             clampPanelToEnabledPages()
         }
-        .onChange(of: panel) { newPanel in
+        .onChange(of: panel) { _ in
             controls.onDismissDetail()
             noteHoverGeneration += 1
             dismissNoteCard()
-            let now = Date()
-            if previousPanel != nil,
-               previousPanel != newPanel,
-               let openedAt = previousPanelOpenedAt,
-               now.timeIntervalSince(openedAt) <= 5 {
-                onExposureEvent(.quickSwitch, newPanel, nil)
-            }
-            previousPanel = newPanel
-            previousPanelOpenedAt = now
         }
         .onChange(of: focusedGoalID) { newValue in
             if let previousFocusedGoalID,
@@ -244,40 +227,11 @@ struct KajiPopoverView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    @ViewBuilder
     private var header: some View {
-        if exposurePhase == .treatment {
-            treatmentHeader
-        } else {
-            legacyHeader
-        }
-    }
-
-    private var legacyHeader: some View {
-        HStack(spacing: 8) {
-            if pages.count > 1 {
-                arrow("chevron.left") { move(-1) }
-            }
-            Text(panelTitle)
-                .font(.system(size: 12.5, weight: .bold, design: .rounded))
-                .foregroundColor(t.cream)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            Text("\(pageIndex + 1)/\(max(pages.count, 1))")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .foregroundColor(t.ash)
-            if pages.count > 1 {
-                arrow("chevron.right") { move(1) }
-            }
-        }
-    }
-
-    private var treatmentHeader: some View {
         HStack(spacing: 5) {
             ForEach(pages, id: \.self) { module in
                 Button(moduleTitle(module)) {
                     panel = module
-                    onExposureEvent(.popoverOpen, module, .primary)
                 }
                 .buttonStyle(.plain)
                 .font(.system(size: 10.5, weight: panel == module ? .bold : .semibold, design: .rounded))
@@ -285,7 +239,7 @@ struct KajiPopoverView: View {
                 .accessibilityIdentifier("kaji.primary.\(module.rawValue)")
             }
             Spacer(minLength: 4)
-            let more = ExposureExperimentLogic.moreModules(
+            let more = ModulePrefsLogic.moreModules(
                 enabled: prefs.enabledModules,
                 favorites: prefs.primaryFavorites
             )
@@ -297,7 +251,6 @@ struct KajiPopoverView: View {
                             detail: moreDetail(module)
                         )) {
                             panel = module
-                            onExposureEvent(.popoverOpen, module, .more)
                         }
                     }
                 } label: {
@@ -306,7 +259,6 @@ struct KajiPopoverView: View {
                 }
                 .menuStyle(.borderlessButton)
                 .fixedSize()
-                .onTapGesture { onExposureEvent(.moreOpen, nil, nil) }
                 .accessibilityIdentifier("kaji.more")
             }
         }
@@ -1955,7 +1907,6 @@ struct KajiPopoverView: View {
         .frame(height: 32)
     }
 
-    private var panelTitle: String { moduleTitle(panel) }
 
     private func moduleTitle(_ module: KajiModuleID) -> String {
         switch module {
@@ -2018,15 +1969,9 @@ struct KajiPopoverView: View {
                        endPoint: .bottomLeading)
     }
 
-    private func move(_ delta: Int) {
-        let list = pages
-        guard list.count > 1 else { return }
-        let next = (pageIndex + delta + list.count) % list.count
-        panel = list[next]
-    }
 
     private func clampPanelToEnabledPages() {
-        if exposurePhase == .treatment, prefs.enabledModules.contains(panel) {
+        if prefs.enabledModules.contains(panel) {
             return
         }
         let list = pages
@@ -2039,17 +1984,6 @@ struct KajiPopoverView: View {
         }
     }
 
-    private func arrow(_ systemName: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(t.cream)
-                .frame(width: 30, height: 30)
-                .background(Circle().fill(t.panel.opacity(0.9)))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-    }
 
     private func iconButton(_ systemName: String,
                             title: String,
