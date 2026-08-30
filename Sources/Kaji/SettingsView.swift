@@ -136,7 +136,6 @@ struct SettingsView: View {
                     moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
                     moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
-                    moduleRow(.launchd, title: "Background Tasks", lockedOn: false)
                 }
             }
             }
@@ -296,15 +295,21 @@ struct SettingsView: View {
 
     private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {
         let on = prefs.isModuleEnabled(id)
+        let enabled = Binding(
+            get: { prefs.isModuleEnabled(id) },
+            set: { value in
+                if !lockedOn { prefs.setModule(id, enabled: value) }
+            }
+        )
         return settingRow(title: title) {
-            segment(L10n.t(.on, prefs.language), on: on) {
-                if !lockedOn { prefs.setModule(id, enabled: true) }
-            }
-            .disabled(lockedOn && on)
-            segment(L10n.t(.off, prefs.language), on: !on) {
-                if !lockedOn { prefs.setModule(id, enabled: false) }
-            }
-            .disabled(lockedOn)
+            Toggle("", isOn: enabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(t.sun)
+                .disabled(lockedOn)
+                .accessibilityLabel(L10n.t(on ? .on : .off, prefs.language))
+                .accessibilityIdentifier("kaji.module.\(id.rawValue).enabled")
             if id != .quota, on {
                 segment(
                     L10n.t(.showInBar, prefs.language),

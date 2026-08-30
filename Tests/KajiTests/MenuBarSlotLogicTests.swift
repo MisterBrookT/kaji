@@ -48,19 +48,6 @@ final class MenuBarSlotLogicTests: XCTestCase {
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .work), .work)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .goals), .goalsToday)
         XCTAssertEqual(MenuBarSlotLogic.destination(for: .background), .quota)
-        XCTAssertEqual(MenuBarSlotLogic.destination(for: .launchd), .launchd)
     }
 
-
-    func testLaunchdStatusPrioritizesFailedCountAndDisappearsWhenDisabled() {
-        XCTAssertNil(MenuBarSlotLogic.launchdStatus(enabled: false, runningCount: 12, failedCount: 3))
-        XCTAssertEqual(
-            MenuBarSlotLogic.launchdStatus(enabled: true, runningCount: 12, failedCount: 0),
-            LaunchdMenuBarStatus(count: 12, hasFailures: false)
-        )
-        XCTAssertEqual(
-            MenuBarSlotLogic.launchdStatus(enabled: true, runningCount: 12, failedCount: 3),
-            LaunchdMenuBarStatus(count: 3, hasFailures: true)
-        )
-    }
 }

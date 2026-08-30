@@ -6,7 +6,6 @@ import KajiCore
 final class PopoverNavigation: ObservableObject {
     @Published var panel: KajiModuleID = .quota
     @Published var goalHorizon: GoalHorizon = .today
-    @Published var launchdCategory: LaunchdJobCategory = .userAgent
 }
 
 struct KajiPopoverControls {
@@ -80,7 +79,6 @@ struct KajiPopoverView: View {
     @ObservedObject var systemMonitor: SystemMonitor
     @ObservedObject var dailyGoals: DailyGoalStore
     @ObservedObject var fixedPlanStore: FixedPlanStore
-    @ObservedObject var launchdJobStore: LaunchdJobStore
     @ObservedObject var navigation: PopoverNavigation
 
     let controls: KajiPopoverControls
@@ -133,10 +131,6 @@ struct KajiPopoverView: View {
     private var panel: KajiModuleID {
         get { navigation.panel }
         nonmutating set { navigation.panel = newValue }
-    }
-    private var selectedLaunchdCategory: LaunchdJobCategory {
-        get { navigation.launchdCategory }
-        nonmutating set { navigation.launchdCategory = newValue }
     }
 
     var body: some View {
@@ -274,156 +268,9 @@ struct KajiPopoverView: View {
             systemPanel
         case .goals:
             goalsPanel
-        case .launchd:
-            launchdPanel
         }
     }
 
-    private var launchdPanel: some View {
-        let snapshot = launchdJobStore.snapshot
-        let selectedJobs = snapshot.jobs(in: selectedLaunchdCategory)
-        let installedSummary = snapshot.installedSummary
-        let runningCount = selectedJobs.count { $0.state == .running }
-        let idleCount = selectedJobs.count { $0.state == .idle }
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(spacing: 4) {
-                launchdCategoryButton(.userAgent, title: "My Tasks", count: snapshot.count(in: .userAgent))
-                launchdCategoryButton(.application, title: "Apps", count: snapshot.count(in: .application))
-                launchdCategoryButton(.appleSystem, title: "Apple", count: snapshot.count(in: .appleSystem))
-                Spacer(minLength: 4)
-                Button { launchdJobStore.refresh() } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-                .buttonStyle(.plain)
-                .disabled(launchdJobStore.isRefreshing)
-                .help("Refresh")
-            }
-
-            HStack(spacing: 6) {
-                launchdSummary("\(runningCount)", label: "running")
-                if selectedLaunchdCategory == .userAgent {
-                    launchdSummary("\(installedSummary.failedCount)", label: "failed")
-                    launchdSummary("\(installedSummary.unloadedCount)", label: "unloaded")
-                } else {
-                    launchdSummary("\(idleCount)", label: "idle")
-                }
-            }
-
-            if selectedJobs.isEmpty {
-                HStack {
-                    Spacer()
-                    if launchdJobStore.isRefreshing {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Text(launchdJobStore.lastError == nil ? "No tasks in this category" : "Could not read background tasks")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundColor(t.mute)
-                    Spacer()
-                }
-                .padding(.vertical, 24)
-            } else {
-                LazyVStack(alignment: .leading, spacing: 10) {
-                    launchdSection(launchdCategoryTitle(selectedLaunchdCategory), jobs: selectedJobs)
-                }
-            }
-        }
-    }
-
-    private func launchdCategoryButton(
-        _ category: LaunchdJobCategory,
-        title: String,
-        count: Int
-    ) -> some View {
-        let isSelected = selectedLaunchdCategory == category
-        return Button {
-            selectedLaunchdCategory = category
-        } label: {
-            Text("\(title) \(count)")
-                .font(.system(size: 9.5, weight: .semibold, design: .monospaced))
-                .foregroundColor(isSelected ? t.cream : t.mute)
-                .padding(.horizontal, 7)
-                .frame(height: 24)
-                .background(
-                    RoundedRectangle(cornerRadius: 4, style: .continuous)
-                        .fill(isSelected ? t.track : Color.clear)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func launchdCategoryTitle(_ category: LaunchdJobCategory) -> String {
-        switch category {
-        case .userAgent: "My Tasks"
-        case .application: "Apps & Services"
-        case .appleSystem: "Apple"
-        }
-    }
-
-    private func launchdSummary(_ value: String, label: String) -> some View {
-        HStack(spacing: 3) {
-            Text(value)
-                .font(.system(size: 10.5, weight: .bold, design: .rounded))
-                .foregroundColor(t.cream)
-            Text(label)
-                .font(.system(size: 9.5, weight: .medium))
-                .foregroundColor(t.mute)
-        }
-    }
-
-    @ViewBuilder
-    private func launchdSection(_ title: String, jobs: [LaunchdJob]) -> some View {
-        if !jobs.isEmpty {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("\(title) · \(jobs.count)")
-                    .font(.system(size: 9, weight: .semibold))
-                    .foregroundColor(t.mute)
-                    .textCase(.uppercase)
-                ForEach(jobs) { job in
-                    launchdJobRow(job)
-                }
-            }
-        }
-    }
-
-    private func launchdJobRow(_ job: LaunchdJob) -> some View {
-        HStack(spacing: 7) {
-            Circle()
-                .fill(job.state == .running ? t.cream : t.track)
-                .frame(width: 5, height: 5)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(job.label)
-                    .font(.system(size: 10.5, weight: job.state == .failed ? .semibold : .medium))
-                    .foregroundColor(job.state == .failed ? t.cream : t.ash)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(launchdJobDetail(job))
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(t.mute)
-            }
-            Spacer(minLength: 4)
-            Text(launchdStateLabel(job.state))
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(job.state == .failed ? t.cream : t.mute)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func launchdJobDetail(_ job: LaunchdJob) -> String {
-        if let pid = job.pid { return "PID \(pid)" }
-        if let code = job.lastExitCode { return "Last exit \(code)" }
-        return "~/Library/LaunchAgents"
-    }
-
-    private func launchdStateLabel(_ state: LaunchdJobState) -> String {
-        switch state {
-        case .failed: "FAILED"
-        case .running: "RUNNING"
-        case .idle: "IDLE"
-        case .unloaded: "UNLOADED"
-        }
-    }
 
 
 
@@ -1668,7 +1515,6 @@ struct KajiPopoverView: View {
         case .work: return "Work / Break"
         case .system: return "System"
         case .goals: return "Goals"
-        case .launchd: return "Background Tasks"
         }
     }
 
@@ -1688,15 +1534,6 @@ struct KajiPopoverView: View {
                 goals: dailyGoals.todayGoalEntries,
                 scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
                 scheduledTotal: fixedPlanStore.todayScheduledEntries.count
-            )
-        case .launchd:
-            let summary = launchdJobStore.snapshot.installedSummary
-            return MoreMenuItemFormatter.launchdDetail(
-                MenuBarSlotLogic.launchdStatus(
-                    enabled: prefs.isModuleEnabled(.launchd),
-                    runningCount: summary.runningCount,
-                    failedCount: summary.failedCount
-                )
             )
         }
     }

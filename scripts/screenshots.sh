@@ -42,10 +42,6 @@ if [[ "$LANG_ARG" == "settings" ]]; then
   echo "==> rendering $LANG_ARG light + dark verification"
   /tmp/kaji-snap both "$LANG_ARG" zh
   echo "==> wrote /tmp/$LANG_ARG-{light,dark}.png"
-elif [[ "$LANG_ARG" == "launchd" ]]; then
-  echo "==> rendering launchd light + dark verification"
-  /tmp/kaji-snap launchd
-  echo "==> wrote /tmp/launchd-{light,dark}.png"
 elif [[ "$LANG_ARG" == "goals" || "$LANG_ARG" == "work" || "$LANG_ARG" == "break" ]]; then
   echo "==> rendering $LANG_ARG dark verification"
   /tmp/kaji-snap dark "$LANG_ARG" zh

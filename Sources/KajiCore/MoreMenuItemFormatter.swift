@@ -10,11 +10,4 @@ public enum MoreMenuItemFormatter {
         guard let detail, !detail.isEmpty else { return title }
         return "\(title) · \(detail)"
     }
-
-    /// Background Tasks shows its count, or `N failed` when any job is
-    /// failing; `nil` means the module is disabled or has no snapshot.
-    public static func launchdDetail(_ status: LaunchdMenuBarStatus?) -> String? {
-        guard let status else { return nil }
-        return status.hasFailures ? "\(status.count) failed" : "\(status.count)"
-    }
 }

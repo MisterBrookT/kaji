@@ -93,12 +93,12 @@ final class KajiControlServerTests: XCTestCase {
             body: [
                 "nonce": "exact-test-nonce",
                 "surface": "popover",
-                "selection": "launchd",
+                "selection": "goals",
                 "outputPath": "/tmp/render.png",
             ]
         )
         XCTAssertEqual(accepted.status, 200)
-        XCTAssertEqual(accepted.object["selection"] as? String, "launchd")
+        XCTAssertEqual(accepted.object["selection"] as? String, "goals")
         XCTAssertEqual(accepted.object["path"] as? String, "/tmp/render.png")
 
         let action = try await rawRequest(

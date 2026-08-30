@@ -229,7 +229,6 @@ public enum MenuBarDestination: Equatable, Sendable {
     case quota
     case work
     case goalsToday
-    case launchd
 }
 
 public enum MenuBarSlotLogic {
@@ -252,38 +251,14 @@ public enum MenuBarSlotLogic {
         case .quota, .background: .quota
         case .work: .work
         case .goals: .goalsToday
-        case .launchd: .launchd
         }
     }
 
-
-    public static func launchdStatus(
-        enabled: Bool,
-        runningCount: Int,
-        failedCount: Int
-    ) -> LaunchdMenuBarStatus? {
-        guard enabled else { return nil }
-        if failedCount > 0 {
-            return LaunchdMenuBarStatus(count: failedCount, hasFailures: true)
-        }
-        return LaunchdMenuBarStatus(count: runningCount, hasFailures: false)
-    }
-}
-
-public struct LaunchdMenuBarStatus: Equatable, Sendable {
-    public let count: Int
-    public let hasFailures: Bool
-
-    public init(count: Int, hasFailures: Bool) {
-        self.count = count
-        self.hasFailures = hasFailures
-    }
 }
 
 public enum MenuBarSlot: Equatable, Sendable {
     case quota
     case work
     case goals
-    case launchd
     case background
 }
