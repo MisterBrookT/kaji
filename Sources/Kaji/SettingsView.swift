@@ -319,6 +319,26 @@ struct SettingsView: View {
                     togglePrimaryFavorite(id)
                 }
             }
+            if id == .work, on {
+                segment(
+                    prefs.workTimeDisplayStyle == .minutesOnly ? "12m" : "MM:SS",
+                    on: prefs.workTimeDisplayStyle == .minutesOnly,
+                    accessibilityIdentifier: "kaji.module.work.time-display"
+                ) {
+                    prefs.workTimeDisplayStyle = prefs.workTimeDisplayStyle == .minutesOnly
+                        ? .exactSeconds : .minutesOnly
+                }
+            }
+            if id == .goals, on {
+                segment(
+                    prefs.goalMenuBarDisplayStyle == .incompleteCount ? "15" : "n/n",
+                    on: prefs.goalMenuBarDisplayStyle == .incompleteCount,
+                    accessibilityIdentifier: "kaji.module.goals.count-display"
+                ) {
+                    prefs.goalMenuBarDisplayStyle = prefs.goalMenuBarDisplayStyle == .incompleteCount
+                        ? .todayFraction : .incompleteCount
+                }
+            }
         }
     }
 

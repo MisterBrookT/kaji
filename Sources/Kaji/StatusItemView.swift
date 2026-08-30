@@ -27,11 +27,12 @@ struct StatusItemView: View {
     /// corner of the glyph as a passive "update available" cue (open popover ->
     /// "Update to vX" to act on it). No notification permission needed.
     var updateAvailable: Bool = false
-    /// Optional work countdown (`MM:SS`) to the right of the rings.
+    /// Optional work countdown in the user's selected display style.
     /// `nil` when the work module is disabled — no slot rendered.
     var workSlotLabel: String? = nil
-    /// Optional today's completion summary (`n/n`) when Goals is enabled.
+    /// Optional Goals summary when Goals is enabled.
     var goalsSlotLabel: String? = nil
+    var goalsSlotShowsCalendar: Bool = false
     /// Optional live system load bars when System is enabled.
     var systemSlotSnapshot: SystemLoadSnapshot? = nil
     var onQuotaClick: () -> Void = {}
@@ -66,7 +67,8 @@ struct StatusItemView: View {
             }
             if let goalsSlotLabel {
                 Button(action: onGoalsClick) {
-                    GoalsStatusSlot(label: goalsSlotLabel)
+                    GoalsStatusSlot(label: goalsSlotLabel,
+                                    showsCalendar: goalsSlotShowsCalendar)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -96,6 +98,7 @@ struct StatusItemView: View {
 
 private struct GoalsStatusSlot: View {
     let label: String
+    let showsCalendar: Bool
 
     @Environment(\.colorScheme) private var scheme
 
@@ -105,8 +108,10 @@ private struct GoalsStatusSlot: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image(systemName: "calendar")
-                .font(.system(size: 10, weight: .medium))
+            if showsCalendar {
+                Image(systemName: "calendar")
+                    .font(.system(size: 10, weight: .medium))
+            }
             Text(label)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))
                 .monospacedDigit()
@@ -132,7 +137,7 @@ private struct SystemStatusSlot: View {
             loadBar(snapshot.memoryPercent)
             loadBar(snapshot.diskPercent)
         }
-        .frame(width: 24, height: 21)
+        .frame(width: 16, height: 21)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("CPU \(rounded(snapshot.cpuPercent))%, memory \(rounded(snapshot.memoryPercent))%, disk \(rounded(snapshot.diskPercent))%")
     }

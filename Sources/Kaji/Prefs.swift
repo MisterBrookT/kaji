@@ -65,6 +65,12 @@ final class Prefs: ObservableObject {
     @Published var breakOverlayEnabled: Bool {
         didSet { defaults.set(breakOverlayEnabled, forKey: Key.breakOverlayEnabled) }
     }
+    @Published var workTimeDisplayStyle: WorkTimeDisplayStyle {
+        didSet { defaults.set(workTimeDisplayStyle.rawValue, forKey: Key.workTimeDisplayStyle) }
+    }
+    @Published var goalMenuBarDisplayStyle: GoalMenuBarDisplayStyle {
+        didSet { defaults.set(goalMenuBarDisplayStyle.rawValue, forKey: Key.goalMenuBarDisplayStyle) }
+    }
     @Published var autoCleanEnabled: Bool {
         didSet { defaults.set(autoCleanEnabled, forKey: Key.autoCleanEnabled) }
     }
@@ -86,6 +92,8 @@ final class Prefs: ObservableObject {
         static let breakMinutes = "breakMinutes"
         static let allowBreakSkip = "allowBreakSkip"
         static let breakOverlayEnabled = "breakOverlayEnabled"
+        static let workTimeDisplayStyle = "workTimeDisplayStyle"
+        static let goalMenuBarDisplayStyle = "goalMenuBarDisplayStyle"
         static let visibleProvidersV2 = "visibleProvidersV2"
         /// One-shot: insert `cursor` into saved visible set on upgrade to 0.6.1.
         static let visibleProvidersCursor = "visibleProvidersCursor"
@@ -98,9 +106,10 @@ final class Prefs: ObservableObject {
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
             showRemaining, focusMinutes, breakMinutes,
-            allowBreakSkip, breakOverlayEnabled, visibleProvidersV2,
-            visibleProvidersCursor, autoCleanEnabled, launchAtLogin, preventSleep,
-            goalGrouping, primaryFavorites
+            allowBreakSkip, breakOverlayEnabled, workTimeDisplayStyle,
+            goalMenuBarDisplayStyle, visibleProvidersV2, visibleProvidersCursor,
+            autoCleanEnabled, launchAtLogin, preventSleep, goalGrouping,
+            primaryFavorites
         ]
     }
 
@@ -187,6 +196,12 @@ final class Prefs: ObservableObject {
         } else {
             breakOverlayEnabled = true
         }
+        workTimeDisplayStyle = WorkTimeDisplayStyle(
+            rawValue: d.string(forKey: Key.workTimeDisplayStyle) ?? ""
+        ) ?? .minutesOnly
+        goalMenuBarDisplayStyle = GoalMenuBarDisplayStyle(
+            rawValue: d.string(forKey: Key.goalMenuBarDisplayStyle) ?? ""
+        ) ?? .incompleteCount
         if d.object(forKey: Key.autoCleanEnabled) != nil {
             autoCleanEnabled = d.bool(forKey: Key.autoCleanEnabled)
         } else {

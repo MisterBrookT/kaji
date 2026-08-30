@@ -139,4 +139,40 @@ final class WorkStatusSlotModelTests: XCTestCase {
             XCTAssertNil(label)
         }
     }
+
+    func testMinutesOnlyRoundsUpRemainingPartialMinute() {
+        XCTAssertEqual(
+            WorkStatusSlotModel.label(
+                workEnabled: true,
+                phase: .working,
+                focusRemaining: 12 * 60 + 34,
+                breakRemaining: 0,
+                displayStyle: .minutesOnly
+            ),
+            "13m"
+        )
+    }
+
+    func testMinutesOnlyShowsZeroOnlyAtZero() {
+        XCTAssertEqual(
+            WorkStatusSlotModel.label(
+                workEnabled: true,
+                phase: .breaking,
+                focusRemaining: 0,
+                breakRemaining: 1,
+                displayStyle: .minutesOnly
+            ),
+            "1m"
+        )
+        XCTAssertEqual(
+            WorkStatusSlotModel.label(
+                workEnabled: true,
+                phase: .breaking,
+                focusRemaining: 0,
+                breakRemaining: 0,
+                displayStyle: .minutesOnly
+            ),
+            "0m"
+        )
+    }
 }

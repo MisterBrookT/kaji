@@ -104,6 +104,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
+        prefs.$workTimeDisplayStyle
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
+        prefs.$goalMenuBarDisplayStyle
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
         prefs.$visibleProviders
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildPopoverContentIfShown() }
@@ -247,6 +255,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
                                   goalsSlotLabel: goalsStatusSlotLabel,
+                                  goalsSlotShowsCalendar: goalsStatusSlotShowsCalendar,
                                   systemSlotSnapshot: systemStatusSlotSnapshot,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
@@ -270,6 +279,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
                                                goalsSlotLabel: goalsStatusSlotLabel,
+                                               goalsSlotShowsCalendar: goalsStatusSlotShowsCalendar,
                                                systemSlotSnapshot: systemStatusSlotSnapshot,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
@@ -297,17 +307,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             workEnabled: prefs.isModuleEnabled(.work),
             phase: phase,
             focusRemaining: focusRemaining,
-            breakRemaining: workSession.breakRemaining
+            breakRemaining: workSession.breakRemaining,
+            displayStyle: prefs.workTimeDisplayStyle
         )
     }
 
     private var goalsStatusSlotLabel: String? {
-        MenuBarSlotLogic.goalsLabel(
-            enabled: prefs.isModuleEnabled(.goals),
-            goals: dailyGoals.todayGoalEntries,
-            scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
-            scheduledTotal: fixedPlanStore.todayScheduledEntries.count
-        )
+        guard prefs.isModuleEnabled(.goals) else { return nil }
+        switch prefs.goalMenuBarDisplayStyle {
+        case .incompleteCount:
+            return String(MenuBarSlotLogic.incompleteCount(
+                goals: dailyGoals.allGoalEntries,
+                scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
+                scheduledTotal: fixedPlanStore.todayScheduledEntries.count
+            ))
+        case .todayFraction:
+            return MenuBarSlotLogic.goalsLabel(
+                enabled: true,
+                goals: dailyGoals.todayGoalEntries,
+                scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
+                scheduledTotal: fixedPlanStore.todayScheduledEntries.count
+            )
+        }
+    }
+
+    private var goalsStatusSlotShowsCalendar: Bool {
+        prefs.goalMenuBarDisplayStyle == .todayFraction
     }
     private var systemStatusSlotSnapshot: SystemLoadSnapshot? {
         guard prefs.isModuleEnabled(.system) else { return nil }
@@ -324,15 +349,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // the pre-round-2 multi-ring formula, restored.
         let shown = max(1, min(3, menuBarProviders.count))
         var length = CGFloat(shown) * 26 + 6
-        // Compact monospaced `MM:SS` to the right of the rings (~40pt).
-        if workStatusSlotLabel != nil {
-            length += 40
+        if let workStatusSlotLabel {
+            length += 5 + CGFloat(workStatusSlotLabel.count) * 7
         }
         if let goalsStatusSlotLabel {
-            length += 20 + CGFloat(goalsStatusSlotLabel.count) * 7
+            let iconWidth: CGFloat = goalsStatusSlotShowsCalendar ? 12 : 0
+            length += 9 + iconWidth + CGFloat(goalsStatusSlotLabel.count) * 7
         }
         if systemStatusSlotSnapshot != nil {
-            length += 29
+            length += 21
         }
         return length
     }
