@@ -536,24 +536,13 @@ struct SettingsView: View {
             }
             .disabled(lockedOn)
             if exposurePhase == .treatment, id != .quota, on {
-                Button {
+                segment(
+                    L10n.t(.showInBar, prefs.language),
+                    on: prefs.primaryFavorites.contains(id),
+                    accessibilityIdentifier: "kaji.module.\(id.rawValue).primary"
+                ) {
                     togglePrimaryFavorite(id)
-                } label: {
-                    Image(systemName: prefs.primaryFavorites.contains(id) ? "star.fill" : "star")
                 }
-                .buttonStyle(.plain)
-                .help("Primary favorite")
-                .accessibilityIdentifier("kaji.module.\(id.rawValue).primary")
-            }
-            if exposurePhase == .treatment, id == .work, on {
-                Button {
-                    prefs.showsWorkCompactSignal.toggle()
-                } label: {
-                    Image(systemName: prefs.showsWorkCompactSignal ? "menubar.rectangle" : "rectangle")
-                }
-                .buttonStyle(.plain)
-                .help("Show compact Work signal")
-                .accessibilityIdentifier("kaji.module.work.status-signal")
             }
         }
     }

@@ -50,7 +50,7 @@ public enum L10n {
     public enum K: CaseIterable, Sendable {
         case fiveHQuota, week, quit, stale, waiting, needPython
         case quitApp, settings, advancedSettings, appearance, language, providers, show
-        case hide, on, off
+        case hide, on, off, showInBar
         case usage, showUsed, showRemaining
         case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
         case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
@@ -105,6 +105,7 @@ public enum L10n {
         .hide: .init(en: "Hide", zh: "隐藏", ptBR: "Ocultar", es: "Ocultar"),
         .on: .init(en: "On", zh: "开", ptBR: "Sim", es: "Sí"),
         .off: .init(en: "Off", zh: "关", ptBR: "Não", es: "No"),
+        .showInBar: .init(en: "Show", zh: "显示", ptBR: "Mostrar", es: "Mostrar"),
         .usage: .init(en: "Usage", zh: "用量", ptBR: "Uso", es: "Uso"),
         .showUsed: .init(en: "Used", zh: "已用", ptBR: "Usado", es: "Usado"),
         .showRemaining: .init(en: "Remaining", zh: "剩余", ptBR: "Restante", es: "Restante"),
