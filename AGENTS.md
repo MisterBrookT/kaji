@@ -109,6 +109,35 @@ Primary files today: `Sources/Kaji/{AppDelegate,Prefs,KajiPopoverView,StatusItem
    one policy (`NoteCardHoverPolicy`), with an active edit as the only veto.
    Timing comes from `HoverDisclosurePolicy`, not per-call-site constants.
 
+## UI test layers (moved out of README)
+
+Two layers, split by what each can actually prove:
+
+- **In-process** — `Tests/KajiTests/PopoverInteractionTests.swift` +
+  `PopoverRenderTests.swift`, run by plain `swift test` (no XCUITest target;
+  SwiftPM cannot host one — see `Tests/KajiTests/UITestHarness.swift`). These
+  boot the real `AppDelegate` / status-item / popover object graph in-process
+  and invoke the real click-handler closure `setupStatusItem()` wires up, so a
+  regression in that wiring, or in `showPopover`'s state and content, fails for
+  real. They do **not** cover OS-level click delivery: a synthetic click does
+  not reach a SwiftUI `Button`'s gesture recognizer from a bare `xctest`
+  process, and activation-state-dependent bugs (e.g. a window that hides itself
+  because clicking the status item never activates an `LSUIElement` app) stay
+  invisible there.
+- **Real click, real .app** — `scripts/ui-smoke.sh` launches the actual signed
+  `Kaji.app`, posts a genuine `CGEvent` click at the status item, and asserts on
+  `CGWindowList`. This is the only layer that proves a real click opens the
+  popover on screen.
+
+## Public repo face
+
+`README.md` and `README.zh.md` are the only translations; `docs/` carries the
+user-facing set (`quota.md`, `faq.md`, `cli.md`) plus the four decision docs.
+Contributor-only detail belongs here, not in the README. Screenshots used by the
+README live at `dev_docs/assets/use-{quota,work,goals}.png`;
+`dev_docs/assets/social-preview.png` is the 1280×640 GitHub social card, which
+must be uploaded through repo Settings (no API).
+
 ## Non-goals (explicit)
 
 - Ice-style management of other status items

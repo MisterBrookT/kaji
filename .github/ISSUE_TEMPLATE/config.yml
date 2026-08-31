@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: FAQ and troubleshooting
+    url: https://github.com/MisterBrookT/kaji/blob/main/docs/faq.md
+    about: python3 errors, empty quota rows, uninstall — check here first.
+  - name: How quota works
+    url: https://github.com/MisterBrookT/kaji/blob/main/docs/quota.md
+    about: Where each number comes from, and what leaves your Mac.

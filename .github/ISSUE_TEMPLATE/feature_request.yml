@@ -1,0 +1,30 @@
+name: Feature or module proposal
+description: Propose a capability for Kaji
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Kaji stays small on purpose. Before proposing, please read
+        [product principles](https://github.com/MisterBrookT/kaji/blob/main/docs/product-principles.md) —
+        hiding other apps' menu-bar items and third-party plugins are explicit non-goals.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to know or do, without switching apps?
+    validations:
+      required: true
+  - type: checkboxes
+    id: bar
+    attributes:
+      label: Does it meet the bar for a menu-bar signal?
+      options:
+        - label: Its state changes during the day
+        - label: It can be understood at a glance
+        - label: It occasionally needs an immediate action
+        - label: It would be unnecessarily heavy as a separate app
+  - type: textarea
+    id: shape
+    attributes:
+      label: What would the smallest useful version look like?
+      description: A ring, a countdown, one row, one button — not a dashboard.

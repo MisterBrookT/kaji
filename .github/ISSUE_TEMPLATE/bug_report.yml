@@ -1,0 +1,46 @@
+name: Bug report
+description: Something in Kaji behaves incorrectly
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you got instead.
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: Module
+      options: [Quota, Work / Break, System, Goals, Settings, Install / build, CLI, Other]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kaji version
+      description: Menu bar → gear → About, or the release tag you installed.
+    validations:
+      required: true
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and chip
+      placeholder: "14.5, M2"
+    validations:
+      required: true
+  - type: textarea
+    id: quota-context
+    attributes:
+      label: Quota context (only if a provider row is wrong or empty)
+      description: |
+        Which provider, and the output of these commands:
+        `/Applications/Kaji.app/Contents/Resources/quota.py --json` (or your python3 path)
+        `command -v python3 codex`
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Anything else
+      description: Screenshots help a lot for layout issues. Redact tokens and private goal text.
