@@ -42,13 +42,6 @@ Kaji starts small. Quota is on; everything else is opt-in. `Kaji` is Japanese `è
 
 <img src="dev_docs/assets/use-goals.png" width="560" alt="Goals panel: today's goals grouped by tag with completion dots" />
 
-<details>
-<summary>See it in motion (30s)</summary>
-
-https://github.com/user-attachments/assets/a345bc3f-d74e-4092-8e8f-5730b154d39c
-
-</details>
-
 ## Install
 
 ```sh
