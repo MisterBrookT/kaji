@@ -10,7 +10,7 @@ Kaji 暂时不重构现有 popover 信息架构，不把所有 module 统一成�
 
 这不是否定该方向，而是判断它目前并非最关键的问题。现有设计虽然需要在不同 module 间切换，却也因此层次更分明：用户清楚自己正在进入 Quota、Goals、System 还是 Work，每个 module 都有自己的信息节奏。在没有完整视觉设计前，为统一而统一可能损失这种辨识度。
 
-仓库继续留在 `blackblue-labs/kaji`。不另建 Organization，不转移仓库。
+仓库继续留在 `MisterBrookT/kaji`。不另建 Organization，不转移仓库。
 
 ## 讨论从哪里开始
 

@@ -13,10 +13,10 @@ Lo que importa hoy, a un vistazo de distancia.
 
 [English](README.md) · [中文](README.zh.md) · [Português](README.pt-BR.md)
 
-<a href="https://github.com/blackblue-labs/kaji/stargazers"><img src="https://img.shields.io/github/stars/blackblue-labs/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="Estrellas en GitHub"></a>
+<a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="Estrellas en GitHub"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/blackblue-labs/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Licencia MIT"></a>
-<img src="https://img.shields.io/github/v/release/blackblue-labs/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Última versión">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Licencia MIT"></a>
+<img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Última versión">
 
 </div>
 
@@ -37,7 +37,7 @@ Kaji empieza pequeño. Quota está activado. Los demás módulos son opcionales.
 ## Instalación
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
 Requiere macOS 13+ (Apple Silicon), `git` y `swift`. Clona la etiqueta de la versión más reciente, compila localmente, elimina la cuarentena e instala en `/Applications`.
@@ -65,7 +65,7 @@ swift test
 
 ## Enlaces
 
-- [Última versión](https://github.com/blackblue-labs/kaji/releases/latest)
+- [Última versión](https://github.com/MisterBrookT/kaji/releases/latest)
 - [AGENTS.md](AGENTS.md): notas para contributors / agents
 - [dev_docs/](dev_docs/README.md): specs internas
 

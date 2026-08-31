@@ -7,7 +7,7 @@ Kaji is **unsigned and not notarized**. Releases publish **source + written note
 Install path:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
 `install.sh` clones the latest release tag, builds with `scripts/build-app.sh`, copies to `/Applications`, and clears the quarantine xattr.

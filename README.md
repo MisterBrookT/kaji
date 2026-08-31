@@ -13,10 +13,10 @@ What matters today, one glance away.
 
 [中文](README.zh.md) · [Português](README.pt-BR.md) · [Español](README.es.md)
 
-<a href="https://github.com/blackblue-labs/kaji/stargazers"><img src="https://img.shields.io/github/stars/blackblue-labs/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
+<a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
 <img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/blackblue-labs/kaji?color=8A8A8A&labelColor=1A1A1A" alt="MIT license"></a>
-<img src="https://img.shields.io/github/v/release/blackblue-labs/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Latest release">
+<a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="MIT license"></a>
+<img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Latest release">
 
 </div>
 
@@ -37,7 +37,7 @@ Kaji starts small. Quota is on. Other modules are opt-in. One shell. Only the si
 ## Install
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
 Needs macOS 13+ (Apple Silicon), `git`, and `swift`. Clones the latest release tag, builds locally, clears quarantine, installs to `/Applications`.
@@ -71,7 +71,7 @@ Two layers, split by what each can actually prove:
 
 ## Links
 
-- [Latest release](https://github.com/blackblue-labs/kaji/releases/latest)
+- [Latest release](https://github.com/MisterBrookT/kaji/releases/latest)
 - [AGENTS.md](AGENTS.md): contributor / agent notes
 - [Published decisions](docs/product-principles.md): product, modules, design, and integration boundaries
 - [dev_docs/](dev_docs/README.md): internal durable decisions

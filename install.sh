@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Kaji — one-line installer (build from source).
 #
-#   curl -fsSL https://raw.githubusercontent.com/blackblue-labs/kaji/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 #
 # Clones the latest release tag, builds Kaji.app locally, installs to
 # /Applications, clears Gatekeeper quarantine (unsigned for now), and launches.
 # Browser .zip downloads are not used — they trip Gatekeeper on unsigned apps.
 set -euo pipefail
 
-REPO="blackblue-labs/kaji"
+REPO="MisterBrookT/kaji"
 DEST="/Applications"
 CLONE_DIR=""
 
