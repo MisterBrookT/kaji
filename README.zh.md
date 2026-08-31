@@ -42,13 +42,6 @@ Kaji 默认很小：只开 Quota，其余模块按需开启。`Kaji` 来自日�
 
 <img src="dev_docs/assets/use-goals.png" width="560" alt="Goals 面板：按标签分组的今日目标" />
 
-<details>
-<summary>看动态演示（30 秒）</summary>
-
-https://github.com/user-attachments/assets/a345bc3f-d74e-4092-8e8f-5730b154d39c
-
-</details>
-
 ## 安装
 
 ```sh
