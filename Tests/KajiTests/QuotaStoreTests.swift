@@ -5,96 +5,90 @@ import XCTest
 final class QuotaStoreTests: XCTestCase {
     private func provider(
         _ id: String,
-        fiveHourPercent: Double?
+        fiveHourPercent: Double?,
+        weekPercent: Double? = nil
     ) -> ProviderView {
         ProviderView(
             id: id,
             mark: id,
             displayName: id,
             fiveHourPercent: fiveHourPercent,
-            weekPercent: nil,
+            weekPercent: weekPercent,
             resetDate: nil,
             weekResetDate: nil
         )
     }
 
-    func testMostConstrainedPicksHighestPercentAndSkipsNoData() {
+    func testMenuBarOrderRanksByConstraint() {
         let providers = [
             provider("claude", fiveHourPercent: 56),
             provider("codex", fiveHourPercent: 82),
-            provider("ark", fiveHourPercent: nil),
-        ]
-        XCTAssertEqual(
-            QuotaStore.mostConstrained(in: providers)?.id,
-            "codex"
-        )
-    }
-
-    func testMostConstrainedTieBreaksToEarlierProvider() {
-        let providers = [
-            provider("codex", fiveHourPercent: 70),
-            provider("claude", fiveHourPercent: 70),
-        ]
-        XCTAssertEqual(
-            QuotaStore.mostConstrained(in: providers)?.id,
-            "codex"
-        )
-    }
-
-    // MARK: - mostConstrained(in:count:)
-
-    func testMostConstrainedCountReturnsRankedList() {
-        let providers = [
-            provider("claude", fiveHourPercent: 56),
-            provider("codex", fiveHourPercent: 82),
-            provider("ark", fiveHourPercent: nil),
             provider("cursor", fiveHourPercent: 63),
         ]
         XCTAssertEqual(
-            QuotaStore.mostConstrained(in: providers, count: 2).map(\.id),
+            QuotaStore.menuBarOrder(in: providers, count: 2).map(\.id),
             ["codex", "cursor"]
-        )
-        // `count` only caps the result — no-data providers are dropped, never padded.
-        XCTAssertEqual(
-            QuotaStore.mostConstrained(in: providers, count: 4).map(\.id),
-            ["codex", "cursor", "claude"]
         )
     }
 
-    func testMostConstrainedCountTieBreaksToEarlierProvider() {
+    func testMenuBarOrderTieBreaksToEarlierProvider() {
         let providers = [
             provider("codex", fiveHourPercent: 70),
             provider("claude", fiveHourPercent: 70),
             provider("cursor", fiveHourPercent: 50),
         ]
         XCTAssertEqual(
-            QuotaStore.mostConstrained(in: providers, count: 2).map(\.id),
+            QuotaStore.menuBarOrder(in: providers, count: 2).map(\.id),
             ["codex", "claude"]
         )
     }
 
-    func testMostConstrainedCountBoundsAndEmpty() {
+    /// Enabling a provider is an explicit request to see it: a missing
+    /// percentage must never remove its ring, only push it to the end.
+    func testMenuBarOrderKeepsProvidersWithoutData() {
         let providers = [
-            provider("codex", fiveHourPercent: 82),
-            provider("claude", fiveHourPercent: 56),
+            provider("ark", fiveHourPercent: nil),
+            provider("claude", fiveHourPercent: nil, weekPercent: 8),
+            provider("codex", fiveHourPercent: 2),
         ]
-        XCTAssertEqual(QuotaStore.mostConstrained(in: providers, count: 0), [])
-        XCTAssertEqual(QuotaStore.mostConstrained(in: [], count: 3), [])
         XCTAssertEqual(
-            QuotaStore.mostConstrained(in: [provider("ark", fiveHourPercent: nil)], count: 3),
-            []
+            QuotaStore.menuBarOrder(in: providers, count: 3).map(\.id),
+            ["claude", "codex", "ark"]
         )
     }
 
-    func testMostConstrainedCountOneMatchesLegacySingle() {
+    /// No-data providers keep their input order among themselves.
+    func testMenuBarOrderNoDataProvidersKeepInputOrder() {
         let providers = [
-            provider("claude", fiveHourPercent: 56),
-            provider("codex", fiveHourPercent: 82),
+            provider("minimax", fiveHourPercent: nil),
             provider("ark", fiveHourPercent: nil),
         ]
         XCTAssertEqual(
-            QuotaStore.mostConstrained(in: providers, count: 1).first?.id,
-            QuotaStore.mostConstrained(in: providers)?.id
+            QuotaStore.menuBarOrder(in: providers, count: 3).map(\.id),
+            ["minimax", "ark"]
         )
+    }
+
+    /// Score is the worse of the two windows, not whichever field is present.
+    func testMenuBarOrderUsesMaxOfBothWindows() {
+        let providers = [
+            provider("claude", fiveHourPercent: nil, weekPercent: 40),
+            provider("codex", fiveHourPercent: 2, weekPercent: 90),
+        ]
+        XCTAssertEqual(
+            QuotaStore.menuBarOrder(in: providers, count: 1).map(\.id),
+            ["codex"]
+        )
+    }
+
+    func testMenuBarOrderBoundsAndEmpty() {
+        let providers = [
+            provider("codex", fiveHourPercent: 82),
+            provider("claude", fiveHourPercent: 56),
+        ]
+        XCTAssertEqual(QuotaStore.menuBarOrder(in: providers, count: 0), [])
+        XCTAssertEqual(QuotaStore.menuBarOrder(in: [], count: 3), [])
+        // `count` caps, never pads.
+        XCTAssertEqual(QuotaStore.menuBarOrder(in: providers, count: 9).count, 2)
     }
 }

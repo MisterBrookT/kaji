@@ -296,28 +296,35 @@ final class QuotaStore: ObservableObject {
         providers = views
     }
 
-    /// The provider closest to its limit — drives the menubar indicator.
-    var mostConstrained: ProviderView? {
-        Self.mostConstrained(in: providers)
+    /// Ranking signal: how constrained a provider looks right now — the worse
+    /// of the two windows. `nil` only when the provider reports no quota at
+    /// all; such a provider still gets a ring (empty track), it just sorts last.
+    private static func constraintScore(_ p: ProviderView) -> Double? {
+        switch (p.fiveHourPercent, p.weekPercent) {
+        case let (five?, week?): return max(five, week)
+        case let (five?, nil): return five
+        case let (nil, week?): return week
+        case (nil, nil): return nil
+        }
     }
 
-    /// The provider closest to its limit among a given set.
-    /// Providers without five-hour data are skipped; ties go to the earlier one.
-    static func mostConstrained(in providers: [ProviderView]) -> ProviderView? {
-        mostConstrained(in: providers, count: 1).first
-    }
-
-    /// This is what the menubar shows — up to three visible providers sorted
-    /// by 5-hour used percent descending (stable, so equal percents keep their
-    /// input order — "ties go to the earlier one"). Providers without five-hour
-    /// data are skipped; `count` merely caps the result, it never pads it.
-    static func mostConstrained(in providers: [ProviderView], count: Int) -> [ProviderView] {
-        let ranked = providers
-            .filter { $0.fiveHourPercent != nil }
-            .sorted {
-                guard let a = $0.fiveHourPercent, let b = $1.fiveHourPercent else { return false }
-                return a > b
+    /// What the menubar draws: the user's visible providers, most-constrained
+    /// first, capped at `count`. Enabling a provider is an explicit request to
+    /// see it, so a missing percentage NEVER removes its ring — no-data
+    /// providers sort last and render an empty track. Ties and no-data
+    /// providers keep their input order.
+    static func menuBarOrder(in providers: [ProviderView], count: Int) -> [ProviderView] {
+        let ranked = providers.enumerated()
+            .sorted { a, b in
+                switch (constraintScore(a.element), constraintScore(b.element)) {
+                case let (x?, y?) where x != y: return x > y
+                case (_?, nil): return true
+                case (nil, _?): return false
+                // Explicit index tiebreak: Swift's sort is not guaranteed stable.
+                default: return a.offset < b.offset
+                }
             }
+            .map(\.element)
         return Array(ranked.prefix(max(0, count)))
     }
 }

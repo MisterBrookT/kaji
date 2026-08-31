@@ -222,11 +222,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// What the menubar draws: up to three visible providers, most-constrained
-    /// first (5-hour used fraction). Restores multi-provider visibility that
-    /// round 2 collapsed to a single ring. Empty means no provider has data
-    /// yet — StatusItemView then falls back to its placeholder single ring.
+    /// first. Every enabled provider keeps its ring even without data — empty
+    /// only before the first quota snapshot arrives, when StatusItemView falls
+    /// back to its placeholder single ring.
     private var menuBarProviders: [ProviderView] {
-        QuotaStore.mostConstrained(in: visibleProviders, count: 3)
+        QuotaStore.menuBarOrder(in: visibleProviders, count: 3)
     }
 
     func applicationWillTerminate(_ notification: Notification) {

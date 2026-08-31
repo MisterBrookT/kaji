@@ -110,12 +110,29 @@ LIMITS_TTL = 180
 CLAUDE_LIMITS_TTL = 3600
 
 
+def _cache_is_current(data):
+    """A cached snapshot is only valid until its own windows reset. Claude's
+    TTL is an hour but its 5-hour window can reset inside that hour; serving
+    the cached payload then means `_scrub_expired` drops the percentage and the
+    provider reports nothing until the TTL lapses. Treat a passed reset as a
+    cache miss so the next poll refetches."""
+    if not isinstance(data, dict):
+        return False
+    for win in ("five_hour", "seven_day"):
+        reset = _reset_epoch(data.get(win + "_resets_at"))
+        if reset is not None and reset <= time.time():
+            return False
+    return True
+
+
 def _limits_cached(name, fetch, ttl=LIMITS_TTL):
     path = CACHE_DIR / name
     retry_path = path.with_name(path.name + ".retry-at")
     try:
         if time.time() - path.stat().st_mtime < ttl:
-            return json.loads(path.read_text())
+            cached = json.loads(path.read_text())
+            if _cache_is_current(cached):
+                return cached
     except Exception:
         pass
     retry_at = 0
