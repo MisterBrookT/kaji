@@ -33,6 +33,7 @@ Feature specs、bug-fix notes、implementation plans、单次 UI 调整和逐版
 | --- | --- |
 | [integrate/sleep-helper.md](integrate/sleep-helper.md) | Sleep helper 边界 |
 | [integrate/localization.md](integrate/localization.md) | 本地化约束 |
+| [integrate/usage-accounting.md](integrate/usage-accounting.md) | Token 计数与额度窗口映射规则 |
 
 ### Ship
 

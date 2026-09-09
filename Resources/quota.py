@@ -46,6 +46,46 @@ from urllib.parse import quote
 HOME = Path.home()
 # Overridable for tests.
 CODEX_SESSIONS = Path(os.environ.get("HELM_CODEX_SESSIONS") or HOME / ".codex" / "sessions")
+
+
+def _claude_project_roots():
+    """Every directory Claude Code may write session JSONL into.
+
+    Claude Code honours CODEX-style config relocation via CLAUDE_CONFIG_DIR
+    (comma-separated, as ccusage supports), and older/XDG installs use
+    ~/.config/claude. Reading only ~/.claude/projects silently reports 0 tokens
+    for anyone with a relocated config dir.
+    """
+    roots, seen = [], set()
+
+    def add(base):
+        p = (Path(base).expanduser() / "projects").resolve()
+        key = str(p)
+        if key in seen:
+            return
+        seen.add(key)
+        if p.is_dir():
+            roots.append(p)
+
+    override = os.environ.get("HELM_CLAUDE_PROJECTS")
+    if override:
+        for part in override.split(","):
+            if part.strip():
+                p = Path(part.strip()).expanduser().resolve()
+                if str(p) not in seen:
+                    seen.add(str(p))
+                    if p.is_dir():
+                        roots.append(p)
+        return roots
+
+    cfg = os.environ.get("CLAUDE_CONFIG_DIR")
+    if cfg:
+        for part in cfg.split(","):
+            if part.strip():
+                add(part.strip())
+    add(HOME / ".claude")
+    add(HOME / ".config" / "claude")
+    return roots
 ARK_AGENT_KEY = Path(os.environ.get("HELM_ARK_AGENT_KEY") or HOME / ".config" / "ark" / "agent-key")
 
 
@@ -89,7 +129,19 @@ VOLC_SK = _secret("VOLCENGINE_SECRET_ACCESS_KEY", "VOLCENGINE_SECRET_KEY",
                   "VOLC_SECRET_ACCESS_KEY", "VOLC_SECRET_KEY")
 VOLC_SESSION_TOKEN = _secret("VOLCENGINE_SESSION_TOKEN", "VOLC_SESSION_TOKEN")
 NOW = time.time()
-TODAY_START = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
+# LOCAL midnight, not UTC. "Today" must mean the user's day: at UTC+8 a UTC
+# boundary starts today at 08:00 local and silently discards the whole morning
+# (and at UTC-5 it counts part of yesterday evening). ccusage buckets by local
+# date for the same reason.
+TODAY_START = datetime.now().astimezone().replace(
+    hour=0, minute=0, second=0, microsecond=0).timestamp()
+
+
+def _int(value):
+    """A token count as int. Missing/None/garbage -> 0 (bool is not a count)."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return 0
+    return int(value)
 
 
 def ago(ts: float) -> str:
@@ -368,12 +420,55 @@ def cursor_limits():
     return _limits_cached("cursor-limits-cache.json", _fetch_cursor_limits)
 
 
+def _codex_map_rate_limits(rl, pct_key, reset_key, window_key, plan_key):
+    """A codex rateLimits object -> Kaji's {five_hour,seven_day} limits dict.
+
+    Mapped by WINDOW LENGTH, never by the `primary`/`secondary` slot name.
+    Codex reuses `primary` for whichever window is currently authoritative: on
+    a plan with only a weekly cap, `primary.window_minutes == 10080` and
+    `secondary` is null. Trusting the slot name paints a 7-day figure onto the
+    5-hour ring — that is the "codex ring is wrong" bug. ≤ 24h counts as the
+    5-hour window, anything longer as the 7-day window.
+    """
+    if not isinstance(rl, dict):
+        return None
+    out = {}
+    for slot in ("primary", "secondary"):
+        w = rl.get(slot)
+        if not isinstance(w, dict) or w.get(pct_key) is None:
+            continue
+        mins = w.get(window_key)
+        if isinstance(mins, (int, float)) and not isinstance(mins, bool):
+            key = "five_hour" if mins <= 1440 else "seven_day"
+        else:
+            # No window length: fall back to the slot's conventional meaning.
+            key = "five_hour" if slot == "primary" else "seven_day"
+        # First writer wins so a genuine 5h window is not overwritten by a
+        # second short window reported in the other slot.
+        if key + "_used_percent" in out:
+            continue
+        out[key + "_used_percent"] = w[pct_key]
+        if w.get(reset_key) is not None:
+            out[key + "_resets_at"] = w[reset_key]
+    if rl.get(plan_key):
+        out["plan"] = rl[plan_key]
+    # A dict carrying only a plan label is not a usable limits reading.
+    if not any(k.endswith("_used_percent") for k in out):
+        return None
+    return out
+
+
 def _fetch_codex_limits():
     """codex app-server JSON-RPC account/rateLimits/read (official path)."""
     import queue as _queue
     import threading
+    # `-a untrusted` was REMOVED from codex's approval policy enum (0.153.x
+    # accepts only on-request|never); passing it makes the CLI exit before
+    # serving any JSON-RPC, so the live path silently never worked and every
+    # reading came from the stale session-file fallback. `never` is the
+    # non-interactive choice, paired with read-only sandboxing.
     proc = subprocess.Popen(
-        ["codex", "-s", "read-only", "-a", "untrusted", "app-server"],
+        ["codex", "-s", "read-only", "-a", "never", "app-server"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL, text=True)
     # Drain stdout on a background thread. select()+text readline() can leave a
@@ -416,16 +511,8 @@ def _fetch_codex_limits():
                 continue
             if d.get("id") == 2:
                 rl = (d.get("result") or {}).get("rateLimits") or {}
-                out = {}
-                for src, key in (("primary", "five_hour"), ("secondary", "seven_day")):
-                    w = rl.get(src) or {}
-                    if w.get("usedPercent") is not None:
-                        out[key + "_used_percent"] = w["usedPercent"]
-                        if w.get("resetsAt") is not None:
-                            out[key + "_resets_at"] = w["resetsAt"]
-                if rl.get("planType"):
-                    out["plan"] = rl["planType"]
-                return out or None
+                return _codex_map_rate_limits(
+                    rl, "usedPercent", "resetsAt", "windowDurationMins", "planType")
         return None
     finally:
         try:
@@ -448,17 +535,26 @@ def claude_code():
 
     by_project: {munged project dir name: tokens_today} — keys match
     munge_cwd(session cwd), so a fleet session maps to its own burn.
+
+    Counting rules (aligned with ccusage):
+      * tokens = input + output + cache_creation + cache_read. Cache reads are
+        ~99% of real traffic; input+output alone tracks almost nothing.
+      * every usage record is de-duplicated on (message.id, requestId). Resumed,
+        branched and compacted sessions REWRITE earlier turns into new files, so
+        a naive sum counts the same API call several times.
+      * `model == "<synthetic>"` rows are local error placeholders, not billed.
+      * subagent/sidechain files are real billed usage and must be included.
     """
-    base = HOME / ".claude" / "projects"
-    if not base.exists():
+    roots = _claude_project_roots()
+    if not roots:
         return 0, 0, None, {}, {}
     tokens_today, last = 0, None
     session_ids_today = set()
     by_project = {}
     context = {}        # proj -> {"used": n, "window": w, "ts": newest-seen}
-    for jsonl in base.rglob("*.jsonl"):
-        if "subagents" in str(jsonl):
-            continue
+    seen_usage = set()  # (message.id, requestId) across ALL files
+    for base in roots:
+      for jsonl in base.rglob("*.jsonl"):
         try:
             mtime = jsonl.stat().st_mtime
         except OSError:
@@ -488,25 +584,33 @@ def claude_code():
                         sid = d.get("sessionId")
                         if sid:
                             session_ids_today.add(sid)
-                        usage = d.get("message", {}).get("usage") if isinstance(d.get("message"), dict) else None
-                        if usage:
-                            n = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-                            tokens_today += n
-                            by_project[proj] = by_project.get(proj, 0) + n
-                            # Live context size = the newest prompt's full input
-                            # (incl. cache reads/creations). Window by model:
-                            # "[1m]" models 1M, else 200k.
-                            cur = context.get(proj)
-                            if cur is None or ts > cur["ts"]:
-                                used = (usage.get("input_tokens", 0)
-                                        + usage.get("cache_read_input_tokens", 0)
-                                        + usage.get("cache_creation_input_tokens", 0))
-                                model = (d.get("message") or {}).get("model") or ""
-                                window = 1_000_000 if ("[1m]" in model or "fable" in model) else 200_000
-                                if used > window:
-                                    window = 1_000_000
-                                if used:
-                                    context[proj] = {"used": used, "window": window, "ts": ts}
+                        msg = d.get("message") if isinstance(d.get("message"), dict) else None
+                        usage = msg.get("usage") if msg else None
+                        if not isinstance(usage, dict) or not usage:
+                            continue
+                        if msg.get("model") == "<synthetic>":
+                            continue
+                        used = (_int(usage.get("input_tokens"))
+                                + _int(usage.get("cache_read_input_tokens"))
+                                + _int(usage.get("cache_creation_input_tokens")))
+                        # Context is a point-in-time snapshot of the newest
+                        # prompt, so it is read BEFORE the dedup gate (a
+                        # duplicated record still describes the real context).
+                        cur = context.get(proj)
+                        if used and (cur is None or ts > cur["ts"]):
+                            model = msg.get("model") or ""
+                            window = 1_000_000 if ("[1m]" in model or "fable" in model) else 200_000
+                            if used > window:
+                                window = 1_000_000
+                            context[proj] = {"used": used, "window": window, "ts": ts}
+                        key = (msg.get("id"), d.get("requestId"))
+                        if key[0] and key[1]:
+                            if key in seen_usage:
+                                continue
+                            seen_usage.add(key)
+                        n = used + _int(usage.get("output_tokens"))
+                        tokens_today += n
+                        by_project[proj] = by_project.get(proj, 0) + n
         except Exception:
             pass
     for v in context.values():
@@ -578,10 +682,23 @@ def opencode():
     return sessions_today, (tokens_today if tokens_today else None), last
 
 
-def _codex_last_token_count(path):
-    """Last token_count payload + session cwd in a rollout file:
-    (info, rate_limits, cwd)."""
+def _codex_scan_rollout(path):
+    """Scan one rollout file: (info, rate_limits, cwd, tokens_today).
+
+    `info`/`rate_limits` are the LAST seen (freshest snapshot in this session).
+
+    `tokens_today` needs care. A token_count event carries a session-CUMULATIVE
+    `total_token_usage` plus the per-turn `last_token_usage`. Summing the final
+    cumulative value attributes a session's ENTIRE lifetime to today — a
+    long-lived session started three weeks ago (10.6M tokens here) lands wholly
+    in today's total. So we sum `last_token_usage` over events TIMESTAMPED today
+    instead, skipping events whose cumulative snapshot is byte-identical to the
+    previous one (the TUI re-emits the same token_count on redraw//status, which
+    would otherwise double-count the last turn).
+    """
     info, rl, cwd = None, None, None
+    tokens_today = 0
+    prev_total = None
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             for line in f:
@@ -606,11 +723,23 @@ def _codex_last_token_count(path):
                     continue
                 if payload.get("type") != "token_count":
                     continue
-                info = payload.get("info") or info
+                cur = payload.get("info")
                 rl = payload.get("rate_limits") or rl
+                if not isinstance(cur, dict):
+                    continue
+                info = cur
+                total = cur.get("total_token_usage")
+                if total == prev_total:
+                    continue
+                prev_total = total
+                ts = _reset_epoch(rec.get("timestamp"))
+                if ts is None or ts < TODAY_START:
+                    continue
+                last = cur.get("last_token_usage") or {}
+                tokens_today += _int(last.get("total_tokens"))
     except OSError:
         pass
-    return info, rl, cwd
+    return info, rl, cwd, tokens_today
 
 
 def _codex_rollout_files():
@@ -638,11 +767,11 @@ def _codex_recent_rollout_files(hours=24):
 def codex():
     """Returns (sessions_today, tokens_today, last_active_ts, limits|None, by_project, context).
 
-    tokens: token_count events are session-CUMULATIVE — take the LAST event
-    per file and sum across sessions active in the last 24h. Directory dates are
-    not reliable for a menu bar app because UTC/local day boundaries differ.
+    tokens: per-turn `last_token_usage` summed over events timestamped today
+    (see _codex_scan_rollout) across sessions touched in the last 24h.
     limits: from the freshest session overall (account-level, not today-bound):
-    {primary_used_percent?, secondary_used_percent?, *_resets_at?, plan?}.
+    {five_hour_*, seven_day_*, plan?} — mapped by WINDOW LENGTH, not by the
+    primary/secondary slot name.
     """
     base = CODEX_SESSIONS
     if not base.exists():
@@ -654,22 +783,22 @@ def codex():
     context = {}        # cwd -> {"used", "window"} from the freshest session
     ctx_mtime = {}
     for p in files_recent:
-        info, _, cwd = _codex_last_token_count(p)
+        info, _, cwd, n = _codex_scan_rollout(p)
         try:
             m = p.stat().st_mtime
         except OSError:
             m = 0
-        if info:
-            n = ((info.get("total_token_usage") or {}).get("total_tokens") or 0)
+        if n:
             tokens_today += n
             if cwd:
                 by_project[cwd] = by_project.get(cwd, 0) + n
-                lt = info.get("last_token_usage") or {}
-                used = (lt.get("input_tokens") or 0) + (lt.get("cached_input_tokens") or 0)
-                window = info.get("model_context_window") or 0
-                if used and window and m >= ctx_mtime.get(cwd, 0):
-                    context[cwd] = {"used": used, "window": window}
-                    ctx_mtime[cwd] = m
+        if info and cwd:
+            lt = info.get("last_token_usage") or {}
+            used = _int(lt.get("input_tokens")) + _int(lt.get("cached_input_tokens"))
+            window = info.get("model_context_window") or 0
+            if used and window and m >= ctx_mtime.get(cwd, 0):
+                context[cwd] = {"used": used, "window": window}
+                ctx_mtime[cwd] = m
         last = max(last or 0, m) if m else last
 
     limits = None
@@ -679,22 +808,28 @@ def codex():
     # no token_count yet (rl=None) — using only all_files[-1] would then drop
     # account limits even though the 2nd-freshest session has fresh ones.
     for p in reversed(all_files):
-        _, rl, _ = _codex_last_token_count(p)
+        _, rl, _, _ = _codex_scan_rollout(p)
         if not rl:
             continue
-        limits = {}
-        for src, key in (("primary", "five_hour"), ("secondary", "seven_day")):
-            window = rl.get(src)
-            if isinstance(window, dict) and window.get("used_percent") is not None:
-                limits[key + "_used_percent"] = window["used_percent"]
-                if window.get("resets_at") is not None:
-                    limits[key + "_resets_at"] = window["resets_at"]
-        if rl.get("plan_type"):
-            limits["plan"] = rl["plan_type"]
-        limits = limits or None
-        break
+        mapped = _codex_map_rate_limits(rl, "used_percent", "resets_at",
+                                        "window_minutes", "plan_type")
+        # A rate_limits event carrying only a plan label is not a reading —
+        # keep walking back instead of giving up on this session.
+        if mapped:
+            limits = mapped
+            break
 
-    return len(files_recent), (tokens_today or None), last, limits, by_project, context
+    # Sessions active TODAY, matching the token window. `files_recent` spans 24h
+    # so a session that ran past midnight still contributes today's events.
+    sessions_today = 0
+    for p in files_recent:
+        try:
+            if p.stat().st_mtime >= TODAY_START:
+                sessions_today += 1
+        except OSError:
+            pass
+
+    return sessions_today, (tokens_today or None), last, limits, by_project, context
 
 
 
@@ -1139,10 +1274,11 @@ def emit_table():
         tok_s = "—" if tok is None else fmt_tokens(tok)
         print(f"{label.get(name, name):<14} {sess_s:<16} {tok_s:<13} {fmt_last(last)}{extra}")
     print()
-    print("Note: claude-code tokens summed from message.usage (today only).")
+    print("Note: claude-code tokens = input+output+cache from message.usage, de-duplicated")
+    print("            on (message.id, requestId), local day only.")
     print("      opencode tokens summed from storage/message/*.json (today).")
-    print("      codex tokens = last token_count per session (cumulative), today's UTC dir;")
-    print("            quota %% from rate_limits in the freshest session.")
+    print("      codex tokens = per-turn last_token_usage over today's token_count events;")
+    print("            quota %% from app-server, mapped by window length.")
     print("      cursor limits from DashboardService period usage (API/Auto); no today tokens.")
     print("      kiro session files store no token counts (sessions only).")
 
