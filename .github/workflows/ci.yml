@@ -35,6 +35,12 @@ jobs:
       - name: swift build
         run: swift build
 
+      # Quota reader accuracy: token de-duplication, cache-token accounting,
+      # local day boundary and codex rate-limit window mapping. Pure stdlib,
+      # temp-dir fixtures, no network and no user data.
+      - name: quota.py accuracy tests
+        run: python3 Tests/quota/test_quota.py
+
       # Unit + in-process UI tests (see Tests/KajiTests/UITestHarness.swift).
       # These boot the real AppDelegate/status-item/popover object graph
       # and invoke the real click-handler closure — no self-skipping.
