@@ -811,11 +811,25 @@ def codex():
         _, rl, _, _ = _codex_scan_rollout(p)
         if not rl:
             continue
-        limits = _codex_map_rate_limits(rl, "used_percent", "resets_at",
+        mapped = _codex_map_rate_limits(rl, "used_percent", "resets_at",
                                         "window_minutes", "plan_type")
-        break
+        # A rate_limits event carrying only a plan label is not a reading —
+        # keep walking back instead of giving up on this session.
+        if mapped:
+            limits = mapped
+            break
 
-    return len(files_recent), (tokens_today or None), last, limits, by_project, context
+    # Sessions active TODAY, matching the token window. `files_recent` spans 24h
+    # so a session that ran past midnight still contributes today's events.
+    sessions_today = 0
+    for p in files_recent:
+        try:
+            if p.stat().st_mtime >= TODAY_START:
+                sessions_today += 1
+        except OSError:
+            pass
+
+    return sessions_today, (tokens_today or None), last, limits, by_project, context
 
 
 

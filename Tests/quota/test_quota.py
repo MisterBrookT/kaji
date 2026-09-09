@@ -249,6 +249,16 @@ class TestCodexTokenCounting(unittest.TestCase):
         _, _, _, _, _, context = quota.codex()
         self.assertEqual(context["/tmp/a"], {"used": 40, "window": 237_500})
 
+    def test_sessions_today_uses_local_day(self):
+        clear_codex()
+        # Touched within 24h but before local midnight -> not "today".
+        p = codex_rollout("s1", [token_count(100, 100, ts=YESTERDAY)])
+        os.utime(p, (YESTERDAY, YESTERDAY))
+        codex_rollout("s2", [token_count(200, 200, ts=TODAY)])
+        sessions, tokens, _, _, _, _ = quota.codex()
+        self.assertEqual(sessions, 1)
+        self.assertEqual(tokens, 200)
+
     def test_no_sessions_reports_none(self):
         clear_codex()
         sessions, tokens, _, _, _, _ = quota.codex()
@@ -298,6 +308,20 @@ class TestCodexWindowMapping(unittest.TestCase):
         self.assertIsNone(quota._codex_map_rate_limits(
             {"primary": None, "secondary": None, "plan_type": "prolite"},
             "used_percent", "resets_at", "window_minutes", "plan_type"))
+
+    def test_walk_continues_past_a_plan_only_rate_limits_event(self):
+        clear_codex()
+        newest = codex_rollout("s2", [token_count(
+            100, 100, rate_limits={"primary": None, "secondary": None,
+                                   "plan_type": "prolite"})])
+        older = codex_rollout("s1", [token_count(
+            50, 50, rate_limits={"primary": {"used_percent": 22.0,
+                                             "window_minutes": 300}})])
+        os.utime(older, (TODAY - 600, TODAY - 600))
+        os.utime(newest, (TODAY, TODAY))
+        _, _, _, limits, _, _ = quota.codex()
+        self.assertEqual(limits["five_hour_used_percent"], 22.0,
+                         "a plan-label-only event must not end the search")
 
     def test_non_dict_input(self):
         self.assertIsNone(quota._codex_map_rate_limits(
