@@ -194,6 +194,28 @@ enum ResetFormat {
         return lang == .zh ? "\(d) \u{540E}\u{91CD}\u{7F6E}" : "resets in \(d)"          // 后重置
     }
 
+    /// Coarser countdown for tight captions: days drop the hour remainder
+    /// ("3d 4h" -> "3d"); sub-day durations stay exact.
+    static func coarse(_ dur: String) -> String {
+        guard let dIdx = dur.firstIndex(of: "d") else { return dur }
+        return String(dur[dur.startIndex...dIdx])
+    }
+
+    /// Wall-clock reset stamp. Today: "21:40"; within a week: "Sun 12:00";
+    /// later: "6-29 12:00".
+    static func resetClock(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.locale = Locale.current
+        if Calendar.current.isDateInToday(date) {
+            f.dateFormat = "HH:mm"
+        } else if date.timeIntervalSinceNow < 6 * 24 * 3600 {
+            f.dateFormat = "EEE HH:mm"
+        } else {
+            f.dateFormat = "M-d HH:mm"
+        }
+        return f.string(from: date)
+    }
+
     /// "—" when no date; "2h 14m" countdown otherwise. (compat helper)
     static func short(_ date: Date?) -> String { dur(date) ?? "\u{2014}" }
 

@@ -357,10 +357,16 @@ struct KajiPopoverView: View {
     }
 
 
+    // Quota row (minimal list style):
+    //   provider mark + name
+    //   5h  [====      ]  42%   21:40 \u{00B7} 2h 14m left
+    //   7d  [========  ]  78%   Sun 12:00 \u{00B7} 3d left
+    // No card chrome: whitespace separates providers so the popover reads as
+    // one quiet list. Weight (bar height, percent size) encodes priority,
+    // not extra words.
     private func quotaRow(_ provider: ProviderView) -> some View {
         let windows = CursorLimitsLogic.windowLabels(for: provider.id)
-        let secondary = provider.id == "cursor" ? windows.secondary : "7d"
-        return VStack(alignment: .leading, spacing: 5) {
+        return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 7) {
                 ProviderLogo(key: provider.id, color: provider.isNearLimit ? t.amber : t.gold, size: 12)
                 Text(provider.displayName)
@@ -368,34 +374,64 @@ struct KajiPopoverView: View {
                     .foregroundColor(t.cream)
                     .lineLimit(1)
                 Spacer(minLength: 6)
-                Text(percent(provider.fiveHourPercent))
-                    .font(.system(size: 12, weight: .bold, design: .rounded))
+            }
+            quotaWindowLine(label: windows.primary,
+                            percentValue: provider.fiveHourPercent,
+                            fraction: provider.usedFraction,
+                            resetDate: provider.resetDate,
+                            nearLimit: provider.isNearLimit,
+                            emphasized: true)
+            quotaWindowLine(label: windows.secondary,
+                            percentValue: provider.weekPercent,
+                            fraction: provider.weekFraction,
+                            resetDate: provider.weekResetDate,
+                            nearLimit: provider.weekNearLimit,
+                            emphasized: false)
+        }
+    }
+
+    /// One quota window as a single aligned line, plus a tiny reset caption.
+    /// The caption answers both "when" (wall clock) and "how long" (time left).
+    private func quotaWindowLine(label: String,
+                                 percentValue: Double?,
+                                 fraction: Double,
+                                 resetDate: Date?,
+                                 nearLimit: Bool,
+                                 emphasized: Bool) -> some View {
+        let barColor = nearLimit ? t.amber : (emphasized ? t.gold : t.mute)
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text(label)
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundColor(provider.isNearLimit ? t.amber : t.gold)
+                    .foregroundColor(t.ash)
+                    .frame(width: 18, alignment: .leading)
+                progressBar(fraction, color: barColor, height: emphasized ? 6 : 3)
+                Text(percent(percentValue))
+                    .font(.system(size: emphasized ? 10.5 : 9.5,
+                                  weight: emphasized ? .bold : .semibold,
+                                  design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(emphasized ? t.cream : t.mute)
+                    .frame(width: 30, alignment: .trailing)
             }
-            progressBar(provider.usedFraction, color: provider.isNearLimit ? t.amber : t.gold)
-            HStack(spacing: 6) {
-                Text(windows.primary)
-                Text(ResetFormat.short(provider.resetDate))
-                    .foregroundColor(t.gold.opacity(0.9))
-                Spacer(minLength: 6)
-                Text(secondary)
-                Text(percent(provider.weekPercent))
-                    .foregroundColor(provider.weekNearLimit ? t.amber : t.gold.opacity(0.9))
-            }
-            .font(.system(size: 9.5, weight: .medium, design: .rounded))
-            .foregroundColor(t.mute)
+            Text(resetCaption(resetDate))
+                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(t.ash)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.leading, 26)
         }
-        .padding(8)
-        .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(scheme == .light ? Color.white.opacity(0.92) : t.panel.opacity(0.75))
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(scheme == .light ? Color.black.opacity(0.08) : t.cream.opacity(0.06), lineWidth: 0.5)
-        )
-        .shadow(color: scheme == .light ? Color.black.opacity(0.06) : .clear, radius: 4, y: 1)
+    }
+
+    /// "21:40 \u{00B7} 2h 14m left" / "Sun 12:00 \u{00B7} 3d left".
+    private func resetCaption(_ date: Date?) -> String {
+        guard let date else { return "\u{2014}" }
+        let clock = ResetFormat.resetClock(date)
+        guard let left = ResetFormat.dur(date) else { return clock }
+        if left == "now" { return "resetting" }
+        return "\(clock) \u{00B7} \(ResetFormat.coarse(left)) left"
     }
 
     private func quotaWindowRow(label: String, value: Double, resetDate: Date?, nearLimit: Bool) -> some View {
@@ -1703,7 +1739,7 @@ struct KajiPopoverView: View {
     }
 
 
-    private func progressBar(_ value: Double, color: Color) -> some View {
+    private func progressBar(_ value: Double, color: Color, height: CGFloat = 7) -> some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
                 Capsule().fill(t.track.opacity(0.7))
@@ -1712,7 +1748,7 @@ struct KajiPopoverView: View {
                     .frame(width: max(4, geo.size.width * min(max(value, 0), 1)))
             }
         }
-        .frame(height: 7)
+        .frame(height: height)
     }
 
     private func percent(_ value: Double?) -> String {
