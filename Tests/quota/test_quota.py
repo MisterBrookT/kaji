@@ -17,6 +17,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -326,6 +327,72 @@ class TestCodexWindowMapping(unittest.TestCase):
     def test_non_dict_input(self):
         self.assertIsNone(quota._codex_map_rate_limits(
             None, "used_percent", "resets_at", "window_minutes", "plan_type"))
+
+
+# Deliberately not shaped like a provider key: secret scanners flag realistic
+# prefixes even in fixtures, and the token's content is irrelevant here — these
+# tests only care whether it survives the expiry check.
+FAKE_TOKEN = "test-token-not-a-secret"
+
+
+class TestClaudeCredentialUsability(unittest.TestCase):
+    """Regression: `expiresAt: 0` made Claude report nothing at all.
+
+    Team/enterprise logins store `expiresAt: 0` in the keychain. The old check
+    divided it by 1000 and compared against now, so a falsy timestamp read as
+    "expired in 1970", the token was dropped, no request was ever made, and the
+    popover showed an empty 5h/7d row that looked exactly like 0% usage.
+    """
+
+    @staticmethod
+    def creds(expires_at, token=FAKE_TOKEN):
+        return {"claudeAiOauth": {"accessToken": token, "expiresAt": expires_at}}
+
+    def test_zero_expiry_is_unknown_not_expired(self):
+        self.assertEqual(
+            quota._usable_claude_token(self.creds(0)), FAKE_TOKEN)
+
+    def test_missing_expiry_is_unknown_not_expired(self):
+        self.assertEqual(
+            quota._usable_claude_token({"claudeAiOauth": {"accessToken": "t"}}), "t")
+
+    def test_future_expiry_is_usable(self):
+        future = (time.time() + 3600) * 1000
+        self.assertEqual(
+            quota._usable_claude_token(self.creds(future)), FAKE_TOKEN)
+
+    def test_past_expiry_is_rejected(self):
+        past = (time.time() - 3600) * 1000
+        self.assertIsNone(quota._usable_claude_token(self.creds(past)))
+
+    def test_missing_token_is_rejected(self):
+        self.assertIsNone(quota._usable_claude_token(self.creds(0, token="")))
+        self.assertIsNone(quota._usable_claude_token({"claudeAiOauth": {}}))
+
+    def test_junk_input_is_rejected(self):
+        self.assertIsNone(quota._usable_claude_token(None))
+        self.assertIsNone(quota._usable_claude_token({}))
+        self.assertIsNone(quota._usable_claude_token({"claudeAiOauth": "nope"}))
+
+
+class TestClaudeLimitsParsing(unittest.TestCase):
+    """A window without `utilization` must be absent, never zero."""
+
+    def test_utilization_zero_is_kept_as_a_real_reading(self):
+        payload = {"five_hour": {"utilization": 0, "resets_at": "2026-09-12T10:00:00Z"},
+                   "seven_day": {"utilization": 78}}
+        out = quota._parse_claude_usage(payload)
+        self.assertEqual(out["five_hour_used_percent"], 0)
+        self.assertEqual(out["seven_day_used_percent"], 78)
+
+    def test_missing_utilization_is_omitted_not_zeroed(self):
+        out = quota._parse_claude_usage({"five_hour": {}, "seven_day": {"utilization": 12}})
+        self.assertNotIn("five_hour_used_percent", out)
+        self.assertEqual(out["seven_day_used_percent"], 12)
+
+    def test_empty_payload_is_none(self):
+        self.assertIsNone(quota._parse_claude_usage({}))
+        self.assertIsNone(quota._parse_claude_usage(None))
 
 
 class TestIntCoercion(unittest.TestCase):

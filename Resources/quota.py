@@ -227,13 +227,23 @@ def _limits_cached(name, fetch, ttl=LIMITS_TTL):
 
 
 def _usable_claude_token(credentials):
-    """Return an unexpired access token from a Claude credential object."""
+    """Return a usable access token from a Claude credential object.
+
+    `expiresAt` is advisory, not authoritative. Team/enterprise logins store
+    `expiresAt: 0`, so treating a falsy timestamp as "already expired" drops
+    the only usable token and the provider then reports no percentages at all.
+    A missing or zero timestamp means "unknown": try the token and let the
+    server decide. Only a real timestamp in the past is rejected locally.
+    """
     try:
         oauth = credentials["claudeAiOauth"]
-        expires_at = float(oauth.get("expiresAt") or 0) / 1000.0
-        if expires_at <= time.time() + 60:
+        token = oauth.get("accessToken") or None
+        if not token:
             return None
-        return oauth.get("accessToken") or None
+        expires_at = float(oauth.get("expiresAt") or 0) / 1000.0
+        if expires_at > 0 and expires_at <= time.time() + 60:
+            return None
+        return token
     except Exception:
         return None
 
@@ -296,10 +306,22 @@ def _fetch_claude_limits():
             "Content-Type": "application/json",
         })
     with urllib.request.urlopen(req, timeout=10) as r:
-        d = json.loads(r.read().decode("utf-8"))
+        return _parse_claude_usage(json.loads(r.read().decode("utf-8")))
+
+
+def _parse_claude_usage(payload):
+    """Anthropic usage payload -> Kaji limits dict.
+
+    A window with no `utilization` is OMITTED, not zero-filled: "unknown" and
+    "0% used" must stay distinguishable all the way to the popover.
+    """
+    if not isinstance(payload, dict):
+        return None
     out = {}
     for key in ("five_hour", "seven_day"):
-        w = d.get(key) or {}
+        w = payload.get(key) or {}
+        if not isinstance(w, dict):
+            continue
         if w.get("utilization") is not None:
             out[key + "_used_percent"] = w["utilization"]
             if w.get("resets_at"):

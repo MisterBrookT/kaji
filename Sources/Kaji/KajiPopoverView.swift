@@ -398,6 +398,10 @@ struct KajiPopoverView: View {
                                  resetDate: Date?,
                                  nearLimit: Bool,
                                  emphasized: Bool) -> some View {
+        // A missing reading is NOT zero usage. Rendering nil as an empty bar
+        // made "no data" look identical to "0% used", which hid a broken
+        // provider credential for as long as the user cared to stare at it.
+        let hasReading = QuotaCaption.hasReading(percentValue)
         let barColor = nearLimit ? t.amber : (emphasized ? t.gold : t.mute)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
@@ -406,16 +410,20 @@ struct KajiPopoverView: View {
                     .monospacedDigit()
                     .foregroundColor(t.ash)
                     .frame(width: 18, alignment: .leading)
-                progressBar(fraction, color: barColor, height: emphasized ? 6 : 3)
-                Text(percent(percentValue))
+                if hasReading {
+                    progressBar(fraction, color: barColor, height: emphasized ? 6 : 3)
+                } else {
+                    unavailableBar(height: emphasized ? 6 : 3)
+                }
+                Text(QuotaCaption.percent(percentValue))
                     .font(.system(size: emphasized ? 10.5 : 9.5,
                                   weight: emphasized ? .bold : .semibold,
                                   design: .rounded))
                     .monospacedDigit()
-                    .foregroundColor(emphasized ? t.cream : t.mute)
+                    .foregroundColor(hasReading ? (emphasized ? t.cream : t.mute) : t.ash)
                     .frame(width: 30, alignment: .trailing)
             }
-            Text(resetCaption(resetDate))
+            Text(hasReading ? resetCaption(resetDate) : QuotaCaption.unavailable)
                 .font(.system(size: 9, weight: .medium, design: .rounded))
                 .monospacedDigit()
                 .foregroundColor(t.ash)
@@ -423,6 +431,14 @@ struct KajiPopoverView: View {
                 .minimumScaleFactor(0.8)
                 .padding(.leading, 26)
         }
+    }
+
+    /// Placeholder track for a window with no reading: a hollow outline, so it
+    /// can never be mistaken for a full-but-empty usage bar.
+    private func unavailableBar(height: CGFloat) -> some View {
+        Capsule()
+            .strokeBorder(t.track, style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            .frame(height: height)
     }
 
     /// "21:40 \u{00B7} 2h 14m left" / "Sun 12:00 \u{00B7} 3d left".
