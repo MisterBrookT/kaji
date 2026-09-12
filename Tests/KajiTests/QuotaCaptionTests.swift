@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import KajiCore
 
@@ -36,6 +37,21 @@ final class QuotaCaptionTests: XCTestCase {
     func testNonFiniteIsNotAReading() {
         XCTAssertFalse(QuotaCaption.hasReading(.nan))
         XCTAssertFalse(QuotaCaption.hasReading(.infinity))
+    }
+
+    /// Cursor labels its windows "API" / "Auto" instead of "5h" / "7d". The
+    /// label column must fit the longest of them on one line: a 18pt slot
+    /// wrapped "Auto" and knocked the whole row out of alignment.
+    func testWindowLabelColumnFitsWordLabels() {
+        XCTAssertGreaterThanOrEqual(QuotaCaption.windowLabelWidth, 26)
+        for label in ["5h", "7d", "API", "Auto"] {
+            let width = label.size(withAttributes: [
+                .font: NSFont.systemFont(ofSize: 9.5, weight: .semibold)
+            ]).width
+            XCTAssertLessThanOrEqual(
+                width, QuotaCaption.windowLabelWidth,
+                "\(label) does not fit the window-label column")
+        }
     }
 
     /// The caption must say something actionable, not an em dash that looks
