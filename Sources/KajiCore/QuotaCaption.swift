@@ -1,3 +1,4 @@
+import CoreGraphics
 import Foundation
 
 /// Captions for a single quota window in the popover.
@@ -9,6 +10,11 @@ import Foundation
 public enum QuotaCaption {
     /// Shown instead of a reset time when the provider returned no reading.
     public static let unavailable = "no data \u{00B7} check sign-in"
+
+    /// Width of the window-label column. Wide enough for Cursor's word labels
+    /// ("API" / "Auto"), not just the 2-character "5h" / "7d" — a narrower
+    /// slot wrapped "Auto" onto two lines and broke the row's alignment.
+    public static let windowLabelWidth: CGFloat = 26
 
     /// Percent text for a window. `nil` is an em dash, never "0%".
     public static func percent(_ value: Double?) -> String {

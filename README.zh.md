@@ -7,9 +7,9 @@
   </picture>aji
 </h1>
 
-**值得一直留在菜单栏的 AI coding 状态层。**
+**值得一直留在菜单栏的 AI coding 工具。**
 
-Quota 一眼可见，其余能力按需拼装。
+一眼看到还剩多少额度，其余功能想要再开。
 
 [English](README.md)
 
@@ -18,29 +18,17 @@ Quota 一眼可见，其余能力按需拼装。
 <a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="MIT license"></a>
 <img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Latest release">
 
-<img src="dev_docs/assets/use-quota.png" width="620" alt="菜单栏中的 Kaji：Claude Code 与 Codex 的 5h / 7d quota" />
+<img src="dev_docs/assets/use-quota.png" width="560" alt="Kaji quota 面板：Claude Code、Codex、Cursor 各自的两个用量窗口、百分比与重置时间" />
 
 </div>
 
 ## 是什么
 
-Kaji 把真正在变化、又值得你随时知道的状态放进 **菜单栏**：Claude Code 与 Codex 还剩多少 quota、当前是否在专注块里、今天说过要做的事。
+Claude Code 和 Codex 都按滚动窗口计量。Kaji 把答案放进菜单栏：用了多少，什么时候重置。
 
-为什么是菜单栏？因为它始终在当前工作旁边：一眼知道状态，hover 获得上下文，点击立即操作。不需要切换 App，也不需要一条通知来打断你。
+每个 provider 显示它的两个窗口——短的会话窗口和长的那个——各自带百分比与重置时间。不用打开任何东西，也不用问。
 
-Kaji 默认很小：只开 Quota，其余模块按需开启。`Kaji` 来自日语 `舵 / かじ`。
-
-## 三种实际用法
-
-**1. 不用问，就知道 AI quota 还剩多少。** 每个 provider 的 5h 会话窗口与 7d 窗口，以及距离重置的时间（见上图）。环在菜单栏，数字点一下就有。
-
-**2. 用专注块工作，而不是漂着过一天。** 菜单栏里能直接读的倒计时，以及真的会打断你的休息遮罩。
-
-<img src="dev_docs/assets/use-work.png" width="560" alt="Work 面板：剩余 07:57，45m 专注 / 2m 休息" />
-
-**3. 把今天的目标放在躲不开的地方。** Today / Week / Vision 三个层次，标签与说明，并提供 `kaji` CLI 让 agent 帮你增删与完成目标。
-
-<img src="dev_docs/assets/use-goals.png" width="560" alt="Goals 面板：按标签分组的今日目标" />
+默认只开 Quota。专注计时、系统负载、目标都是可选模块，想要再开。`Kaji` 来自日语 `舵 / かじ`。
 
 ## 安装
 
@@ -48,9 +36,9 @@ Kaji 默认很小：只开 Quota，其余模块按需开启。`Kaji` 来自日�
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-需要 macOS 13+（Apple Silicon）、`git`、`swift`（Xcode 或 Swift 工具链），以及可用的 `python3`。安装脚本会拉取最新 release tag、本机构建、装到 `/Applications`、清除 quarantine 并启动。
+需要 macOS 13+（Apple Silicon），以及 `git`、`swift`、`python3`。安装脚本会从最新 release tag 本机构建并装到 `/Applications`。
 
-Release **不**附 `.app.zip`：目前还没有 Apple Developer ID 签名，浏览器下载的未签名 App 会被 Gatekeeper 拦住，本机构建反而是更诚实的路径。已 clone 的话执行 `./scripts/build-local.sh`。
+没有预编译下载：Kaji 还没有 Developer ID 签名，浏览器下载的未签名 `.app.zip` 会被 Gatekeeper 拦下，本机构建反而更诚实。已经 clone 的话执行 `./scripts/build-local.sh`。
 
 出问题或想卸载：[常见问题与排查](docs/faq.md)。
 
@@ -58,35 +46,47 @@ Release **不**附 `.app.zip`：目前还没有 Apple Developer ID 签名，浏�
 
 | 模块 | 默认 | 能力 |
 | --- | --- | --- |
-| **Quota** | 开 | 5h / 7d 用量、重置时间、各 provider 的环 |
+| **Quota** | 开 | 每个 provider、每个窗口的用量与重置时间 |
 | **Work / Break** | 关 | 专注计时、菜单栏倒计时、休息遮罩 |
 | **System** | 关 | CPU / 内存、磁盘分类、顶部进程 |
-| **Goals** | 关 | Today / Week / Vision / Schedule、说明、标签与热力图 |
+| **Goals** | 关 | Today / Week / Vision、标签、说明、`kaji` CLI |
 
-关闭一个模块不只是隐藏页面，同时会停掉它的定时器与轮询。主题只有 **Mono**（黑白灰，浅色 / 深色）。
+关掉一个模块不只是隐藏页面，同时会停掉它的定时器与轮询。只有一套主题：黑白灰，浅色与深色。
+
+<details>
+<summary>专注计时与目标</summary>
+
+<br>
+
+不用打开任何界面就能读到的倒计时，以及真的会打断你的休息。
+
+<img src="dev_docs/assets/use-work.png" width="480" alt="Work 面板：剩余 07:57，45m 专注 / 2m 休息" />
+
+Today / Week / Vision 三层目标，并提供 `kaji` CLI，让 agent 帮你增删与完成。
+
+<img src="dev_docs/assets/use-goals.png" width="480" alt="Goals 面板：按标签分组的今日目标" />
+
+</details>
 
 ## 隐私
 
-Kaji 读取 AI coding 工具本来就写在你 Mac 上的本地文件；对于只在服务端公布额度的 provider，则用你本机已有的凭据去调用该 provider 自己的用量接口。
+Kaji 读取 AI 工具本来就写在你 Mac 上的文件；对于只在服务端公布额度的 provider，用你本机已有的凭据调用它自己的用量接口。
 
-- **本地读取：** `~/.claude/projects/**/*.jsonl`、`~/.codex/sessions/**/rollout-*.jsonl`，以及必要时的本地凭据（`~/.claude/.credentials.json`、Cursor 的 `state.vscdb`）。
-- **离开本机的请求：** 启用 Claude 时访问 `api.anthropic.com`、启用 Cursor 时访问 `api2.cursor.sh`（只带你自己的 token），以及向 `api.github.com` 检查新版本。仅此而已，且只针对你启用的 provider。
-- **没有统计、没有账号、没有我们的服务器。** 用量、prompt、目标都不会被上传。目标存在本地，CLI 只通过 `127.0.0.1` 与 App 通信。
+- **本地读取：** `~/.claude/projects/**/*.jsonl`、`~/.codex/sessions/**/rollout-*.jsonl`，以及必要时的本地凭据。
+- **离开本机的请求：** 带你自己 token 的 `api.anthropic.com` 或 `api2.cursor.sh` 用量请求，以及向 `api.github.com` 检查新版本。只针对你启用的 provider。
+- **没有统计、没有账号、没有我们的服务器。** prompt、用量、目标都不会被上传。CLI 只通过 `127.0.0.1` 与 App 通信。
 
-每个数字具体怎么算：[quota 原理](docs/quota.md)。
+每个数字怎么算：[quota 原理](docs/quota.md)。
 
 ## 文档
 
-- [quota 原理](docs/quota.md)：数据来源、精度、provider、隐私
-- [常见问题与排查](docs/faq.md)：python3 报错、quota 空白、卸载
-- [CLI 参考](docs/cli.md)：在 shell 或 agent 里操作目标
+- [quota 原理](docs/quota.md) · [常见问题](docs/faq.md) · [CLI 参考](docs/cli.md)
 - [产品原则](docs/product-principles.md) · [模块架构](docs/module-architecture.md) · [设计语言](docs/design-language.md)
 - [AGENTS.md](AGENTS.md)：贡献者 / agent 笔记
-- [最新 Release](https://github.com/MisterBrookT/kaji/releases/latest)
 
 ## 贡献
 
-欢迎 issue 与 PR。提 PR 前请跑 `swift test`；UI 测试分层与布局不变量见 [AGENTS.md](AGENTS.md)。
+欢迎 issue 与 PR。提 PR 前请跑 `swift test`；布局不变量与 UI 测试分层见 [AGENTS.md](AGENTS.md)。
 
 ## License
 

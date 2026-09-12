@@ -405,11 +405,15 @@ struct KajiPopoverView: View {
         let barColor = nearLimit ? t.amber : (emphasized ? t.gold : t.mute)
         return VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 8) {
+                // Cursor's window labels are words ("API" / "Auto"), not the
+                // 2-character "5h" / "7d" — a narrower slot wraps them.
                 Text(label)
                     .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(t.ash)
-                    .frame(width: 18, alignment: .leading)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(width: QuotaCaption.windowLabelWidth, alignment: .leading)
                 if hasReading {
                     progressBar(fraction, color: barColor, height: emphasized ? 6 : 3)
                 } else {
@@ -429,7 +433,7 @@ struct KajiPopoverView: View {
                 .foregroundColor(t.ash)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .padding(.leading, 26)
+                .padding(.leading, QuotaCaption.windowLabelWidth + 8)
         }
     }
 

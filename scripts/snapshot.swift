@@ -62,23 +62,22 @@ func renderHosting(
 struct Snap {
     @MainActor
     static func makeMocks() -> [ProviderView] {
+        // Healthy, fully-populated readings: the README should show the
+        // product working, not an error state. The "no data" placeholder is
+        // exercised by tests, not by marketing screenshots.
         return [
             ProviderView(id: "claude", mark: "", displayName: "Claude Code",
                          fiveHourPercent: 56, weekPercent: 36,
                          resetDate: Date(timeIntervalSinceNow: 72 * 60),
                          weekResetDate: Date(timeIntervalSinceNow: 38 * 3600)),
             ProviderView(id: "codex", mark: "", displayName: "Codex",
-                         fiveHourPercent: 82, weekPercent: nil,
+                         fiveHourPercent: 82, weekPercent: 61,
                          resetDate: Date(timeIntervalSinceNow: 47 * 60),
-                         weekResetDate: nil),
-            ProviderView(id: "ark-agent", mark: "", displayName: "Ark Agent",
-                         fiveHourPercent: 0, weekPercent: 87,
-                         resetDate: nil,
-                         weekResetDate: Date(timeIntervalSinceNow: 13 * 3600)),
-            ProviderView(id: "minimax", mark: "", displayName: "MiniMax",
-                         fiveHourPercent: 69, weekPercent: 17,
-                         resetDate: Date(timeIntervalSinceNow: 22 * 60),
-                         weekResetDate: Date(timeIntervalSinceNow: 14 * 3600)),
+                         weekResetDate: Date(timeIntervalSinceNow: 3 * 24 * 3600)),
+            ProviderView(id: "cursor", mark: "", displayName: "Cursor",
+                         fiveHourPercent: 44, weekPercent: 12,
+                         resetDate: Date(timeIntervalSinceNow: 5 * 3600),
+                         weekResetDate: Date(timeIntervalSinceNow: 9 * 24 * 3600)),
         ]
     }
 
@@ -86,7 +85,7 @@ struct Snap {
     static func makePrefs(_ lang: Lang) -> Prefs {
         let p = Prefs()
         p.language = lang
-        p.visibleProviders = ["claude", "codex", "ark-agent", "minimax"]
+        p.visibleProviders = ["claude", "codex", "cursor"]
         p.menubarStyle = .blackWhite
         p.showRemaining = false
         // Slim default — quota only (matches shipped lean modules).
