@@ -22,18 +22,17 @@ final class ModulePrefsLogicTests: XCTestCase {
         XCTAssertEqual(result, [.quota])
     }
 
-    func testNormalize_allFour_preservesAll() {
+    func testNormalizeLegacySystemIsDropped() {
         let result = ModulePrefsLogic.normalizeEnabledModules(
             ["goals", "system", "work", "quota"]
         )
-        XCTAssertEqual(result, [.quota, .work, .system, .goals])
+        XCTAssertEqual(result, [.quota, .work, .goals])
     }
 
     func testNormalize_missingQuota_isForcedOn() {
-        let result = ModulePrefsLogic.normalizeEnabledModules(["work", "system"])
+        let result = ModulePrefsLogic.normalizeEnabledModules(["work"])
         XCTAssertTrue(result.contains(.quota))
         XCTAssertTrue(result.contains(.work))
-        XCTAssertTrue(result.contains(.system))
         XCTAssertFalse(result.contains(.goals))
     }
 
@@ -51,10 +50,10 @@ final class ModulePrefsLogicTests: XCTestCase {
     // MARK: - Primary and More modules
 
     func testNormalizedFavoritesDropsQuotaDisabledAndDuplicatesAndCapsAtTwo() {
-        let enabled: Set<KajiModuleID> = [.quota, .work, .system, .goals]
+        let enabled: Set<KajiModuleID> = [.quota, .work, .goals]
         XCTAssertEqual(
             ModulePrefsLogic.normalizedFavorites(
-                [.quota, .goals, .work, .goals, .system],
+                [.quota, .goals, .work, .goals],
                 enabled: enabled
             ),
             [.goals, .work]
@@ -68,7 +67,7 @@ final class ModulePrefsLogicTests: XCTestCase {
     func testPrimaryModulesAreQuotaFirstAndFavoriteOrdered() {
         XCTAssertEqual(
             ModulePrefsLogic.primaryModules(
-                enabled: [.quota, .work, .system, .goals],
+                enabled: [.quota, .work, .goals],
                 favorites: [.goals, .work]
             ),
             [.quota, .goals, .work]
@@ -78,10 +77,10 @@ final class ModulePrefsLogicTests: XCTestCase {
     func testMoreModulesUseStableOrderAndExcludePrimaryModules() {
         XCTAssertEqual(
             ModulePrefsLogic.moreModules(
-                enabled: [.quota, .work, .system, .goals],
-                favorites: [.goals, .work]
+                enabled: [.quota, .work, .goals],
+                favorites: [.goals]
             ),
-            [.system]
+            [.work]
         )
     }
 }

@@ -71,9 +71,6 @@ final class Prefs: ObservableObject {
     @Published var goalMenuBarDisplayStyle: GoalMenuBarDisplayStyle {
         didSet { defaults.set(goalMenuBarDisplayStyle.rawValue, forKey: Key.goalMenuBarDisplayStyle) }
     }
-    @Published var autoCleanEnabled: Bool {
-        didSet { defaults.set(autoCleanEnabled, forKey: Key.autoCleanEnabled) }
-    }
     @Published var launchAtLogin: Bool {
         didSet { defaults.set(launchAtLogin, forKey: Key.launchAtLogin) }
     }
@@ -97,7 +94,6 @@ final class Prefs: ObservableObject {
         static let visibleProvidersV2 = "visibleProvidersV2"
         /// One-shot: insert `cursor` into saved visible set on upgrade to 0.6.1.
         static let visibleProvidersCursor = "visibleProvidersCursor"
-        static let autoCleanEnabled = "autoCleanEnabled"
         static let launchAtLogin = "launchAtLogin"
         static let preventSleep = "preventSleep"
         static let preferencesInitialized = "preferencesInitialized"
@@ -108,7 +104,7 @@ final class Prefs: ObservableObject {
             showRemaining, focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, workTimeDisplayStyle,
             goalMenuBarDisplayStyle, visibleProvidersV2, visibleProvidersCursor,
-            autoCleanEnabled, launchAtLogin, preventSleep, goalGrouping,
+            launchAtLogin, preventSleep, goalGrouping,
             primaryFavorites
         ]
     }
@@ -202,11 +198,6 @@ final class Prefs: ObservableObject {
         goalMenuBarDisplayStyle = GoalMenuBarDisplayStyle(
             rawValue: d.string(forKey: Key.goalMenuBarDisplayStyle) ?? ""
         ) ?? .incompleteCount
-        if d.object(forKey: Key.autoCleanEnabled) != nil {
-            autoCleanEnabled = d.bool(forKey: Key.autoCleanEnabled)
-        } else {
-            autoCleanEnabled = false
-        }
         if d.object(forKey: Key.launchAtLogin) != nil {
             launchAtLogin = d.bool(forKey: Key.launchAtLogin)
         } else {

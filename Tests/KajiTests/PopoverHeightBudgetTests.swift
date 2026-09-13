@@ -94,7 +94,6 @@ final class PopoverHeightBudgetTests: XCTestCase {
             store: fixture.store,
             prefs: fixture.prefs,
             workSession: fixture.workSession,
-            systemMonitor: fixture.systemMonitor,
             dailyGoals: fixture.dailyGoals,
             fixedPlanStore: fixture.fixedPlanStore,
             navigation: fixture.navigation,
