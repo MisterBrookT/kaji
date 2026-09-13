@@ -80,7 +80,7 @@ Start incremental — no multi-target rewrite:
 
 1. `Prefs.enabledModules`
 2. Filter popover pages to enabled modules
-3. Slim defaults (System/Goals off; heavy Break off)
+3. Slim defaults (Goals off; heavy Break off)
 4. Composable status-item slots (quota + optional work countdown)
 5. Disabled module ⇒ stop its timers/polls
 

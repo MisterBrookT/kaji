@@ -27,7 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker = UpdateChecker()
     private let sleepController = SleepController()
     private lazy var workSession = WorkSessionController(prefs: prefs)
-    private let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
     private lazy var controlServer: KajiControlServer = {
         let environment = ProcessInfo.processInfo.environment
@@ -160,10 +159,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
-        systemMonitor.$snapshot
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in self?.updateStatusItem() }
-            .store(in: &cancellables)
         prefs.$launchAtLogin
             .removeDuplicates()
             .receive(on: RunLoop.main)
@@ -208,11 +203,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             closeBreakOverlay()
         }
 
-        if modules.contains(.system) {
-            systemMonitor.start()
-        } else {
-            systemMonitor.stop()
-        }
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -256,11 +246,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   workSlotLabel: workStatusSlotLabel,
                                   workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                   goalsSlotLabel: goalsStatusSlotLabel,
-                                  systemSlotSnapshot: systemStatusSlotSnapshot,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                  onSystemClick: { [weak self] in self?.showPopover(.system) })
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -280,11 +268,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                workSlotLabel: workStatusSlotLabel,
                                                workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                                goalsSlotLabel: goalsStatusSlotLabel,
-                                               systemSlotSnapshot: systemStatusSlotSnapshot,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
-                                               onSystemClick: { [weak self] in self?.showPopover(.system) })
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
         statusItem.length = statusItemLength
     }
 
@@ -331,13 +317,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private var systemStatusSlotSnapshot: SystemLoadSnapshot? {
-        guard prefs.isModuleEnabled(.system) else { return nil }
-        let snapshot = systemMonitor.snapshot
-        return SystemLoadSnapshot(cpuPercent: snapshot.cpuPercent,
-                                  memoryPercent: snapshot.memoryPercent,
-                                  diskPercent: snapshot.diskPercent)
-    }
 
 
 
@@ -352,9 +331,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let goalsStatusSlotLabel {
             length += 21 + CGFloat(goalsStatusSlotLabel.count) * 7
-        }
-        if systemStatusSlotSnapshot != nil {
-            length += 21
         }
         return length
     }
@@ -451,7 +427,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
             return .quota
-        case .work, .goalsToday, .system:
+        case .work, .goalsToday:
             return .quota
         }
     }
@@ -464,8 +440,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
-        case .system:
-            return popoverNavigation.panel == .system
         }
     }
 
@@ -486,12 +460,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
-        case .system:
-            guard prefs.isModuleEnabled(.system) else {
-                popoverNavigation.panel = .quota
-                break
-            }
-            popoverNavigation.panel = .system
         }
     }
 
@@ -509,7 +477,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let content = KajiPopoverView(store: store,
                                       prefs: prefs,
                                       workSession: workSession,
-                                      systemMonitor: systemMonitor,
                                       dailyGoals: dailyGoals,
                                       fixedPlanStore: fixedPlanStore,
                                       navigation: popoverNavigation,
@@ -589,7 +556,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 
     private func controlSnapshot() -> [String: Any] {
-        let snapshot = systemMonitor.snapshot
         return [
             "settings": [
                 "enabledModules": prefs.enabledModules.map(\.rawValue).sorted(),
@@ -599,7 +565,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "breakMinutes": prefs.breakMinutes,
                 "allowBreakSkip": prefs.allowBreakSkip,
                 "breakOverlayEnabled": prefs.breakOverlayEnabled,
-                "autoCleanEnabled": prefs.autoCleanEnabled,
                 "launchAtLogin": prefs.launchAtLogin,
                 "preventSleep": prefs.preventSleep,
             ],
@@ -631,23 +596,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 "breakRemaining": workSession.breakRemaining,
                 "skipCountToday": workSession.skipCountToday,
                 "completedBreaksToday": workSession.completedBreaksToday,
-            ],
-            "system": [
-                "cpuPercent": snapshot.cpuPercent,
-                "memoryPercent": snapshot.memoryPercent,
-                "diskPercent": snapshot.diskPercent,
-                "processCount": snapshot.processCount,
-                "sampledAt": snapshot.sampledAt.timeIntervalSince1970,
-                "topProcesses": snapshot.topProcesses.map {
-                    ["pid": $0.pid, "cpu": $0.cpu, "memory": $0.memory, "command": $0.command]
-                },
-                "cleanableItems": systemMonitor.cleanableItems.map {
-                    ["id": $0.id, "title": $0.title, "path": $0.path, "bytes": $0.bytes]
-                },
-                "orphanProcesses": systemMonitor.orphanProcesses.map {
-                    ["pid": $0.pid, "ageSeconds": $0.ageSeconds, "command": $0.command]
-                },
-                "diskInsights": jsonValue(systemMonitor.diskInsights),
             ],
             "goals": [
                 "items": dailyGoals.goals(for: .today).map {

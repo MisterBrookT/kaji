@@ -28,7 +28,7 @@ Claude Code and Codex meter you on rolling windows. Kaji puts the answer in the 
 
 Each provider shows both of its windows — the short session window and the long one — with a percentage and the reset time. Nothing to open, nothing to ask.
 
-Quota is on by default. Work timer, system load and goals are modules you turn on if you want them. `Kaji` is Japanese `舵 / かじ` — rudder.
+Quota is on by default. Work timer and goals are modules you turn on if you want them. `Kaji` is Japanese `舵 / かじ` — rudder.
 
 ## Install
 
@@ -48,7 +48,6 @@ Trouble, or want it gone? [FAQ & troubleshooting](docs/faq.md).
 | --- | --- | --- |
 | **Quota** | on | Usage and reset time per window, per provider |
 | **Work / Break** | off | Focus timer, menu-bar countdown, break overlay |
-| **System** | off | CPU / memory, disk categories, top processes |
 | **Goals** | off | Today / Week / Vision, tags, notes, `kaji` CLI |
 
 Turning a module off removes its page *and* stops its timers and polling. One theme: black, white, gray — light and dark.

@@ -134,7 +134,6 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                     moduleRow(.quota, title: L10n.t(.moduleQuota, prefs.language), lockedOn: true)
                     moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
-                    moduleRow(.system, title: L10n.t(.moduleSystem, prefs.language), lockedOn: false)
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
                 }
             }

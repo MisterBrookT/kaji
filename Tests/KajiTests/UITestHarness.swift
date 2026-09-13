@@ -271,7 +271,6 @@ final class PopoverRenderFixture {
     let store: QuotaStore
     let prefs: Prefs
     let workSession: WorkSessionController
-    let systemMonitor = SystemMonitor()
     let dailyGoals: DailyGoalStore
     let fixedPlanStore: FixedPlanStore
     let navigation = PopoverNavigation()
@@ -333,7 +332,6 @@ final class PopoverRenderFixture {
             store: store,
             prefs: prefs,
             workSession: workSession,
-            systemMonitor: systemMonitor,
             dailyGoals: dailyGoals,
             fixedPlanStore: fixedPlanStore,
             navigation: navigation,

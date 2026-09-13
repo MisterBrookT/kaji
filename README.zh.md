@@ -48,7 +48,6 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 | --- | --- | --- |
 | **Quota** | 开 | 每个 provider、每个窗口的用量与重置时间 |
 | **Work / Break** | 关 | 专注计时、菜单栏倒计时、休息遮罩 |
-| **System** | 关 | CPU / 内存、磁盘分类、顶部进程 |
 | **Goals** | 关 | Today / Week / Vision、标签、说明、`kaji` CLI |
 
 关掉一个模块不只是隐藏页面，同时会停掉它的定时器与轮询。只有一套主题：黑白灰，浅色与深色。

@@ -59,7 +59,7 @@ public enum L10n {
         case launchAtLogin
         case modules, modulesHint
         case cliIntegrationHint, cliExamplePrompt, copyPrompt
-        case moduleQuota, moduleWork, moduleSystem, moduleGoals
+        case moduleQuota, moduleWork, moduleGoals
         case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
         case permissions, loginPermission, loginPermissionWhy
@@ -150,7 +150,6 @@ public enum L10n {
         .copyPrompt: .init(en: "Copy prompt", zh: "复制提示词", ptBR: "Copiar prompt", es: "Copiar prompt"),
         .moduleQuota: .init(en: "Quota", zh: "Quota", ptBR: "Quota", es: "Quota"),
         .moduleWork: .init(en: "Work / Break", zh: "Work / Break", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
-        .moduleSystem: .init(en: "System", zh: "System", ptBR: "Sistema", es: "Sistema"),
         .moduleGoals: .init(en: "Goals", zh: "Goals", ptBR: "Metas", es: "Metas"),
         .goalGroup: .init(en: "Group", zh: "分组", ptBR: "Agrupar", es: "Agrupar"),
         .goalGroupingNone: .init(en: "No Grouping", zh: "不分组", ptBR: "Sem agrupamento", es: "Sin agrupar"),
