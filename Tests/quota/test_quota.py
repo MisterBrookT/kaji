@@ -395,6 +395,168 @@ class TestClaudeLimitsParsing(unittest.TestCase):
         self.assertIsNone(quota._parse_claude_usage(None))
 
 
+class TestCodexPerLimitIdGroups(unittest.TestCase):
+    """A per-model group must be able to supply the 5-hour window.
+
+    Regression: on a plan whose account-wide "codex" group carries only a
+    weekly window, Kaji showed no 5h reading at all even though the
+    GPT-5.3-Codex-Spark group (`rateLimitsByLimitId.codex_bengalfox`) reported
+    a live 5-hour window.
+    """
+
+    RESULT = {
+        "rateLimits": {
+            "limitId": "codex",
+            "primary": {"usedPercent": 91, "windowDurationMins": 10080,
+                        "resetsAt": 1789806666},
+            "secondary": None, "planType": "prolite",
+        },
+        "rateLimitsByLimitId": {
+            "codex": {
+                "primary": {"usedPercent": 91, "windowDurationMins": 10080,
+                            "resetsAt": 1789806666},
+                "secondary": None, "planType": "prolite",
+            },
+            "codex_bengalfox": {
+                "primary": {"usedPercent": 12, "windowDurationMins": 300,
+                            "resetsAt": 1789393061},
+                "secondary": {"usedPercent": 4, "windowDurationMins": 10080,
+                              "resetsAt": 1789979861},
+                "planType": "prolite",
+            },
+        },
+    }
+
+    def merged(self, result):
+        groups = quota._codex_rate_limit_groups(result)
+        return quota._codex_merge_limit_groups(
+            groups, "usedPercent", "resetsAt", "windowDurationMins", "planType")
+
+    def test_five_hour_comes_from_a_per_model_group(self):
+        out = self.merged(self.RESULT)
+        self.assertEqual(out["five_hour_used_percent"], 12)
+        self.assertEqual(out["five_hour_resets_at"], 1789393061)
+
+    def test_seven_day_keeps_the_worst_group(self):
+        out = self.merged(self.RESULT)
+        self.assertEqual(out["seven_day_used_percent"], 91,
+                         "a quiet per-model group must not mask the account cap")
+        self.assertEqual(out["seven_day_resets_at"], 1789806666)
+        self.assertEqual(out["plan"], "prolite")
+
+    def test_falls_back_to_the_flat_rate_limits_object(self):
+        out = self.merged({"rateLimits": {
+            "primary": {"usedPercent": 30, "windowDurationMins": 300},
+            "secondary": {"usedPercent": 60, "windowDurationMins": 10080}}})
+        self.assertEqual(out["five_hour_used_percent"], 30)
+        self.assertEqual(out["seven_day_used_percent"], 60)
+
+    def test_zero_percent_is_a_real_reading_not_missing(self):
+        out = self.merged({"rateLimitsByLimitId": {
+            "codex_x": {"primary": {"usedPercent": 0,
+                                    "windowDurationMins": 300}}}})
+        self.assertEqual(out["five_hour_used_percent"], 0)
+
+    def test_no_usable_group_is_none(self):
+        self.assertIsNone(self.merged({}))
+        self.assertIsNone(self.merged({"rateLimitsByLimitId": {
+            "codex": {"primary": None, "secondary": None,
+                      "planType": "prolite"}}}))
+        self.assertIsNone(quota._codex_merge_limit_groups(
+            [], "usedPercent", "resetsAt", "windowDurationMins", "planType"))
+
+
+class TestCLIDiscovery(unittest.TestCase):
+    """A .app inherits a minimal PATH; a bare CLI name is then unreachable.
+
+    Regression: `subprocess(["codex", ...])` raised FileNotFoundError inside the
+    shipped app, so every codex reading silently came from the stale
+    session-file fallback while the live app-server path never ran.
+    """
+
+    def test_search_dirs_cover_homebrew_and_npm_prefixes(self):
+        for d in ("/opt/homebrew/bin", "/usr/local/bin"):
+            self.assertIn(d, quota.CLI_SEARCH_DIRS)
+
+    def test_cli_path_finds_a_binary_outside_path(self):
+        bindir = Path(TMP) / "fakebin"
+        bindir.mkdir(exist_ok=True)
+        tool = bindir / "faketool"
+        tool.write_text("#!/bin/sh\nexit 0\n")
+        tool.chmod(0o755)
+        old_path, old_dirs = os.environ.get("PATH", ""), quota.CLI_SEARCH_DIRS
+        try:
+            os.environ["PATH"] = "/nonexistent"
+            quota.CLI_SEARCH_DIRS = [str(bindir)]
+            self.assertEqual(quota._cli_path("faketool"), str(tool))
+            self.assertIsNone(quota._cli_path("definitely-not-here"))
+        finally:
+            os.environ["PATH"] = old_path
+            quota.CLI_SEARCH_DIRS = old_dirs
+
+    def test_child_env_path_includes_the_search_dirs(self):
+        old = os.environ.get("PATH", "")
+        try:
+            os.environ["PATH"] = "/usr/bin:/bin"
+            path = quota._cli_env()["PATH"].split(os.pathsep)
+        finally:
+            os.environ["PATH"] = old
+        for d in quota.CLI_SEARCH_DIRS:
+            self.assertIn(d, path)
+        self.assertEqual(len(path), len(set(path)), "PATH must not duplicate")
+
+    def test_missing_cli_returns_none_instead_of_raising(self):
+        old = quota.CLI_SEARCH_DIRS
+        real_which = quota.shutil.which
+        try:
+            quota.CLI_SEARCH_DIRS = []
+            quota.shutil.which = lambda _n: None
+            self.assertIsNone(quota._fetch_codex_limits())
+            self.assertIsNone(quota._fetch_minimax_limits())
+        finally:
+            quota.CLI_SEARCH_DIRS = old
+            quota.shutil.which = real_which
+
+
+class TestStaleLimitsFallback(unittest.TestCase):
+    """A cache may cover a blip, never a permanently broken fetch path."""
+
+    def setUp(self):
+        self.dir = Path(TMP) / "cache"
+        self.dir.mkdir(exist_ok=True)
+        self.old_dir, quota.CACHE_DIR = quota.CACHE_DIR, self.dir
+        self.name = "stale-test-cache.json"
+        self.path = self.dir / self.name
+        self.path.write_text(json.dumps({"seven_day_used_percent": 4}))
+
+    def tearDown(self):
+        quota.CACHE_DIR = self.old_dir
+        self.path.unlink(missing_ok=True)
+
+    def age(self, seconds):
+        t = time.time() - seconds
+        os.utime(self.path, (t, t))
+
+    def test_recent_cache_covers_a_failed_fetch(self):
+        self.age(600)
+        out = quota._limits_cached(self.name, lambda: None)
+        self.assertEqual(out["seven_day_used_percent"], 4)
+
+    def test_cache_past_the_ceiling_reports_nothing(self):
+        self.age(quota.STALE_LIMITS_MAX_AGE + 60)
+        self.assertIsNone(
+            quota._limits_cached(self.name, lambda: None),
+            "a long-dead fetch path must surface as 'no data', not a stale %")
+
+    def test_a_successful_fetch_refreshes_an_expired_cache(self):
+        self.age(quota.STALE_LIMITS_MAX_AGE + 60)
+        out = quota._limits_cached(self.name,
+                                   lambda: {"seven_day_used_percent": 92})
+        self.assertEqual(out["seven_day_used_percent"], 92)
+        self.assertEqual(json.loads(self.path.read_text()),
+                         {"seven_day_used_percent": 92})
+
+
 class TestIntCoercion(unittest.TestCase):
     def test_rejects_bool_and_junk(self):
         self.assertEqual(quota._int(True), 0)
