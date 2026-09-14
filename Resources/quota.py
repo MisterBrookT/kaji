@@ -38,7 +38,7 @@ claude-code + opencode + codex; kiro stays session-count only until a
 CLI/API exists.
 ────────────────────────────────────────────────────────────────────────
 """
-import hashlib, hmac, json, os, subprocess, sys, time
+import hashlib, hmac, json, os, shutil, subprocess, sys, time
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -160,6 +160,12 @@ def ago(ts: float) -> str:
 CACHE_DIR = HOME / ".helm" / "sessions"
 LIMITS_TTL = 180
 CLAUDE_LIMITS_TTL = 3600
+# Hard ceiling on serving a stale cache when every live fetch fails. Without
+# it a broken fetch path (missing CLI, revoked token) is invisible: the last
+# good percentage is served forever and the user trusts a number that stopped
+# tracking reality hours ago. Past this age we report nothing, and the UI's
+# "no data · check sign-in" row makes the breakage legible.
+STALE_LIMITS_MAX_AGE = 6 * 3600
 
 
 def _cache_is_current(data):
@@ -220,7 +226,11 @@ def _limits_cached(name, fetch, ttl=LIMITS_TTL):
         except Exception:
             pass
         return data
+    # Fetch failed: fall back to the cache, but only while it is still plausibly
+    # current. An unbounded fallback hides a permanently broken fetch path.
     try:
+        if time.time() - path.stat().st_mtime > STALE_LIMITS_MAX_AGE:
+            return None
         return json.loads(path.read_text())
     except Exception:
         return None
@@ -442,6 +452,97 @@ def cursor_limits():
     return _limits_cached("cursor-limits-cache.json", _fetch_cursor_limits)
 
 
+# A .app launched from Finder inherits a MINIMAL PATH (/usr/bin:/bin:/usr/sbin:
+# /sbin), not the user's shell PATH, so a Homebrew/npm CLI is invisible to a
+# bare `subprocess(["codex", ...])` — the live fetch raises FileNotFoundError
+# and every reading silently falls back to the stale session-file scan. Probe
+# the usual install prefixes explicitly, and put them on PATH for the child so
+# a node-shebang wrapper can find its own interpreter too.
+CLI_SEARCH_DIRS = [
+    "/opt/homebrew/bin",       # Apple Silicon Homebrew
+    "/usr/local/bin",          # Intel Homebrew / npm global
+    str(HOME / ".local" / "bin"),
+    str(HOME / ".bun" / "bin"),
+    str(HOME / ".volta" / "bin"),
+    "/opt/homebrew/opt/node/bin",
+    "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+]
+
+
+def _cli_path(name):
+    """Absolute path to a CLI, searching PATH then the known install prefixes."""
+    found = shutil.which(name)
+    if found:
+        return found
+    for d in CLI_SEARCH_DIRS:
+        candidate = os.path.join(d, name)
+        if os.access(candidate, os.X_OK) and os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def _cli_env():
+    """Child env with the install prefixes on PATH (node shebangs need this)."""
+    env = dict(os.environ)
+    existing = [p for p in env.get("PATH", "").split(os.pathsep) if p]
+    merged, seen = [], set()
+    for p in existing + CLI_SEARCH_DIRS:
+        if p not in seen:
+            seen.add(p)
+            merged.append(p)
+    env["PATH"] = os.pathsep.join(merged)
+    return env
+
+
+def _codex_merge_limit_groups(groups, pct_key, reset_key, window_key, plan_key):
+    """Fold every rate-limit GROUP into one {five_hour, seven_day} dict.
+
+    codex reports per-limit-id groups (`rateLimitsByLimitId`): the account-wide
+    "codex" group plus per-model groups such as "codex_bengalfox"
+    (GPT-5.3-Codex-Spark). A plan whose account group carries ONLY a weekly
+    window leaves the 5-hour ring empty even though a model group reports a
+    live 5-hour window — that is the "Kaji shows no 5h data" bug. Take the
+    WORST (highest used_percent) reading per window across groups, which is the
+    number that actually constrains the user.
+    """
+    out = {}
+    for rl in groups:
+        mapped = _codex_map_rate_limits(rl, pct_key, reset_key, window_key, plan_key)
+        if not mapped:
+            continue
+        for win in ("five_hour", "seven_day"):
+            pct = mapped.get(win + "_used_percent")
+            if pct is None:
+                continue
+            current = out.get(win + "_used_percent")
+            if current is None or pct > current:
+                out[win + "_used_percent"] = pct
+                reset = mapped.get(win + "_resets_at")
+                if reset is not None:
+                    out[win + "_resets_at"] = reset
+                elif win + "_resets_at" in out:
+                    del out[win + "_resets_at"]
+        if mapped.get("plan") and "plan" not in out:
+            out["plan"] = mapped["plan"]
+    if not any(k.endswith("_used_percent") for k in out):
+        return None
+    return out
+
+
+def _codex_rate_limit_groups(result):
+    """Every rate-limit object in an app-server result, per-limit-id included."""
+    if not isinstance(result, dict):
+        return []
+    groups = []
+    by_id = result.get("rateLimitsByLimitId")
+    if isinstance(by_id, dict):
+        groups.extend(v for v in by_id.values() if isinstance(v, dict))
+    top = result.get("rateLimits")
+    if isinstance(top, dict) and not groups:
+        groups.append(top)
+    return groups
+
+
 def _codex_map_rate_limits(rl, pct_key, reset_key, window_key, plan_key):
     """A codex rateLimits object -> Kaji's {five_hour,seven_day} limits dict.
 
@@ -489,10 +590,13 @@ def _fetch_codex_limits():
     # serving any JSON-RPC, so the live path silently never worked and every
     # reading came from the stale session-file fallback. `never` is the
     # non-interactive choice, paired with read-only sandboxing.
+    codex_bin = _cli_path("codex")
+    if not codex_bin:
+        return None
     proc = subprocess.Popen(
-        ["codex", "-s", "read-only", "-a", "never", "app-server"],
+        [codex_bin, "-s", "read-only", "-a", "never", "app-server"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True)
+        stderr=subprocess.DEVNULL, text=True, env=_cli_env())
     # Drain stdout on a background thread. select()+text readline() can leave a
     # second JSON-RPC response stranded in the userspace buffer (select reports
     # the fd not-ready while a full line already sits decoded), stalling the
@@ -532,9 +636,10 @@ def _fetch_codex_limits():
             except Exception:
                 continue
             if d.get("id") == 2:
-                rl = (d.get("result") or {}).get("rateLimits") or {}
-                return _codex_map_rate_limits(
-                    rl, "usedPercent", "resetsAt", "windowDurationMins", "planType")
+                groups = _codex_rate_limit_groups(d.get("result") or {})
+                return _codex_merge_limit_groups(
+                    groups, "usedPercent", "resetsAt",
+                    "windowDurationMins", "planType")
         return None
     finally:
         try:
@@ -928,9 +1033,12 @@ def _fetch_minimax_limits():
     stale-cache behavior as the other providers.
     """
     try:
+        mmx_bin = _cli_path("mmx")
+        if not mmx_bin:
+            return None
         proc = subprocess.run(
-            ["mmx", "quota", "show", "--output", "json", "--quiet"],
-            capture_output=True, text=True, timeout=10)
+            [mmx_bin, "quota", "show", "--output", "json", "--quiet"],
+            capture_output=True, text=True, timeout=10, env=_cli_env())
     except (OSError, subprocess.TimeoutExpired):
         return None
     if proc.returncode != 0:
