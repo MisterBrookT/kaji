@@ -545,12 +545,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             updateChecker.checkIfDue(force: true)
             return
         }
-        guard let rel = updateChecker.available else { return }
+        // Never install straight from here: route through Settings so the
+        // changelog confirmation is always shown first.
+        openSettings()
+    }
+
+    /// Only reached from the explicit "Install and Relaunch" confirmation.
+    private func installUpdate(_ release: UpdateChecker.Release) {
         do {
-            try updateChecker.install(rel)
+            try updateChecker.install(release)
             NSApp.terminate(nil)
         } catch {
-            NSWorkspace.shared.open(rel.url)
+            NSWorkspace.shared.open(release.url)
         }
     }
 
@@ -733,6 +739,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             prefs: prefs,
             sleepController: sleepController,
             fixedPlanStore: fixedPlanStore,
+            updateChecker: updateChecker,
+            onInstallUpdate: { [weak self] release in self?.installUpdate(release) },
+            onOpenReleasePage: { NSWorkspace.shared.open($0) },
         ))
 
         controller.view.configureKajiHost()

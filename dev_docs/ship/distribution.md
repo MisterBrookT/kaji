@@ -2,19 +2,25 @@
 
 ## Current State
 
-Kaji is **unsigned and not notarized**. Releases publish **source + written notes** only — no `.app.zip` asset.
+Kaji is **ad-hoc signed only — not Developer ID signed and not notarized**. This is an explicitly accepted testing-phase trade-off.
 
-Install path:
+Each `v*` tag runs `.github/workflows/release.yml` on macOS: tag must equal `Info.plist` `CFBundleShortVersionString`, tests run, `KAJI_UNIVERSAL=1 scripts/build-app.sh` builds arm64 + x86_64 per arch and merges with `lipo`, the bundle is ad-hoc signed and verified, then `Kaji.app` is zipped with `ditto --keepParent`. The release is published only if every step succeeds.
+
+Release asset contract (the shipped in-app updater depends on it):
+
+- Exactly **one** `.zip` asset, `Kaji.app.zip` — the updater installs the first `.zip` it finds, with no architecture filter.
+- The archive root contains only `Kaji.app`.
+- The app is universal, so that one asset runs on Apple Silicon and Intel.
+
+Release notes come from `scripts/release-notes.sh` (tested by `Tests/release/test_release_notes.sh`): commit subjects since the previous tag are grouped into Fixed / Added / Removed / Changed by leading verb or conventional-commit type; merge/release/bump/chore commits are dropped; an unsigned/unnotarized install notice is always appended. Notes quality depends on commit subjects starting with a clear verb. Per-release working notes live in `.dev/`, not `dev_docs/`.
+
+Source install remains available:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-`install.sh` clones the latest release tag, builds with `scripts/build-app.sh`, copies to `/Applications`, and clears the quarantine xattr.
-
-Browser `.app.zip` downloads used to show: `Kaji is damaged and can't be opened…` — Gatekeeper + unsigned binary. That asset is intentionally gone.
-
-GitHub Release notes are generated from commits when a version tag is pushed; they are not duplicated under `dev_docs/`.
+Browser-downloaded zips may show `Kaji is damaged and can't be opened…` (Gatekeeper + quarantine). The in-app updater clears quarantine itself.
 
 ## Temporary Internal Fix
 

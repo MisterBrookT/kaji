@@ -53,6 +53,8 @@ public enum L10n {
         case hide, on, off, showInBar
         case usage, showUsed, showRemaining
         case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
+        case updates, currentVersion, updateChangesTitle, updateFixed, updateAdded, updateRemoved, updateOther
+        case updateNoNotes, updateInstall, updateViewRelease, updateInstallHint
         case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
         case work, focusLength, breakLength, skipBreak, breakOverlay
         case fixedPlan
@@ -114,6 +116,17 @@ public enum L10n {
         .updateChecking: .init(en: "Checking…", zh: "检查中…", ptBR: "Verificando…", es: "Comprobando…"),
         .updateCurrent: .init(en: "Up to date", zh: "已是最新", ptBR: "Atualizado", es: "Actualizado"),
         .updateFailed: .init(en: "Update check failed", zh: "检查更新失败", ptBR: "Falha ao buscar atualização", es: "Error al buscar actualizaciones"),
+        .updates: .init(en: "Updates", zh: "更新", ptBR: "Atualizações", es: "Actualizaciones"),
+        .currentVersion: .init(en: "Version", zh: "版本", ptBR: "Versão", es: "Versión"),
+        .updateChangesTitle: .init(en: "What's changed in", zh: "更新内容", ptBR: "Novidades em", es: "Novedades en"),
+        .updateFixed: .init(en: "Fixed", zh: "修复", ptBR: "Corrigido", es: "Corregido"),
+        .updateAdded: .init(en: "Added", zh: "新增", ptBR: "Adicionado", es: "Añadido"),
+        .updateRemoved: .init(en: "Removed", zh: "移除", ptBR: "Removido", es: "Eliminado"),
+        .updateOther: .init(en: "Other", zh: "其他", ptBR: "Outros", es: "Otros"),
+        .updateNoNotes: .init(en: "No release notes were published for this version.", zh: "此版本没有发布说明。", ptBR: "Nenhuma nota foi publicada para esta versão.", es: "No se publicaron notas para esta versión."),
+        .updateInstall: .init(en: "Install and Relaunch", zh: "安装并重启", ptBR: "Instalar e reabrir", es: "Instalar y reabrir"),
+        .updateViewRelease: .init(en: "View on GitHub", zh: "在 GitHub 查看", ptBR: "Ver no GitHub", es: "Ver en GitHub"),
+        .updateInstallHint: .init(en: "This testing build is not Apple-notarized. Only install if you trust this repository. Kaji will quit, replace /Applications/Kaji.app, clear quarantine, and reopen.", zh: "此测试构建未经 Apple 公证。仅在信任本仓库时安装。Kaji 将退出、替换 /Applications/Kaji.app、移除隔离标记并重新打开。", ptBR: "Esta versão de teste não é notarizada pela Apple. Instale apenas se confiar neste repositório. O Kaji vai fechar, substituir /Applications/Kaji.app, remover a quarentena e reabrir.", es: "Esta versión de prueba no está notarizada por Apple. Instálala solo si confías en este repositorio. Kaji se cerrará, reemplazará /Applications/Kaji.app, quitará la cuarentena y se volverá a abrir."),
         .system: .init(en: "System", zh: "系统", ptBR: "Sistema", es: "Sistema"),
         .keepAwake: .init(en: "Prevent Sleep", zh: "禁止休眠", ptBR: "Impedir repouso", es: "Impedir reposo"),
         .keepAwakeOn: .init(en: "Awake On", zh: "不休眠已开", ptBR: "Repouso bloqueado", es: "Reposo bloqueado"),

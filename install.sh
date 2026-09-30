@@ -9,7 +9,7 @@
 set -euo pipefail
 
 REPO="MisterBrookT/kaji"
-DEST="/Applications"
+DEST="${KAJI_INSTALL_DEST:-/Applications}"
 CLONE_DIR=""
 
 say() { printf '\033[1;38;5;208m==>\033[0m %s\n' "$1"; }
@@ -44,13 +44,16 @@ if ! have_python; then
 fi
 
 say "Finding the latest release tag…"
-TAG="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+# Use ${VAR} before non-ASCII text: macOS bash 3.2 in a UTF-8 locale otherwise
+# reads the "…" lead byte as part of the name ("TAG?: unbound variable").
+RELEASE_JSON="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" || true)"
+TAG="$(printf '%s\n' "$RELEASE_JSON" \
         | grep -o '"tag_name": *"[^"]*"' \
-        | head -1 | cut -d'"' -f4)"
+        | head -1 | cut -d'"' -f4 || true)"
 [ -n "$TAG" ] || die "no GitHub release found. Clone the repo and run ./scripts/build-local.sh."
 
 CLONE_DIR="$(mktemp -d)/kaji"
-say "Cloning $REPO @$TAG…"
+say "Cloning ${REPO} @${TAG}…"
 git clone --depth 1 --branch "$TAG" "https://github.com/$REPO.git" "$CLONE_DIR"
 cd "$CLONE_DIR"
 
@@ -72,4 +75,4 @@ xattr -dr com.apple.quarantine "$DEST/Kaji.app" 2>/dev/null || true
 
 say "Launching…"
 open "$DEST/Kaji.app"
-say "Done — Kaji $TAG is in your menu bar."
+say "Done — Kaji ${TAG} is in your menu bar."

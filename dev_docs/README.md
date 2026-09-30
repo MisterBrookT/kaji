@@ -39,7 +39,7 @@ Feature specs、bug-fix notes、implementation plans、单次 UI 调整和逐版
 
 | Doc | Constraint |
 | --- | --- |
-| [ship/distribution.md](ship/distribution.md) | 安装、签名、Gatekeeper 与发布链 |
+| [ship/distribution.md](ship/distribution.md) | 手动点击更新、通用测试包、分类 changelog 与签名限制 |
 
 ### Assets
 
