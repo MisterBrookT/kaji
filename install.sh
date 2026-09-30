@@ -46,11 +46,22 @@ fi
 say "Finding the latest release tag…"
 # Use ${VAR} before non-ASCII text: macOS bash 3.2 in a UTF-8 locale otherwise
 # reads the "…" lead byte as part of the name ("TAG?: unbound variable").
-RELEASE_JSON="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" || true)"
-TAG="$(printf '%s\n' "$RELEASE_JSON" \
-        | grep -o '"tag_name": *"[^"]*"' \
-        | head -1 | cut -d'"' -f4 || true)"
-[ -n "$TAG" ] || die "no GitHub release found. Clone the repo and run ./scripts/build-local.sh."
+# Resolve the public releases/latest redirect instead of the unauthenticated
+# REST API, which is rate-limited per IP (403) on shared/corporate networks.
+LATEST_URL="https://github.com/${REPO}/releases/latest"
+if ! RESOLVED_URL="$(curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 15 --max-time 60 \
+      -o /dev/null -w '%{url_effective}' "$LATEST_URL")"; then
+  die "could not reach GitHub (${LATEST_URL}): network error or rate limit. Retry later."
+fi
+case "$RESOLVED_URL" in
+  "https://github.com/${REPO}/releases"|"https://github.com/${REPO}/releases/")
+    die "no GitHub release found. Clone the repo and run ./scripts/build-local.sh." ;;
+esac
+TAG="${RESOLVED_URL#https://github.com/${REPO}/releases/tag/}"
+if [ "$TAG" = "$RESOLVED_URL" ] \
+   || ! printf '%s' "$TAG" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+  die "unexpected release URL from GitHub: ${RESOLVED_URL}"
+fi
 
 CLONE_DIR="$(mktemp -d)/kaji"
 say "Cloning ${REPO} @${TAG}…"
