@@ -31,9 +31,11 @@ defaults write dev.kaji pythonInterpreter /path/to/python3
 
 See [how quota works](quota.md) for the exact source of each number.
 
-## Why is there no download on Releases?
+## How do updates work?
 
-Kaji is not yet signed with an Apple Developer ID. An unsigned `.app.zip` downloaded through a browser is quarantined by Gatekeeper and refuses to launch, which is a worse first experience than building from source. The installer builds locally and clears quarantine on a bundle it just built itself.
+Updates are user-initiated: choose **Update** in Kaji. Releases include a testing `.app.zip` and a **Fixed / Added / Removed** changelog. Starting with 0.9.7, Kaji shows release notes before asking you to install; older versions install directly when you click Update.
+
+Kaji is ad-hoc signed, not Apple Developer ID signed or notarized. Browser downloads may be blocked by Gatekeeper. The in-app updater clears quarantine, so only use it if you trust this repository. The source installer remains available if you prefer to build locally.
 
 ## macOS asks for my password when I enable sleep control
 

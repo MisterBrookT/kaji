@@ -43,8 +43,10 @@ jobs:
       - name: quota.py accuracy tests
         run: python3 Tests/quota/test_quota.py
 
-      - name: Installer regression tests
-        run: /bin/bash Tests/installer/test_install.sh
+      - name: Installer and release-notes regression tests
+        run: |
+          /bin/bash Tests/installer/test_install.sh
+          /bin/bash Tests/release/test_release_notes.sh
 
       # Unit + in-process UI tests (see Tests/KajiTests/UITestHarness.swift).
       # These boot the real AppDelegate/status-item/popover object graph
@@ -52,9 +54,12 @@ jobs:
       - name: swift test
         run: swift test
 
-      - name: Assemble app bundle
-        run: ./scripts/build-app.sh
+      - name: Assemble universal app bundle
+        run: KAJI_UNIVERSAL=1 ./scripts/build-app.sh
 
       - name: Verify non-interactive ad-hoc signature
         run: |
           test "$(codesign -dv --verbose=4 dist/Kaji.app 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"
+          codesign --verify --deep --strict dist/Kaji.app
+          lipo dist/Kaji.app/Contents/MacOS/Kaji -verify_arch arm64 x86_64
+          lipo dist/Kaji.app/Contents/Library/HelperTools/KajiSleepHelper -verify_arch arm64 x86_64

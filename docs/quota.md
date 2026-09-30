@@ -8,7 +8,7 @@ A bundled Python reader (`Resources/quota.py`, shipped inside `Kaji.app`) produc
 
 | Provider | 5h / 7d windows | Token and cost numbers |
 | --- | --- | --- |
-| **Claude Code** | `https://api.anthropic.com/api/oauth/usage`, authorized with the OAuth token in `~/.claude/.credentials.json`. Cached for 1 hour. | Local parse of `~/.claude/projects/**/*.jsonl` (`message.usage`) — the same fields `ccusage` reads. |
+| **Claude Code** | `https://api.anthropic.com/api/oauth/usage`, authorized with Claude Code's OAuth token from `~/.claude/.credentials.json` or the macOS keychain. Cached for 1 hour. | Local parse of `~/.claude/projects/**/*.jsonl` (`message.usage`) — the same fields `ccusage` reads. |
 | **Codex** | The local `codex` CLI, via `codex app-server` → `account/rateLimits/read`. No direct network call from Kaji. Cached for 3 minutes. | Local parse of `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` `token_count` events. Values are session-cumulative, so the last event per file wins. |
 | **Cursor** (opt-in) | `api2.cursor.sh` dashboard usage, authorized with the access token in Cursor's `state.vscdb`. This is a monthly billing pool, mapped onto the 5h / 7d slots (outer = API, inner = Auto), not a real session window. | Not exposed. |
 | **MiniMax, Ark Agent** (opt-in) | Provider OpenAPI, only when you have configured that provider's key locally. | Provider-reported. |
@@ -27,10 +27,11 @@ Windows and caches are stored under `~/.helm/sessions/`.
 ## What leaves your Mac
 
 - A usage request to `api.anthropic.com` (Claude enabled) and `api2.cursor.sh` (Cursor enabled), carrying only your own provider token.
-- A version check against `api.github.com/repos/MisterBrookT/kaji/releases/latest`.
+- A Claude token-renewal request to `console.anthropic.com/v1/oauth/token` when the access token is near expiry or rejected, carrying your refresh token.
+- A version check against `api.github.com/repos/MisterBrookT/kaji/releases/latest`, plus an app download from GitHub when you explicitly choose to install an update.
 
 That is the complete list. There is no analytics, no crash reporting, no Kaji-operated server, and no transmission of prompts, file contents, goals, or usage data anywhere else. The `kaji` CLI reaches the app over `127.0.0.1` only.
 
 ## Why read credential files at all
 
-For Claude and Cursor there is no local file that contains the account's remaining quota — only the provider knows it. Kaji reuses the token the official tool already wrote to disk so you never paste a key into Kaji. If you would rather Kaji never touch those files, disable that provider: the code path is not entered for a disabled provider.
+For Claude and Cursor there is no local file that contains the account's remaining quota — only the provider knows it. Kaji reuses the token the official tool already stored so you never paste a key into Kaji. For Claude, Kaji also renews expired tokens and writes the rotated credentials back to the same file or keychain item, preserving other fields. This keeps quota working without running the Claude terminal. First-use keychain writes may require macOS authorization; concurrent refresh by Claude Code can still race despite credential rechecks. If you would rather Kaji never touch those files, disable that provider: the code path is not entered for a disabled provider.

@@ -28,7 +28,7 @@ Claude Code 和 Codex 都按滚动窗口计量。Kaji 把答案放进菜单栏�
 
 每个 provider 显示它的两个窗口——短的会话窗口和长的那个——各自带百分比与重置时间。不用打开任何东西，也不用问。
 
-默认只开 Quota。专注计时、系统负载、目标都是可选模块，想要再开。`Kaji` 来自日语 `舵 / かじ`。
+默认只开 Quota。专注计时、目标都是可选模块，想要再开。`Kaji` 来自日语 `舵 / かじ`。
 
 ## 安装
 
@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 需要 macOS 13+（Apple Silicon），以及 `git`、`swift`、`python3`。安装脚本会从最新 release tag 本机构建并装到 `/Applications`。
 
-没有预编译下载：Kaji 还没有 Developer ID 签名，浏览器下载的未签名 `.app.zip` 会被 Gatekeeper 拦下，本机构建反而更诚实。已经 clone 的话执行 `./scripts/build-local.sh`。
+已有用户可在 Kaji 中点击 **更新**。Release 提供测试用 `.app.zip` 和 **Fixed / Added / Removed** 分类更新说明。构建仅做 ad-hoc 签名，尚未经过 Apple 公证；只在信任本仓库时更新。浏览器下载可能被 Gatekeeper 拦截。仍可本机构建：`./scripts/build-local.sh`。
 
 出问题或想卸载：[常见问题与排查](docs/faq.md)。
 
@@ -72,7 +72,7 @@ Today / Week / Vision 三层目标，并提供 `kaji` CLI，让 agent 帮你增�
 Kaji 读取 AI 工具本来就写在你 Mac 上的文件；对于只在服务端公布额度的 provider，用你本机已有的凭据调用它自己的用量接口。
 
 - **本地读取：** `~/.claude/projects/**/*.jsonl`、`~/.codex/sessions/**/rollout-*.jsonl`，以及必要时的本地凭据。
-- **离开本机的请求：** 带你自己 token 的 `api.anthropic.com` 或 `api2.cursor.sh` 用量请求，以及向 `api.github.com` 检查新版本。只针对你启用的 provider。
+- **离开本机的请求：** 带你自己 token 的 provider 用量请求、向 `console.anthropic.com` 续期 Claude token，以及从 GitHub 检查和下载更新。只查询已启用的 provider；续期后的 Claude 凭据写回原来的本地存储。
 - **没有统计、没有账号、没有我们的服务器。** prompt、用量、目标都不会被上传。CLI 只通过 `127.0.0.1` 与 App 通信。
 
 每个数字怎么算：[quota 原理](docs/quota.md)。

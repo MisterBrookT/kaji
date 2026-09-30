@@ -13,10 +13,29 @@ APP_NAME="Kaji"
 BUNDLE="dist/${APP_NAME}.app"
 EXEC_NAME="Kaji"
 
-echo "==> swift build -c release"
-swift build -c release
+# KAJI_UNIVERSAL=1 builds one arm64+x86_64 bundle (release assets: the in-app
+# updater installs the first .zip it finds, so it must run on every Mac).
+# Each arch is built separately and merged with lipo into .build/universal.
+if [[ "${KAJI_UNIVERSAL:-0}" == "1" ]]; then
+	BIN_DIR=".build/universal"
+	mkdir -p "$BIN_DIR"
+	for arch in arm64 x86_64; do
+		echo "==> swift build -c release --arch ${arch}"
+		swift build -c release --arch "$arch"
+	done
+	ARM_DIR="$(swift build -c release --arch arm64 --show-bin-path)"
+	X86_DIR="$(swift build -c release --arch x86_64 --show-bin-path)"
+	for product in "$EXEC_NAME" KajiSleepHelper; do
+		lipo -create "${ARM_DIR}/${product}" "${X86_DIR}/${product}" \
+			-output "${BIN_DIR}/${product}"
+	done
+else
+	echo "==> swift build -c release"
+	swift build -c release
+	BIN_DIR="$(swift build -c release --show-bin-path)"
+fi
 
-BIN_PATH="$(swift build -c release --show-bin-path)/${EXEC_NAME}"
+BIN_PATH="${BIN_DIR}/${EXEC_NAME}"
 if [[ ! -x "$BIN_PATH" ]]; then
 	echo "error: built executable not found at $BIN_PATH" >&2
 	exit 1
@@ -32,7 +51,7 @@ mkdir -p "${BUNDLE}/Contents/Library/LaunchDaemons"
 cp "$BIN_PATH" "${BUNDLE}/Contents/MacOS/${EXEC_NAME}"
 chmod +x "${BUNDLE}/Contents/MacOS/${EXEC_NAME}"
 
-HELPER_PATH="$(swift build -c release --show-bin-path)/KajiSleepHelper"
+HELPER_PATH="${BIN_DIR}/KajiSleepHelper"
 cp "$HELPER_PATH" "${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
 chmod +x "${BUNDLE}/Contents/Library/HelperTools/KajiSleepHelper"
 cp "Resources/dev.kaji.sleep-helper.plist" \
@@ -52,8 +71,8 @@ else
 	<key>CFBundleExecutable</key><string>Kaji</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>0.9.6</string>
-	<key>CFBundleVersion</key><string>28</string>
+	<key>CFBundleShortVersionString</key><string>0.9.7</string>
+	<key>CFBundleVersion</key><string>37</string>
 	<key>LSMinimumSystemVersion</key><string>13.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>

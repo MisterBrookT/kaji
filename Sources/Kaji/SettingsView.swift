@@ -31,21 +31,31 @@ struct SettingsView: View {
     @ObservedObject var prefs: Prefs
     @ObservedObject var sleepController: SleepController
     @ObservedObject var fixedPlanStore: FixedPlanStore
+    @ObservedObject var updateChecker: UpdateChecker
+    let onInstallUpdate: (UpdateChecker.Release) -> Void
+    let onOpenReleasePage: (URL) -> Void
 
     @State private var selection: SettingsSection = .general
     @State private var loginPermission: PermissionState = .notAuthorized
     @State private var sleepPermission: PermissionState = .notAuthorized
+    @State private var pendingUpdate: UpdateChecker.Release?
 
 
     init(
         prefs: Prefs,
         sleepController: SleepController,
         fixedPlanStore: FixedPlanStore,
+        updateChecker: UpdateChecker = UpdateChecker(),
         initialSection: SettingsSection = .general,
+        onInstallUpdate: @escaping (UpdateChecker.Release) -> Void = { _ in },
+        onOpenReleasePage: @escaping (URL) -> Void = { _ in },
     ) {
         self.prefs = prefs
         self.sleepController = sleepController
         self.fixedPlanStore = fixedPlanStore
+        self.updateChecker = updateChecker
+        self.onInstallUpdate = onInstallUpdate
+        self.onOpenReleasePage = onOpenReleasePage
         _selection = State(initialValue: initialSection)
     }
     @Environment(\.colorScheme) private var scheme
@@ -103,9 +113,32 @@ struct SettingsView: View {
         } message: {
             Text(sleepGuidanceMessage)
         }
+        .sheet(item: $pendingUpdate) { release in
+            UpdateNotesSheet(
+                release: release,
+                currentVersion: updateChecker.currentVersion,
+                language: prefs.language,
+                onInstall: {
+                    pendingUpdate = nil
+                    onInstallUpdate(release)
+                },
+                onViewRelease: { onOpenReleasePage(release.url) },
+                onCancel: { pendingUpdate = nil }
+            )
+        }
         .onChange(of: prefs.enabledModules) { _ in
             if !visibleSections.contains(selection) { selection = .general }
         }
+    }
+
+    private var updateButtonTitle: String {
+        if let release = updateChecker.available {
+            return L10n.t(.updateTo, prefs.language) + " " + release.tag
+        }
+        if updateChecker.isChecking { return L10n.t(.updateChecking, prefs.language) }
+        if updateChecker.lastError != nil { return L10n.t(.updateFailed, prefs.language) }
+        if updateChecker.lastChecked != nil { return L10n.t(.updateCurrent, prefs.language) }
+        return L10n.t(.checkUpdates, prefs.language)
     }
 
     private var sleepGuidanceTitle: String {
@@ -158,6 +191,23 @@ struct SettingsView: View {
                         .fixedSize()
                         .accessibilityIdentifier("kaji.settings.usage")
                     }
+                }
+            }
+            settingBlock(title: L10n.t(.updates, prefs.language)) {
+                settingRow(title: L10n.t(.currentVersion, prefs.language)) {
+                    Text(updateChecker.currentVersion)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                        .foregroundColor(t.mute)
+                        .accessibilityIdentifier("kaji.settings.update.version")
+                    segment(updateButtonTitle, on: updateChecker.available != nil,
+                            accessibilityIdentifier: "kaji.settings.update.action") {
+                        if let release = updateChecker.available {
+                            pendingUpdate = release
+                        } else {
+                            updateChecker.checkIfDue(force: true)
+                        }
+                    }
+                    .disabled(updateChecker.isChecking)
                 }
             }
             settingBlock(title: L10n.t(.system, prefs.language)) {
@@ -438,5 +488,78 @@ struct SettingsView: View {
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(accessibilityIdentifier ?? "")
+    }
+}
+
+extension UpdateChecker.Release: Identifiable {
+    var id: String { tag }
+}
+
+// MARK: - UpdateNotesSheet
+//
+// Confirmation shown before a manual update: the release body grouped into
+// Fixed / Added / Removed, rendered as plain text. Installing happens only
+// from the explicit button; dismissing does nothing.
+struct UpdateNotesSheet: View {
+    let release: UpdateChecker.Release
+    let currentVersion: String
+    let language: AppLanguage
+    let onInstall: () -> Void
+    let onViewRelease: () -> Void
+    let onCancel: () -> Void
+
+    static let sections: [(ReleaseNotes.Category, L10n.K)] = [
+        (.fixed, .updateFixed), (.added, .updateAdded), (.removed, .updateRemoved), (.other, .updateOther),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("\(L10n.t(.updateChangesTitle, language)) \(release.tag)")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+            Text("\(currentVersion) → \(release.version)")
+                .font(.system(size: 11, weight: .medium, design: .rounded).monospacedDigit())
+                .foregroundColor(.secondary)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    if release.notes.isEmpty {
+                        Text(L10n.t(.updateNoNotes, language))
+                            .font(.system(size: 11.5, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .accessibilityIdentifier("kaji.update.notes.empty")
+                    }
+                    ForEach(Self.sections, id: \.0) { category, title in
+                        let items = release.notes.items(category)
+                        if !items.isEmpty {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L10n.t(title, language))
+                                    .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                                    Text("• " + item)
+                                        .font(.system(size: 11.5, design: .rounded))
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                            .accessibilityIdentifier("kaji.update.notes.\(category.rawValue)")
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxHeight: 280)
+            Text(L10n.t(.updateInstallHint, language))
+                .font(.system(size: 10.5, design: .rounded))
+                .foregroundColor(.secondary)
+            HStack {
+                Button(L10n.t(.updateViewRelease, language), action: onViewRelease)
+                Spacer()
+                Button(L10n.t(.cancel, language), action: onCancel)
+                    .keyboardShortcut(.cancelAction)
+                Button(L10n.t(.updateInstall, language), action: onInstall)
+                    .keyboardShortcut(.defaultAction)
+                    .accessibilityIdentifier("kaji.update.install")
+            }
+        }
+        .padding(18)
+        .frame(width: 420)
     }
 }

@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 macOS 13+ (Apple Silicon), plus `git`, `swift` and `python3`. The installer builds from the latest release tag and installs to `/Applications`.
 
-There is no prebuilt download: Kaji has no Developer ID signature yet, and an unsigned `.app.zip` from a browser is blocked by Gatekeeper. Building locally is the honest path. From a clone: `./scripts/build-local.sh`.
+Existing users can choose **Update** in Kaji. Releases include a testing `.app.zip` and a **Fixed / Added / Removed** changelog. These builds are ad-hoc signed, not Apple-notarized; only update if you trust this repository. Browser downloads may be blocked by Gatekeeper. Building locally remains available: `./scripts/build-local.sh`.
 
 Trouble, or want it gone? [FAQ & troubleshooting](docs/faq.md).
 
@@ -72,7 +72,7 @@ Today / Week / Vision goals, with a `kaji` CLI so an agent can add and close the
 Kaji reads the files your AI tools already write, and for providers that only publish quota server-side, calls that provider's usage endpoint with the credentials already on your Mac.
 
 - **Read locally:** `~/.claude/projects/**/*.jsonl`, `~/.codex/sessions/**/rollout-*.jsonl`, and the local credential stores when a provider needs them.
-- **Leaves your Mac:** a usage request to `api.anthropic.com` or `api2.cursor.sh` with *your* token, and a version check against `api.github.com`. Only for providers you enable.
+- **Leaves your Mac:** provider usage requests with *your* token, Claude token renewal at `console.anthropic.com`, and update checks/downloads from GitHub. Only enabled providers are queried. Renewed Claude credentials are saved back to their original local store.
 - **No analytics, no account, no server of ours.** Prompts, usage and goals are never sent anywhere. The CLI talks to the app over `127.0.0.1` only.
 
 How each number is computed: [how quota works](docs/quota.md).

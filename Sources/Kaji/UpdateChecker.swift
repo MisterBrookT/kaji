@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import KajiCore
 
 // MARK: - UpdateChecker
 //
@@ -24,6 +25,7 @@ final class UpdateChecker: ObservableObject {
         let tag: String       // raw tag, e.g. "v0.4.6"
         let url: URL          // release html_url
         let assetURL: URL?    // Kaji.app.zip
+        var notes: ReleaseNotes = ReleaseNotes()  // parsed release body
     }
 
     /// nil = up to date / unknown; non-nil = a strictly newer release exists.
@@ -86,7 +88,8 @@ final class UpdateChecker: ObservableObject {
             let assetURL = Self.zipAssetURL(from: obj)
             let latest = Self.normalize(tag)
             if Self.isNewer(latest, than: Self.normalize(currentVersion)) {
-                available = Release(version: latest, tag: tag, url: htmlURL, assetURL: assetURL)
+                available = Release(version: latest, tag: tag, url: htmlURL, assetURL: assetURL,
+                                    notes: ReleaseNotes.parse(obj["body"] as? String))
             } else {
                 available = nil
             }
@@ -97,7 +100,12 @@ final class UpdateChecker: ObservableObject {
         }
     }
 
+    enum InstallError: Error { case missingAsset }
+
     func install(_ release: Release) throws {
+        // Never install a different "latest" release than the notes approved.
+        // Source-only releases fall back to their GitHub page in AppDelegate.
+        guard release.assetURL != nil else { throw InstallError.missingAsset }
         let script = try updateScript(for: release)
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")

@@ -1,8 +1,8 @@
 name: Release
 
-# Tag a version (e.g. `git tag vX.Y.Z && git push origin vX.Y.Z`) to publish
-# a source release with generated notes. No .app.zip — install builds from
-# source (see install.sh).
+# Tag a version (`git tag vX.Y.Z && git push origin vX.Y.Z`) to publish a
+# universal, ad-hoc signed (NOT notarized) Kaji.app.zip plus categorized notes.
+# The in-app updater installs the first .zip asset, so this is the only one.
 on:
   push:
     tags: ['v*']
@@ -12,8 +12,45 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # release notes need tag history
+
+      - name: Tag matches Info.plist version
+        run: |
+          plist="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Info.plist)"
+          test "v${plist}" = "${GITHUB_REF_NAME}" || { echo "Info.plist ${plist} != tag ${GITHUB_REF_NAME}"; exit 1; }
+
+      - name: Tests
+        run: |
+          python3 Tests/quota/test_quota.py
+          /bin/bash Tests/installer/test_install.sh
+          /bin/bash Tests/release/test_release_notes.sh
+          swift test
+
+      - name: Build universal app bundle (ad-hoc signed)
+        run: KAJI_UNIVERSAL=1 ./scripts/build-app.sh
+
+      - name: Verify bundle
+        run: |
+          for bin in dist/Kaji.app/Contents/MacOS/Kaji dist/Kaji.app/Contents/Library/HelperTools/KajiSleepHelper; do
+            lipo "$bin" -verify_arch arm64 x86_64
+          done
+          codesign --verify --deep --strict dist/Kaji.app
+          test "$(codesign -dv --verbose=4 dist/Kaji.app 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"
+
+      - name: Zip (Kaji.app at archive root)
+        run: |
+          ditto -c -k --keepParent dist/Kaji.app dist/Kaji.app.zip
+          test "$(unzip -Z1 dist/Kaji.app.zip | cut -d/ -f1 | sort -u)" = "Kaji.app"
+
+      - name: Release notes
+        run: ./scripts/release-notes.sh "${GITHUB_REF_NAME}" > dist/release-notes.md
+
       - uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          body_path: dist/release-notes.md
+          files: dist/Kaji.app.zip
+          fail_on_unmatched_files: true
