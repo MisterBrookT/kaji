@@ -138,19 +138,25 @@ struct SettingsView: View {
                 settingBlock(title: L10n.t(.appearance, prefs.language)) {
                 VStack(alignment: .leading, spacing: 10) {
                     settingRow(title: L10n.t(.language, prefs.language)) {
-                        ForEach(Lang.allCases, id: \.rawValue) { language in
-                            segment(language.label, on: prefs.language == language) {
-                                prefs.language = language
+                        Picker(L10n.t(.language, prefs.language), selection: $prefs.language) {
+                            ForEach(Lang.allCases, id: \.rawValue) { language in
+                                Text(language.label).tag(language)
                             }
                         }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .accessibilityIdentifier("kaji.settings.language")
                     }
                     settingRow(title: L10n.t(.usage, prefs.language)) {
-                        segment(L10n.t(.showUsed, prefs.language), on: !prefs.showRemaining) {
-                            prefs.showRemaining = false
+                        Picker(L10n.t(.usage, prefs.language), selection: $prefs.showRemaining) {
+                            Text(L10n.t(.showUsed, prefs.language)).tag(false)
+                            Text(L10n.t(.showRemaining, prefs.language)).tag(true)
                         }
-                        segment(L10n.t(.showRemaining, prefs.language), on: prefs.showRemaining) {
-                            prefs.showRemaining = true
-                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+                        .fixedSize()
+                        .accessibilityIdentifier("kaji.settings.usage")
                     }
                 }
             }
