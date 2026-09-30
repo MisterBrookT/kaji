@@ -4,7 +4,6 @@ import KajiCore
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
-    case modules = "Modules"
     case work = "Work"
     case quota = "Quota"
     case permissions = "Permissions"
@@ -13,7 +12,6 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: "gearshape"
-        case .modules: "square.grid.2x2"
         case .work: "timer"
         case .quota: "gauge.with.dots.needle.67percent"
         case .permissions: "lock.shield"
@@ -56,7 +54,7 @@ struct SettingsView: View {
     private var visibleSections: [SettingsSection] {
         SettingsSection.allCases.filter { section in
             switch section {
-            case .general, .modules, .quota, .permissions:
+            case .general, .quota, .permissions:
                 return true
             case .work:
                 return prefs.isModuleEnabled(.work)
@@ -106,7 +104,7 @@ struct SettingsView: View {
             Text(sleepGuidanceMessage)
         }
         .onChange(of: prefs.enabledModules) { _ in
-            if !visibleSections.contains(selection) { selection = .modules }
+            if !visibleSections.contains(selection) { selection = .general }
         }
     }
 
@@ -125,7 +123,7 @@ struct SettingsView: View {
     private var mainSettings: some View {
         VStack(alignment: .leading, spacing: 16) {
             header
-            if selection == .modules {
+            if selection == .general {
                 settingBlock(title: L10n.t(.modules, prefs.language)) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(L10n.t(.modulesHint, prefs.language))
@@ -137,8 +135,6 @@ struct SettingsView: View {
                     moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
                 }
             }
-            }
-            if selection == .general {
                 settingBlock(title: L10n.t(.appearance, prefs.language)) {
                 VStack(alignment: .leading, spacing: 10) {
                     settingRow(title: L10n.t(.language, prefs.language)) {
@@ -309,50 +305,7 @@ struct SettingsView: View {
                 .disabled(lockedOn)
                 .accessibilityLabel(L10n.t(on ? .on : .off, prefs.language))
                 .accessibilityIdentifier("kaji.module.\(id.rawValue).enabled")
-            if id != .quota, on {
-                segment(
-                    L10n.t(.showInBar, prefs.language),
-                    on: prefs.primaryFavorites.contains(id),
-                    accessibilityIdentifier: "kaji.module.\(id.rawValue).primary"
-                ) {
-                    togglePrimaryFavorite(id)
-                }
-            }
-            if id == .work, on {
-                segment(
-                    prefs.workTimeDisplayStyle == .minutesOnly ? "12m" : "MM:SS",
-                    on: prefs.workTimeDisplayStyle == .minutesOnly,
-                    accessibilityIdentifier: "kaji.module.work.time-display"
-                ) {
-                    prefs.workTimeDisplayStyle = prefs.workTimeDisplayStyle == .minutesOnly
-                        ? .exactSeconds : .minutesOnly
-                }
-            }
-            if id == .goals, on {
-                segment(
-                    prefs.goalMenuBarDisplayStyle == .incompleteCount ? "15" : "n/n",
-                    on: prefs.goalMenuBarDisplayStyle == .incompleteCount,
-                    accessibilityIdentifier: "kaji.module.goals.count-display"
-                ) {
-                    prefs.goalMenuBarDisplayStyle = prefs.goalMenuBarDisplayStyle == .incompleteCount
-                        ? .todayFraction : .incompleteCount
-                }
-            }
         }
-    }
-
-    private func togglePrimaryFavorite(_ id: KajiModuleID) {
-        if let index = prefs.primaryFavorites.firstIndex(of: id) {
-            prefs.primaryFavorites.remove(at: index)
-            return
-        }
-        var favorites = prefs.primaryFavorites
-        if favorites.count == 2 { favorites.removeFirst() }
-        favorites.append(id)
-        prefs.primaryFavorites = ModulePrefsLogic.normalizedFavorites(
-            favorites,
-            enabled: prefs.enabledModules
-        )
     }
 
     private var header: some View {

@@ -375,6 +375,179 @@ class TestClaudeCredentialUsability(unittest.TestCase):
         self.assertIsNone(quota._usable_claude_token({"claudeAiOauth": "nope"}))
 
 
+class FakeClaudeStore:
+    """In-memory credential store; never touches the real keychain/file."""
+    label = "fake"
+
+    def __init__(self, creds, fail_write=False):
+        self.text = json.dumps(creds) if creds is not None else None
+        self.fail_write = fail_write
+        self.writes = []
+        self.on_read = None
+
+    def read(self):
+        if self.on_read:
+            self.on_read(self)
+        return self.text
+
+    def write(self, text):
+        if self.fail_write:
+            raise OSError("denied")
+        self.writes.append(text)
+        self.text = text
+
+
+class TestClaudeTokenRefresh(unittest.TestCase):
+    """Regression: Claude quota died hours after the user last ran `claude`.
+
+    Kaji only read the ~8h access token; Claude Code refreshes it only when the
+    CLI runs. Kaji must refresh itself and write the rotated pair back to the
+    same store, preserving every other field.
+    """
+
+    def setUp(self):
+        self.calls = []
+        self._orig = (quota._claude_credential_stores,
+                      quota._post_claude_token_refresh, quota._warn, quota.CACHE_DIR)
+        quota.CACHE_DIR = Path(TMP) / "refresh-cache"
+        self.warnings = []
+        quota._warn = self.warnings.append
+        quota._post_claude_token_refresh = self.fake_post
+        self.response = {"access_token": "new-access", "refresh_token": "new-refresh",
+                         "expires_in": 28800}
+
+    def tearDown(self):
+        (quota._claude_credential_stores, quota._post_claude_token_refresh,
+         quota._warn, quota.CACHE_DIR) = self._orig
+
+    def fake_post(self, refresh_token):
+        self.calls.append(refresh_token)
+        if isinstance(self.response, Exception):
+            raise self.response
+        return self.response
+
+    @staticmethod
+    def creds(expires_at, access="old-access", refresh="old-refresh"):
+        return {"claudeAiOauth": {"accessToken": access, "refreshToken": refresh,
+                                  "expiresAt": expires_at, "subscriptionType": "max"},
+                "mcpOAuth": {"keep": True}}
+
+    def use(self, *stores):
+        quota._claude_credential_stores = lambda: list(stores)
+
+    def test_file_write_is_private_atomic_and_preserves_other_fields(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".credentials.json"
+            original = self.creds((time.time() - 10) * 1000)
+            path.write_text(json.dumps(original))
+            self.use(quota._ClaudeFileStore(path))
+            self.assertEqual(quota._claude_oauth_token(), "new-access")
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(json.loads(path.read_text())["mcpOAuth"], {"keep": True})
+            self.assertEqual(list(Path(directory).iterdir()), [path])
+
+    def test_valid_token_is_not_refreshed(self):
+        store = FakeClaudeStore(self.creds((time.time() + 7200) * 1000))
+        self.use(store)
+        self.assertEqual(quota._claude_oauth_token(), "old-access")
+        self.assertEqual(self.calls, [])
+
+    def test_expired_token_refreshes_and_writes_back_preserving_fields(self):
+        store = FakeClaudeStore(self.creds((time.time() - 10) * 1000))
+        self.use(store)
+        self.assertEqual(quota._claude_oauth_token(), "new-access")
+        self.assertEqual(self.calls, ["old-refresh"])
+        saved = json.loads(store.text)
+        oauth = saved["claudeAiOauth"]
+        self.assertEqual(oauth["accessToken"], "new-access")
+        self.assertEqual(oauth["refreshToken"], "new-refresh")
+        self.assertGreater(oauth["expiresAt"], (time.time() + 28000) * 1000)
+        self.assertEqual(oauth["subscriptionType"], "max")
+        self.assertEqual(saved["mcpOAuth"], {"keep": True})
+
+    def test_rejected_token_forces_refresh(self):
+        store = FakeClaudeStore(self.creds(0))
+        self.use(store)
+        self.assertEqual(quota._claude_oauth_token(rejected_token="old-access"), "new-access")
+        self.assertEqual(len(store.writes), 1)
+
+    def test_concurrent_rotation_before_refresh_uses_stored_token(self):
+        store = FakeClaudeStore(self.creds((time.time() - 10) * 1000))
+        fresh = self.creds((time.time() + 7200) * 1000, "their-access", "their-refresh")
+        reads = []
+
+        def rotate(s):
+            reads.append(1)
+            if len(reads) == 2:   # between our first read and refresh re-read
+                s.text = json.dumps(fresh)
+        store.on_read = rotate
+        self.use(store)
+        self.assertEqual(quota._claude_oauth_token(), "their-access")
+        self.assertEqual(self.calls, [])
+        self.assertEqual(store.writes, [])
+
+    def test_concurrent_rotation_during_refresh_is_not_overwritten(self):
+        store = FakeClaudeStore(self.creds((time.time() - 10) * 1000))
+        fresh = self.creds((time.time() + 7200) * 1000, "their-access", "their-refresh")
+
+        def post(refresh_token):
+            self.calls.append(refresh_token)
+            store.text = json.dumps(fresh)
+            return self.response
+        quota._post_claude_token_refresh = post
+        self.use(store)
+        self.assertEqual(quota._claude_oauth_token(), "their-access")
+        self.assertEqual(store.writes, [])
+        self.assertEqual(json.loads(store.text), fresh)
+
+    def test_refresh_failure_returns_none_and_keeps_store(self):
+        original = self.creds((time.time() - 10) * 1000)
+        store = FakeClaudeStore(original)
+        self.response = OSError("network down")
+        self.use(store)
+        self.assertIsNone(quota._claude_oauth_token())
+        self.assertEqual(store.writes, [])
+        self.assertEqual(json.loads(store.text), original)
+        self.assertTrue(self.warnings)
+
+    def test_persistence_failure_warns_without_leaking_secrets(self):
+        store = FakeClaudeStore(self.creds((time.time() - 10) * 1000), fail_write=True)
+        self.use(store)
+        self.assertEqual(quota._claude_oauth_token(), "new-access")
+        joined = " ".join(self.warnings)
+        self.assertIn("saving", joined)
+        for secret in ("old-refresh", "new-refresh", "new-access", "old-access"):
+            self.assertNotIn(secret, joined)
+
+    def test_unrefreshable_store_falls_through_to_next(self):
+        legacy = FakeClaudeStore({"claudeAiOauth": {"accessToken": "x", "expiresAt": 1000}})
+        keychain = FakeClaudeStore(self.creds((time.time() - 10) * 1000))
+        self.use(legacy, keychain)
+        self.assertEqual(quota._claude_oauth_token(), "new-access")
+        self.assertEqual(legacy.writes, [])
+        self.assertEqual(len(keychain.writes), 1)
+
+    def test_usage_401_refreshes_once_and_retries(self):
+        import urllib.error
+        store = FakeClaudeStore(self.creds(0))
+        self.use(store)
+        seen = []
+        orig = quota._get_claude_usage
+
+        def get(token):
+            seen.append(token)
+            if token == "old-access":
+                raise urllib.error.HTTPError("u", 401, "unauthorized", {}, None)
+            return {"five_hour_used_percent": 5}
+        quota._get_claude_usage = get
+        try:
+            self.assertEqual(quota._fetch_claude_limits(), {"five_hour_used_percent": 5})
+        finally:
+            quota._get_claude_usage = orig
+        self.assertEqual(seen, ["old-access", "new-access"])
+        self.assertEqual(self.calls, ["old-refresh"])
+
+
 class TestClaudeLimitsParsing(unittest.TestCase):
     """A window without `utilization` must be absent, never zero."""
 

@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'install.sh'
       - 'Package.swift'
       - 'Sources/**'
       - 'Tests/**'
@@ -13,6 +14,7 @@ on:
       - '.github/workflows/ci.yml'
   pull_request:
     paths:
+      - 'install.sh'
       - 'Package.swift'
       - 'Sources/**'
       - 'Tests/**'
@@ -40,6 +42,9 @@ jobs:
       # temp-dir fixtures, no network and no user data.
       - name: quota.py accuracy tests
         run: python3 Tests/quota/test_quota.py
+
+      - name: Installer regression tests
+        run: /bin/bash Tests/installer/test_install.sh
 
       # Unit + in-process UI tests (see Tests/KajiTests/UITestHarness.swift).
       # These boot the real AppDelegate/status-item/popover object graph

@@ -10,10 +10,10 @@ PREFS_DOMAIN="dev.kaji"
 NONCE="$(uuidgen)-$(uuidgen)"
 PORT="$(jot -r 1 40000 59999)"
 SMOKE_DOMAIN="dev.kaji.ui-smoke.$NONCE"
-SEED_MODULES=(quota work system goals)
+SEED_MODULES=(quota work goals)
 SEED_LANGUAGE=en
-PAGE_IDS="quota|work|system|goals"
-SETTINGS_SECTIONS="General|Modules|Work|Quota|Permissions"
+PAGE_IDS="quota|work|goals"
+SETTINGS_SECTIONS="General|Work|Quota|Permissions"
 
 seed_modules_plist_array() {
     local joined

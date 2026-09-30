@@ -258,23 +258,203 @@ def _usable_claude_token(credentials):
         return None
 
 
-def _claude_oauth_token():
-    """Prefer the first unexpired credential; legacy files can linger for months."""
-    try:
-        d = json.loads((HOME / ".claude" / ".credentials.json").read_text())
-        token = _usable_claude_token(d)
-        if token:
-            return token
-    except Exception:
-        pass
-    try:
+# Claude Code's access token lives ~8h and Claude Code only refreshes it when
+# the CLI runs. Kaji used to only READ it, so a few hours after the user last
+# ran `claude` the token expired, no request was made, and the ring went blank
+# until the next terminal session refreshed it. Kaji now refreshes the token
+# itself (near expiry or on 401) and writes the rotated pair back to the SAME
+# store it came from, so Claude Code stays signed in.
+CLAUDE_OAUTH_TOKEN_URL = "https://console.anthropic.com/v1/oauth/token"
+CLAUDE_OAUTH_CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
+CLAUDE_KEYCHAIN_SERVICE = "Claude Code-credentials"
+
+
+class _ClaudeFileStore:
+    """~/.claude/.credentials.json (Linux-style / legacy logins)."""
+    label = "credentials file"
+
+    def __init__(self, path):
+        self.path = path
+
+    def read(self):
+        try:
+            return self.path.read_text()
+        except Exception:
+            return None
+
+    def write(self, text):
+        import tempfile
+        fd, name = tempfile.mkstemp(prefix=".kaji-credentials-", dir=self.path.parent)
+        tmp = Path(name)
+        try:
+            with os.fdopen(fd, "w") as out:
+                out.write(text)
+            tmp.replace(self.path)
+        finally:
+            tmp.unlink(missing_ok=True)
+
+
+class _ClaudeKeychainStore:
+    """macOS login keychain item written by Claude Code."""
+    label = "keychain"
+
+    def read(self):
+        try:
+            pr = subprocess.run(
+                ["security", "find-generic-password", "-s", CLAUDE_KEYCHAIN_SERVICE, "-w"],
+                capture_output=True, text=True, timeout=5)
+            if pr.returncode == 0 and pr.stdout.strip():
+                return pr.stdout.strip()
+        except Exception:
+            pass
+        return None
+
+    def _account(self):
         pr = subprocess.run(
-            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
+            ["security", "find-generic-password", "-s", CLAUDE_KEYCHAIN_SERVICE],
             capture_output=True, text=True, timeout=5)
-        if pr.returncode == 0 and pr.stdout.strip():
-            return _usable_claude_token(json.loads(pr.stdout))
+        for line in pr.stdout.splitlines():
+            line = line.strip()
+            if line.startswith('"acct"<blob>="') and line.endswith('"'):
+                return line[len('"acct"<blob>="'):-1]
+        raise RuntimeError("keychain account not found")
+
+    def write(self, text):
+        account = self._account()
+        # Secret goes over stdin (`security -i`), never argv, so it cannot be
+        # read from the process list. Single-quoted: refuse anything that
+        # could break out of the quoting.
+        if "'" in text or "\n" in text or "'" in account or "\n" in account:
+            raise RuntimeError("credential not safely quotable")
+        cmd = "add-generic-password -U -a '%s' -s '%s' -w '%s'\n" % (
+            account, CLAUDE_KEYCHAIN_SERVICE, text)
+        pr = subprocess.run(["security", "-i"], input=cmd,
+                            capture_output=True, text=True, timeout=5)
+        if pr.returncode != 0 or pr.stderr.strip():
+            raise RuntimeError("security add-generic-password failed")
+
+
+def _claude_credential_stores():
+    return [_ClaudeFileStore(HOME / ".claude" / ".credentials.json"),
+            _ClaudeKeychainStore()]
+
+
+def _load_claude_credentials(store):
+    text = store.read()
+    if not text:
+        return None
+    try:
+        d = json.loads(text)
+        return d if isinstance(d.get("claudeAiOauth"), dict) else None
     except Exception:
-        pass
+        return None
+
+
+def _post_claude_token_refresh(refresh_token):
+    import urllib.request
+    body = json.dumps({
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "client_id": CLAUDE_OAUTH_CLIENT_ID,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        CLAUDE_OAUTH_TOKEN_URL, data=body, method="POST",
+        headers={"Content-Type": "application/json",
+                 "User-Agent": _claude_user_agent()})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read().decode("utf-8"))
+
+
+def _warn(msg):
+    # Never include token material in messages.
+    print("[quota] " + msg, file=sys.stderr)
+
+
+def _refresh_claude_token(store, stale_access_token):
+    """Refresh `store`'s credential and write it back. Returns an access token
+    or None. Re-reads the store before refreshing and before writing: if
+    another process (Claude Code, a second quota.py) already rotated the
+    token, use theirs instead of spending — and invalidating — our copy."""
+    creds = _load_claude_credentials(store)
+    if not creds:
+        return None
+    oauth = creds["claudeAiOauth"]
+    if oauth.get("accessToken") != stale_access_token:
+        return _usable_claude_token(creds)
+    refresh_token = oauth.get("refreshToken")
+    if not refresh_token:
+        return None
+    try:
+        resp = _post_claude_token_refresh(refresh_token)
+        new_access = resp.get("access_token")
+    except Exception as exc:
+        _warn("claude token refresh failed (%s); run `claude` to sign in again"
+              % type(exc).__name__)
+        return None
+    if not new_access:
+        _warn("claude token refresh returned no access token")
+        return None
+
+    latest = _load_claude_credentials(store)
+    if not latest or latest["claudeAiOauth"].get("refreshToken") != refresh_token:
+        # Rotated concurrently; our response may already be superseded. Their
+        # write wins; fall back to whatever is in the store now.
+        _warn("claude credential changed during refresh; keeping stored copy")
+        return _usable_claude_token(latest) if latest else new_access
+    merged = dict(latest)
+    merged_oauth = dict(latest["claudeAiOauth"])
+    merged_oauth["accessToken"] = new_access
+    if resp.get("refresh_token"):
+        merged_oauth["refreshToken"] = resp["refresh_token"]
+    try:
+        merged_oauth["expiresAt"] = int((time.time() + float(resp["expires_in"])) * 1000)
+    except Exception:
+        merged_oauth["expiresAt"] = 0   # unknown: let the server decide
+    if resp.get("scope"):
+        merged_oauth["scopes"] = resp["scope"].split()
+    merged["claudeAiOauth"] = merged_oauth
+    try:
+        store.write(json.dumps(merged))
+    except Exception as exc:
+        _warn("claude token refreshed but saving to %s failed (%s); "
+              "run `claude` to sign in again" % (store.label, type(exc).__name__))
+    return new_access
+
+
+def _claude_refresh_lock():
+    """Serialize refreshes across concurrent quota.py runs (app + CLI)."""
+    import fcntl
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    f = open(CACHE_DIR / "claude-token-refresh.lock", "w")
+    fcntl.flock(f, fcntl.LOCK_EX)
+    return f
+
+
+def _claude_oauth_token(rejected_token=None):
+    """First usable credential across stores; refresh near-expiry tokens (or
+    the server-`rejected_token`) in place. Legacy files can linger for
+    months, so an unrefreshable store just falls through to the next."""
+    for store in _claude_credential_stores():
+        creds = _load_claude_credentials(store)
+        if not creds:
+            continue
+        oauth = creds["claudeAiOauth"]
+        token = _usable_claude_token(creds)
+        if token and token != rejected_token:
+            return token
+        if not oauth.get("refreshToken"):
+            continue
+        try:
+            lock = _claude_refresh_lock()
+        except Exception:
+            lock = None
+        try:
+            refreshed = _refresh_claude_token(store, oauth.get("accessToken"))
+        finally:
+            if lock:
+                lock.close()
+        if refreshed:
+            return refreshed
     return None
 
 
@@ -305,6 +485,20 @@ def _fetch_claude_limits():
     token = _claude_oauth_token()
     if not token:
         return None
+    import urllib.error
+    try:
+        return _get_claude_usage(token)
+    except urllib.error.HTTPError as exc:
+        # Server-revoked or clock-skewed token: refresh once and retry.
+        if exc.code != 401:
+            raise
+    token = _claude_oauth_token(rejected_token=token)
+    if not token:
+        return None
+    return _get_claude_usage(token)
+
+
+def _get_claude_usage(token):
     import urllib.request
     req = urllib.request.Request(
         "https://api.anthropic.com/api/oauth/usage",
