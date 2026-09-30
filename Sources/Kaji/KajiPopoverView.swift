@@ -13,13 +13,17 @@ struct KajiPopoverControls {
     let onQuit: () -> Void
     let onShowDetail: (NSView, AnyView) -> Void
     let onDismissDetail: () -> Void
+    /// Opens the changelog confirmation for `release`; never installs directly.
+    let onReviewUpdate: (UpdateChecker.Release) -> Void
 
     init(
         onOpenSettings: @escaping () -> Void,
         onQuit: @escaping () -> Void,
         onShowDetail: @escaping (NSView, AnyView) -> Void = { _, _ in },
-        onDismissDetail: @escaping () -> Void = {}
+        onDismissDetail: @escaping () -> Void = {},
+        onReviewUpdate: @escaping (UpdateChecker.Release) -> Void = { _ in }
     ) {
+        self.onReviewUpdate = onReviewUpdate
         self.onOpenSettings = onOpenSettings
         self.onQuit = onQuit
         self.onShowDetail = onShowDetail
@@ -86,6 +90,8 @@ struct KajiPopoverView: View {
     /// Offscreen snapshots (ImageRenderer) often paint ScrollView as empty —
     /// pass `false` for screenshot harnesses.
     var scrollsContent: Bool = true
+    /// Footer shows an Update entry only while `available` is non-nil.
+    @ObservedObject var updateChecker: UpdateChecker = UpdateChecker()
 
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
     @State private var previousFocusedGoalID: UUID?
@@ -1157,6 +1163,9 @@ struct KajiPopoverView: View {
     private var controlsFooter: some View {
         HStack(spacing: 7) {
             Spacer()
+            if let release = updateChecker.available {
+                updateButton(release)
+            }
             iconButton(
                 "gearshape",
                 title: L10n.t(.settings, prefs.language),
@@ -1226,6 +1235,31 @@ struct KajiPopoverView: View {
         }
     }
 
+
+    private func updateButton(_ release: UpdateChecker.Release) -> some View {
+        let title = L10n.t(.updateTo, prefs.language) + " " + release.tag
+        return Button { controls.onReviewUpdate(release) } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "arrow.down.circle")
+                    .font(.system(size: 11, weight: .bold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+            }
+            .foregroundColor(t.cream)
+            .padding(.horizontal, 9)
+            .frame(height: 28)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(t.track, lineWidth: 1)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(Text(title))
+        .accessibilityIdentifier("kaji.popover.update")
+    }
 
     private func iconButton(_ systemName: String,
                             title: String,

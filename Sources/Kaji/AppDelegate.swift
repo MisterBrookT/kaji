@@ -472,7 +472,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onShowDetail: { [weak self] sourceView, content in
                 self?.showDetailPopover(content, relativeTo: sourceView)
             },
-            onDismissDetail: { [weak self] in self?.closeDetailPopover() }
+            onDismissDetail: { [weak self] in self?.closeDetailPopover() },
+            onReviewUpdate: { [weak self] release in self?.reviewUpdate(release) }
         )
         let content = KajiPopoverView(store: store,
                                       prefs: prefs,
@@ -484,7 +485,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       maxContentHeight: maxContentHeight ?? maxPopoverHeight(on: statusItem.button?.window?.screen),
                                       onContentSizeChange: { [weak self] size in
                                           self?.resizePopoverContent(to: size)
-                                      })
+                                      },
+                                      updateChecker: updateChecker)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         let controller = KajiHostingController(rootView: AnyView(content))
         controller.view.configureKajiHost(cornerRadius: 14)
@@ -727,6 +729,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return NSNull()
     }
 
+
+    /// Popover footer Update entry: close the popover and show the changelog
+    /// confirmation sheet in the Settings window. Installing stays behind the
+    /// sheet's explicit "Install and Relaunch".
+    func reviewUpdate(_ release: UpdateChecker.Release) {
+        popover.performClose(nil)
+        openSettings()
+        updateChecker.reviewingRelease = release
+    }
 
     private func openSettings() {
         if let settingsWindow {

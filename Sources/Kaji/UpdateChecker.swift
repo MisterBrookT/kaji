@@ -30,6 +30,8 @@ final class UpdateChecker: ObservableObject {
 
     /// nil = up to date / unknown; non-nil = a strictly newer release exists.
     @Published private(set) var available: Release?
+    /// Shared presentation state lets the footer reuse an existing Settings window.
+    @Published var reviewingRelease: Release?
     @Published private(set) var isChecking = false
     @Published private(set) var lastChecked: Date?
     @Published private(set) var lastError: String?
@@ -38,6 +40,11 @@ final class UpdateChecker: ObservableObject {
     private var lastCheck: Date?
     private var inFlight = false
     private let minInterval: TimeInterval = 6 * 3600
+
+    /// `available` seeds a deterministic fixture (tests, snapshots) with no network.
+    init(available: Release? = nil) {
+        self.available = available
+    }
 
     var currentVersion: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"

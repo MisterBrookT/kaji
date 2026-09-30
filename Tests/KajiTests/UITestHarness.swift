@@ -322,7 +322,9 @@ final class PopoverRenderFixture {
     func view(
         page: KajiModuleID,
         maxContentHeight: CGFloat = 640,
-        onShowDetail: @escaping (NSView, AnyView) -> Void = { _, _ in }
+        onShowDetail: @escaping (NSView, AnyView) -> Void = { _, _ in },
+        updateChecker: UpdateChecker = UpdateChecker(),
+        onReviewUpdate: @escaping (UpdateChecker.Release) -> Void = { _ in }
     ) -> KajiPopoverView {
         navigation.panel = page
         if page == .goals {
@@ -338,10 +340,12 @@ final class PopoverRenderFixture {
             controls: KajiPopoverControls(
                 onOpenSettings: {},
                 onQuit: {},
-                onShowDetail: onShowDetail
+                onShowDetail: onShowDetail,
+                onReviewUpdate: onReviewUpdate
             ),
             maxContentHeight: maxContentHeight,
-            onContentSizeChange: { _ in }
+            onContentSizeChange: { _ in },
+            updateChecker: updateChecker
         )
     }
 }
