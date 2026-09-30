@@ -38,7 +38,6 @@ struct SettingsView: View {
     @State private var selection: SettingsSection = .general
     @State private var loginPermission: PermissionState = .notAuthorized
     @State private var sleepPermission: PermissionState = .notAuthorized
-    @State private var pendingUpdate: UpdateChecker.Release?
 
 
     init(
@@ -113,17 +112,17 @@ struct SettingsView: View {
         } message: {
             Text(sleepGuidanceMessage)
         }
-        .sheet(item: $pendingUpdate) { release in
+        .sheet(item: $updateChecker.reviewingRelease) { release in
             UpdateNotesSheet(
                 release: release,
                 currentVersion: updateChecker.currentVersion,
                 language: prefs.language,
                 onInstall: {
-                    pendingUpdate = nil
+                    updateChecker.reviewingRelease = nil
                     onInstallUpdate(release)
                 },
                 onViewRelease: { onOpenReleasePage(release.url) },
-                onCancel: { pendingUpdate = nil }
+                onCancel: { updateChecker.reviewingRelease = nil }
             )
         }
         .onChange(of: prefs.enabledModules) { _ in
@@ -202,7 +201,7 @@ struct SettingsView: View {
                     segment(updateButtonTitle, on: updateChecker.available != nil,
                             accessibilityIdentifier: "kaji.settings.update.action") {
                         if let release = updateChecker.available {
-                            pendingUpdate = release
+                            updateChecker.reviewingRelease = release
                         } else {
                             updateChecker.checkIfDue(force: true)
                         }

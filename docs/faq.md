@@ -33,7 +33,9 @@ See [how quota works](quota.md) for the exact source of each number.
 
 ## How do updates work?
 
-Updates are user-initiated: choose **Update** in Kaji. Releases include a testing `.app.zip` and a **Fixed / Added / Removed** changelog. Starting with 0.9.7, Kaji shows release notes before asking you to install; older versions install directly when you click Update.
+Updates are user-initiated. When a newer release is detected, an **Update** button appears in the popover footer beside Settings; it is hidden when no update is available. You can also check manually in **Settings → General → Updates**. Releases include a testing `.app.zip` and a **Fixed / Added / Removed** changelog; the changelog is shown before you confirm installation.
+
+Version 0.9.6 accidentally omitted the update entry from its interface. If you are still on that version, install the latest release manually once; subsequent updates can use the in-app controls.
 
 Kaji is ad-hoc signed, not Apple Developer ID signed or notarized. Browser downloads may be blocked by Gatekeeper. The in-app updater clears quarantine, so only use it if you trust this repository. The source installer remains available if you prefer to build locally.
 

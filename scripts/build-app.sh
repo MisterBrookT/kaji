@@ -71,8 +71,8 @@ else
 	<key>CFBundleExecutable</key><string>Kaji</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>0.9.7</string>
-	<key>CFBundleVersion</key><string>37</string>
+	<key>CFBundleShortVersionString</key><string>0.9.8</string>
+	<key>CFBundleVersion</key><string>38</string>
 	<key>LSMinimumSystemVersion</key><string>13.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
