@@ -36,19 +36,30 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var lastChecked: Date?
     @Published private(set) var lastError: String?
 
-    private let session = URLSession(configuration: .ephemeral)
+    private let session: URLSession
+    private let currentVersionOverride: String?
     private var lastCheck: Date?
     private var inFlight = false
     private let minInterval: TimeInterval = 6 * 3600
 
     /// `available` seeds a deterministic fixture (tests, snapshots) with no network.
-    init(available: Release? = nil) {
+    /// `session` and `currentVersion` are injectable so network tests stay deterministic.
+    init(available: Release? = nil,
+         session: URLSession = URLSession(configuration: .ephemeral),
+         currentVersion: String? = nil) {
         self.available = available
+        self.session = session
+        self.currentVersionOverride = currentVersion
     }
 
     var currentVersion: String {
-        (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
+        currentVersionOverride
+            ?? (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
     }
+
+    static let apiURL = URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!
+    /// Public page; GitHub redirects it to `/releases/tag/<tag>` without API rate limits.
+    static let latestPageURL = URL(string: "https://github.com/\(repo)/releases/latest")!
 
     /// Start a check unless one ran within `minInterval` (use force from a
     /// manual "Check for updates" action).
@@ -69,42 +80,93 @@ final class UpdateChecker: ObservableObject {
             inFlight = false
             isChecking = false
         }
-        guard let url = URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest") else {
-            lastError = "bad_url"
+        let apiFailure: String
+        switch await fetchFromAPI() {
+        case .success(let release):
+            apply(release)
             return
+        case .failure(let detail):
+            apiFailure = detail
         }
-        var req = URLRequest(url: url)
+        // API rate-limited (403), unavailable, or unparsable: fall back to the
+        // public releases/latest redirect. Notes and assets are unknown there.
+        switch await fetchFromRedirect() {
+        case .success(let release):
+            apply(release)
+        case .failure(let detail):
+            lastError = "api: \(apiFailure); fallback: \(detail)"
+        }
+    }
+
+    private enum FetchResult {
+        case success(Release)
+        case failure(String)
+    }
+
+    private func apply(_ release: Release) {
+        available = Self.isNewer(release.version, than: Self.normalize(currentVersion)) ? release : nil
+        lastChecked = Date()
+    }
+
+    private func fetchFromAPI() async -> FetchResult {
+        var req = URLRequest(url: Self.apiURL)
         req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         req.setValue("Kaji", forHTTPHeaderField: "User-Agent")
         req.timeoutInterval = 12
         do {
             let (data, resp) = try await session.data(for: req)
-            guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
-                lastError = "http"
-                return
-            }
-            guard let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+            guard let http = resp as? HTTPURLResponse else { return .failure("no HTTP response") }
+            guard http.statusCode == 200 else { return .failure("HTTP \(http.statusCode)") }
+            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
                   (obj["draft"] as? Bool) != true,
                   (obj["prerelease"] as? Bool) != true,
                   let tag = obj["tag_name"] as? String,
                   let htmlURL = (obj["html_url"] as? String).flatMap(URL.init(string:))
-            else {
-                lastError = "parse"
-                return
-            }
-            let assetURL = Self.zipAssetURL(from: obj)
-            let latest = Self.normalize(tag)
-            if Self.isNewer(latest, than: Self.normalize(currentVersion)) {
-                available = Release(version: latest, tag: tag, url: htmlURL, assetURL: assetURL,
-                                    notes: ReleaseNotes.parse(obj["body"] as? String))
-            } else {
-                available = nil
-            }
-            lastChecked = Date()
+            else { return .failure("unparsable release JSON") }
+            return .success(Release(version: Self.normalize(tag), tag: tag, url: htmlURL,
+                                    assetURL: Self.zipAssetURL(from: obj),
+                                    notes: ReleaseNotes.parse(obj["body"] as? String)))
         } catch {
-            // Offline / rate-limited / transient.
-            lastError = "network"
+            return .failure("network: \(error.localizedDescription)")
         }
+    }
+
+    private func fetchFromRedirect() async -> FetchResult {
+        var req = URLRequest(url: Self.latestPageURL)
+        req.httpMethod = "HEAD"
+        req.setValue("Kaji", forHTTPHeaderField: "User-Agent")
+        req.timeoutInterval = 12
+        do {
+            let (_, resp) = try await session.data(for: req)
+            guard let http = resp as? HTTPURLResponse else { return .failure("no HTTP response") }
+            guard http.statusCode == 200 else { return .failure("HTTP \(http.statusCode)") }
+            guard let final = http.url, let tag = Self.releaseTag(fromFinalURL: final) else {
+                return .failure("unexpected redirect target \(http.url?.absoluteString ?? "nil")")
+            }
+            return .success(Release(version: Self.normalize(tag), tag: tag, url: final, assetURL: nil))
+        } catch {
+            return .failure("network: \(error.localizedDescription)")
+        }
+    }
+
+    /// Accepts only `https://github.com/<repo>/releases/tag/<tag>` with a version-like tag.
+    static func releaseTag(fromFinalURL url: URL) -> String? {
+        guard url.scheme == "https", url.host?.lowercased() == "github.com",
+              url.port == nil, url.query == nil, url.fragment == nil,
+              url.user == nil, url.password == nil else { return nil }
+        let parts = url.path.split(separator: "/").map(String.init)
+        let repoParts = repo.split(separator: "/").map(String.init)
+        guard parts.count == 5,
+              parts[0].lowercased() == repoParts[0].lowercased(),
+              parts[1].lowercased() == repoParts[1].lowercased(),
+              parts[2] == "releases", parts[3] == "tag" else { return nil }
+        let tag = parts[4].removingPercentEncoding ?? parts[4]
+        let version = (tag.first == "v" || tag.first == "V") ? String(tag.dropFirst()) : tag
+        let components = version.split(separator: ".", omittingEmptySubsequences: false)
+        guard components.count >= 2,
+              components.allSatisfy({ !$0.isEmpty && $0.allSatisfy({ $0 >= "0" && $0 <= "9" }) })
+        else { return nil }
+        return tag
     }
 
     enum InstallError: Error { case missingAsset }

@@ -207,23 +207,31 @@ struct SettingsView: View {
                         }
                     }
                     .disabled(updateChecker.isChecking)
+                    .help(updateChecker.lastError ?? updateButtonTitle)
+                }
+                if let error = updateChecker.lastError {
+                    Text(error)
+                        .font(.system(size: 10.5, design: .monospaced))
+                        .foregroundColor(t.mute)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("kaji.settings.update.error")
                 }
             }
             settingBlock(title: L10n.t(.system, prefs.language)) {
                 VStack(alignment: .leading, spacing: 10) {
                     settingRow(title: L10n.t(.launchAtLogin, prefs.language)) {
-                        segment(prefs.launchAtLogin ? "On" : "Off", on: prefs.launchAtLogin) {
-                            prefs.launchAtLogin.toggle()
-                        }
+                        settingsToggle(isOn: $prefs.launchAtLogin,
+                                       title: L10n.t(.launchAtLogin, prefs.language),
+                                       identifier: "kaji.settings.launch-at-login.toggle")
                     }
                     settingRow(title: L10n.t(.keepAwake, prefs.language)) {
-                        segment(
-                            preventSleepTitle,
-                            on: sleepController.isEnabled,
-                            accessibilityIdentifier: "kaji.prevent-sleep.toggle"
-                        ) {
-                            sleepController.toggle()
-                        }
+                        settingsToggle(
+                            isOn: Binding(get: { sleepController.isEnabled },
+                                          set: { _ in sleepController.toggle() }),
+                            title: L10n.t(.keepAwake, prefs.language),
+                            identifier: "kaji.prevent-sleep.toggle"
+                        )
                         .disabled(sleepController.isBusy)
                         .help(L10n.t(.sleepPermissionWhy, prefs.language))
                     }
@@ -344,7 +352,6 @@ struct SettingsView: View {
 
 
     private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {
-        let on = prefs.isModuleEnabled(id)
         let enabled = Binding(
             get: { prefs.isModuleEnabled(id) },
             set: { value in
@@ -352,15 +359,22 @@ struct SettingsView: View {
             }
         )
         return settingRow(title: title) {
-            Toggle("", isOn: enabled)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .tint(t.sun)
+            settingsToggle(isOn: enabled, title: title,
+                           identifier: "kaji.module.\(id.rawValue).enabled")
                 .disabled(lockedOn)
-                .accessibilityLabel(L10n.t(on ? .on : .off, prefs.language))
-                .accessibilityIdentifier("kaji.module.\(id.rawValue).enabled")
         }
+    }
+
+    // Use the same native switch for every Boolean setting. The system draws
+    // the thumb consistently instead of mixing white thumbs with accent pills.
+    private func settingsToggle(isOn: Binding<Bool>, title: String, identifier: String) -> some View {
+        Toggle(title, isOn: isOn)
+            .labelsHidden()
+            .toggleStyle(.switch)
+            .controlSize(.small)
+            .tint(t.sun)
+            .accessibilityLabel(title)
+            .accessibilityIdentifier(identifier)
     }
 
     private var header: some View {
@@ -399,14 +413,6 @@ struct SettingsView: View {
 
     private var providerSettingsKeys: [String] {
         Providers.sorted(Array(Providers.available))
-    }
-
-    private var preventSleepTitle: String {
-        if sleepController.isBusy {
-            let key: L10n.K = sleepController.targetEnabled == true ? .on : .off
-            return L10n.t(key, prefs.language) + "\u{2026}"
-        }
-        return L10n.t(sleepController.isEnabled ? .on : .off, prefs.language)
     }
 
     private func providerRow(_ key: String) -> some View {
