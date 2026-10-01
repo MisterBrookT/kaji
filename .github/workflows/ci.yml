@@ -12,6 +12,7 @@ on:
       - 'scripts/**'
       - 'Info.plist'
       - '.github/workflows/ci.yml'
+      - '.github/workflows/release.yml'
   pull_request:
     paths:
       - 'install.sh'
@@ -22,6 +23,7 @@ on:
       - 'scripts/**'
       - 'Info.plist'
       - '.github/workflows/ci.yml'
+      - '.github/workflows/release.yml'
 
 jobs:
   build:
@@ -47,6 +49,8 @@ jobs:
         run: |
           /bin/bash Tests/installer/test_install.sh
           /bin/bash Tests/release/test_release_notes.sh
+          python3 Tests/release/test_update_manifest.py
+          /bin/bash Tests/installer/test_source_update.sh
 
       # Unit + in-process UI tests (see Tests/KajiTests/UITestHarness.swift).
       # These boot the real AppDelegate/status-item/popover object graph

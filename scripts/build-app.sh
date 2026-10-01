@@ -72,7 +72,7 @@ else
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
 	<key>CFBundleShortVersionString</key><string>1.0.0</string>
-	<key>CFBundleVersion</key><string>40</string>
+	<key>CFBundleVersion</key><string>41</string>
 	<key>LSMinimumSystemVersion</key><string>13.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
@@ -81,6 +81,10 @@ else
 PLIST
 fi
 
+
+# Bundle the pinned source updater: no remotely supplied shell commands.
+test -f scripts/source-update.sh
+cp scripts/source-update.sh "${BUNDLE}/Contents/Resources/source-update.sh"
 
 # App icon (Finder / Applications / installer — the agent has no dock icon).
 if [[ -f "Resources/AppIcon.icns" ]]; then

@@ -48,14 +48,17 @@ final class UpdateReleaseNotesTests: XCTestCase {
     }
 
     @MainActor
-    func testSourceOnlyReleaseCannotInstallDifferentLatestVersion() {
+    func testSourceOnlyReleaseCannotInstallDifferentLatestVersion() async {
         let release = UpdateChecker.Release(
-            version: "1.0.0", tag: "v1.0.0",
+            version: "1.0.0", tag: "v2.0.0",
             url: URL(string: "https://github.com/MisterBrookT/kaji/releases/tag/v1.0.0")!,
             assetURL: nil
         )
-        XCTAssertThrowsError(try UpdateChecker().install(release)) { error in
-            XCTAssertTrue(error is UpdateChecker.InstallError)
+        do {
+            try await UpdateChecker().install(release)
+            XCTFail("must reject mismatched approved version/tag before building")
+        } catch {
+            XCTAssertEqual(error as? UpdateChecker.InstallError, .invalidRelease)
         }
     }
 

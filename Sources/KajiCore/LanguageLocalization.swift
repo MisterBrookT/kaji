@@ -55,6 +55,7 @@ public enum L10n {
         case updateTo, checkUpdates, updateChecking, updateCurrent, updateFailed
         case updates, currentVersion, updateChangesTitle, updateFixed, updateAdded, updateRemoved, updateOther
         case updateNoNotes, updateInstall, updateViewRelease, updateInstallHint
+        case updateInstalling, updateInstallFailed, updateViewLog
         case system, keepAwake, keepAwakeOn, keepAwakeOff, keepAwakeTurningOn, keepAwakeTurningOff, keepAwakeFailed
         case work, focusLength, breakLength, skipBreak, breakOverlay
         case fixedPlan
@@ -127,7 +128,10 @@ public enum L10n {
         .updateNoNotes: .init(en: "No release notes were published for this version.", zh: "此版本没有发布说明。", ptBR: "Nenhuma nota foi publicada para esta versão.", es: "No se publicaron notas para esta versión."),
         .updateInstall: .init(en: "Install and Relaunch", zh: "安装并重启", ptBR: "Instalar e reabrir", es: "Instalar y reabrir"),
         .updateViewRelease: .init(en: "View on GitHub", zh: "在 GitHub 查看", ptBR: "Ver no GitHub", es: "Ver en GitHub"),
-        .updateInstallHint: .init(en: "This testing build is not Apple-notarized. Only install if you trust this repository. Kaji will quit, replace /Applications/Kaji.app, clear quarantine, and reopen.", zh: "此测试构建未经 Apple 公证。仅在信任本仓库时安装。Kaji 将退出、替换 /Applications/Kaji.app、移除隔离标记并重新打开。", ptBR: "Esta versão de teste não é notarizada pela Apple. Instale apenas se confiar neste repositório. O Kaji vai fechar, substituir /Applications/Kaji.app, remover a quarentena e reabrir.", es: "Esta versión de prueba no está notarizada por Apple. Instálala solo si confías en este repositorio. Kaji se cerrará, reemplazará /Applications/Kaji.app, quitará la cuarentena y se volverá a abrir."),
+        .updateInstallHint: .init(en: "Builds this exact version locally using Git, Swift and Python 3. The current app stays open until the build is verified. Then Kaji replaces the app and relaunches. Not Apple-notarized; only install if you trust this repository.", zh: "使用 Git、Swift 和 Python 3 在本机编译此版本。构建校验通过前保留当前应用，之后替换并重启。未经 Apple 公证，仅在信任本仓库时安装。", ptBR: "Compila esta versão exata localmente com Git, Swift e Python 3. O app atual fica aberto até a verificação; depois é substituído e reaberto. Não notarizado pela Apple; instale apenas se confiar neste repositório.", es: "Compila esta versión exacta localmente con Git, Swift y Python 3. La app actual sigue abierta hasta la verificación; después se reemplaza y se reabre. Sin notarización de Apple; instala solo si confías en este repositorio."),
+        .updateInstalling: .init(en: "Building update…", zh: "正在构建更新…", ptBR: "Compilando atualização…", es: "Compilando actualización…"),
+        .updateInstallFailed: .init(en: "Update installation failed", zh: "更新安装失败", ptBR: "Falha ao instalar atualização", es: "Error al instalar actualización"),
+        .updateViewLog: .init(en: "View log", zh: "查看日志", ptBR: "Ver registro", es: "Ver registro"),
         .system: .init(en: "System", zh: "系统", ptBR: "Sistema", es: "Sistema"),
         .keepAwake: .init(en: "Prevent Sleep", zh: "禁止休眠", ptBR: "Impedir repouso", es: "Impedir reposo"),
         .keepAwakeOn: .init(en: "Awake On", zh: "不休眠已开", ptBR: "Repouso bloqueado", es: "Reposo bloqueado"),

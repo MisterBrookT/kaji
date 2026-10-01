@@ -6,8 +6,8 @@ import KajiCore
 //
 // Lightweight, privacy-respecting update check for an UNSIGNED menubar app.
 //
-// On launch (and at most once per `minInterval`) it asks the GitHub Releases
-// API for the latest published tag and compares it to this bundle's version.
+// On launch (and at most once per `minInterval`) it downloads the static
+// `update.json` manifest attached to the latest GitHub release and compares it to this bundle's version.
 // If a newer one exists it publishes `available`, which drives a passive cue:
 // a dot on the menubar glyph + an "Update to vX" item in the popover.
 //
@@ -15,7 +15,7 @@ import KajiCore
 // as the README one-liner, clears quarantine, and relaunches Kaji. Fully silent
 // background updates should wait until the app is signed + notarized, at which
 // point this can graduate to Sparkle with a real appcast. The check hits only
-// the public GitHub API — no telemetry, no account, no payload sent.
+// public github.com release URLs (never api.github.com) — no telemetry, no account, no payload sent.
 @MainActor
 final class UpdateChecker: ObservableObject {
     static let repo = "MisterBrookT/kaji"
@@ -26,6 +26,8 @@ final class UpdateChecker: ObservableObject {
         let url: URL          // release html_url
         let assetURL: URL?    // Kaji.app.zip
         var notes: ReleaseNotes = ReleaseNotes()  // parsed release body
+        /// Full 40-hex commit the release was built from; nil when only the redirect is known.
+        var sourceRevision: String? = nil
     }
 
     /// nil = up to date / unknown; non-nil = a strictly newer release exists.
@@ -35,7 +37,13 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var isChecking = false
     @Published private(set) var lastChecked: Date?
     @Published private(set) var lastError: String?
+    @Published private(set) var isInstalling = false
+    @Published private(set) var installError: String?
+    @Published private(set) var installLogURL: URL?
 
+    private let installer: SourceUpdateInstaller
+    private let installationDefaults: UserDefaults
+    private static let pendingLogKey = "pendingSourceUpdateLog"
     private let session: URLSession
     private let currentVersionOverride: String?
     private var lastCheck: Date?
@@ -46,10 +54,15 @@ final class UpdateChecker: ObservableObject {
     /// `session` and `currentVersion` are injectable so network tests stay deterministic.
     init(available: Release? = nil,
          session: URLSession = URLSession(configuration: .ephemeral),
-         currentVersion: String? = nil) {
+         currentVersion: String? = nil,
+         installer: SourceUpdateInstaller = SourceUpdateInstaller(),
+         installationDefaults: UserDefaults = .standard) {
         self.available = available
         self.session = session
         self.currentVersionOverride = currentVersion
+        self.installer = installer
+        self.installationDefaults = installationDefaults
+        restoreInstallationResult()
     }
 
     var currentVersion: String {
@@ -57,7 +70,8 @@ final class UpdateChecker: ObservableObject {
             ?? (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0"
     }
 
-    static let apiURL = URL(string: "https://api.github.com/repos/\(repo)/releases/latest")!
+    /// Static manifest asset uploaded with each release; served without API rate limits.
+    static let manifestURL = URL(string: "https://github.com/\(repo)/releases/latest/download/update.json")!
     /// Public page; GitHub redirects it to `/releases/tag/<tag>` without API rate limits.
     static let latestPageURL = URL(string: "https://github.com/\(repo)/releases/latest")!
 
@@ -80,27 +94,35 @@ final class UpdateChecker: ObservableObject {
             inFlight = false
             isChecking = false
         }
-        let apiFailure: String
-        switch await fetchFromAPI() {
+        let manifestFailure: String
+        switch await fetchManifest() {
         case .success(let release):
             apply(release)
             return
+        case .invalid(let detail):
+            // A manifest was served but fails validation: fail closed rather than
+            // letting the redirect fallback paper over a tampered or broken feed.
+            lastError = "invalid update manifest: \(detail)"
+            return
         case .failure(let detail):
-            apiFailure = detail
+            manifestFailure = detail
         }
-        // API rate-limited (403), unavailable, or unparsable: fall back to the
-        // public releases/latest redirect. Notes and assets are unknown there.
+        // Manifest missing (e.g. older release without update.json) or unreachable:
+        // fall back to the public releases/latest redirect. Notes are unknown there.
         switch await fetchFromRedirect() {
         case .success(let release):
             apply(release)
-        case .failure(let detail):
-            lastError = "api: \(apiFailure); fallback: \(detail)"
+        case .failure(let detail), .invalid(let detail):
+            lastError = "manifest: \(manifestFailure); fallback: \(detail)"
         }
     }
 
     private enum FetchResult {
         case success(Release)
+        /// Transport or HTTP unavailability; eligible for the redirect fallback.
         case failure(String)
+        /// Served content failed validation; never falls back.
+        case invalid(String)
     }
 
     private func apply(_ release: Release) {
@@ -108,26 +130,64 @@ final class UpdateChecker: ObservableObject {
         lastChecked = Date()
     }
 
-    private func fetchFromAPI() async -> FetchResult {
-        var req = URLRequest(url: Self.apiURL)
-        req.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+    private func fetchManifest() async -> FetchResult {
+        var req = URLRequest(url: Self.manifestURL)
+        req.setValue("application/json", forHTTPHeaderField: "Accept")
         req.setValue("Kaji", forHTTPHeaderField: "User-Agent")
+        req.cachePolicy = .reloadIgnoringLocalCacheData
         req.timeoutInterval = 12
         do {
             let (data, resp) = try await session.data(for: req)
             guard let http = resp as? HTTPURLResponse else { return .failure("no HTTP response") }
             guard http.statusCode == 200 else { return .failure("HTTP \(http.statusCode)") }
-            guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  (obj["draft"] as? Bool) != true,
-                  (obj["prerelease"] as? Bool) != true,
-                  let tag = obj["tag_name"] as? String,
-                  let htmlURL = (obj["html_url"] as? String).flatMap(URL.init(string:))
-            else { return .failure("unparsable release JSON") }
-            return .success(Release(version: Self.normalize(tag), tag: tag, url: htmlURL,
-                                    assetURL: Self.zipAssetURL(from: obj),
-                                    notes: ReleaseNotes.parse(obj["body"] as? String)))
+            switch Self.parseManifest(data) {
+            case .success(let release): return .success(release)
+            case .failure(let error): return .invalid(error.detail)
+            }
         } catch {
             return .failure("network: \(error.localizedDescription)")
+        }
+    }
+
+    struct ManifestError: Error, Equatable { let detail: String }
+
+    /// Validates schema v1: `{schemaVersion, version, tag, releaseURL, sourceRevision, notes}`.
+    /// The tag must be exactly `v<version>` (stable x.y.z), the URL the canonical
+    /// release page for that tag in this repo, and the revision a full lowercase SHA-1.
+    static func parseManifest(_ data: Data) -> Result<Release, ManifestError> {
+        func fail(_ s: String) -> Result<Release, ManifestError> { .failure(ManifestError(detail: s)) }
+        guard data.count <= 1_048_576 else { return fail("manifest exceeds 1 MB") }
+        guard let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else {
+            return fail("JSON is not an object")
+        }
+        guard let schema = obj["schemaVersion"] as? NSNumber,
+              CFGetTypeID(schema) == CFNumberGetTypeID(), schema == 1 else {
+            return fail("schemaVersion must be the number 1")
+        }
+        guard let version = obj["version"] as? String, isStableSemver(version) else {
+            return fail("tag/version must be a stable x.y.z version")
+        }
+        guard let tag = obj["tag"] as? String, tag == "v\(version)" else {
+            return fail("tag must equal v\(version)")
+        }
+        let canonical = "https://github.com/\(repo)/releases/tag/\(tag)"
+        guard let rawURL = obj["releaseURL"] as? String, rawURL == canonical,
+              let url = URL(string: rawURL), releaseTag(fromFinalURL: url) == tag else {
+            return fail("releaseURL must be \(canonical)")
+        }
+        guard let revision = obj["sourceRevision"] as? String, revision.count == 40,
+              revision.allSatisfy({ ("0"..."9").contains($0) || ("a"..."f").contains($0) }) else {
+            return fail("sourceRevision must be a 40-character lowercase hex commit")
+        }
+        guard let notes = obj["notes"] as? String else { return fail("notes must be a string") }
+        return .success(Release(version: version, tag: tag, url: url, assetURL: nil,
+                                notes: ReleaseNotes.parse(notes), sourceRevision: revision))
+    }
+
+    private static func isStableSemver(_ v: String) -> Bool {
+        let parts = v.split(separator: ".", omittingEmptySubsequences: false)
+        return parts.count == 3 && parts.allSatisfy { p in
+            !p.isEmpty && Int(p) != nil && p.allSatisfy({ $0 >= "0" && $0 <= "9" }) && (p == "0" || p.first != "0")
         }
     }
 
@@ -169,21 +229,61 @@ final class UpdateChecker: ObservableObject {
         return tag
     }
 
-    enum InstallError: Error { case missingAsset }
+    enum InstallError: Error, Equatable, LocalizedError {
+        case alreadyInstalling, invalidRelease
+        var errorDescription: String? {
+            switch self {
+            case .alreadyInstalling: "An update is already being built."
+            case .invalidRelease: "The approved release version, tag and repository URL do not match."
+            }
+        }
+    }
 
-    func install(_ release: Release) throws {
-        // Never install a different "latest" release than the notes approved.
-        // Source-only releases fall back to their GitHub page in AppDelegate.
-        guard release.assetURL != nil else { throw InstallError.missingAsset }
-        let script = try updateScript(for: release)
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/bin/bash")
-        process.arguments = [script.path]
-        try process.run()
+    /// Build and verify before handing off. The caller quits only on success.
+    func install(_ release: Release) async throws {
+        guard !isInstalling else { throw InstallError.alreadyInstalling }
+        isInstalling = true
+        installError = nil
+        installLogURL = installer.logURL
+        defer { isInstalling = false }
+        do {
+            guard Self.isStableSemver(release.version), release.tag == "v\(release.version)",
+                  release.url.absoluteString == "https://github.com/\(Self.repo)/releases/tag/\(release.tag)"
+            else { throw InstallError.invalidRelease }
+            let prepared = try await installer.prepare(tag: release.tag, version: release.version,
+                                                       revision: release.sourceRevision)
+            installationDefaults.set(installer.logURL.path, forKey: Self.pendingLogKey)
+            try installer.launchReplacement(prepared)
+        } catch {
+            installationDefaults.removeObject(forKey: Self.pendingLogKey)
+            let tail = (try? String(contentsOf: installer.logURL, encoding: .utf8))?
+                .split(separator: "\n").suffix(8).joined(separator: "\n")
+            installError = [error.localizedDescription, tail].compactMap { $0 }.joined(separator: "\n")
+            throw error
+        }
+    }
+
+    private func restoreInstallationResult(retriesRemaining: Int = 3) {
+        guard let path = installationDefaults.string(forKey: Self.pendingLogKey) else { return }
+        let log = URL(fileURLWithPath: path)
+        installLogURL = log
+        let result = try? String(contentsOf: log.appendingPathExtension("result"), encoding: .utf8)
+        let status = result?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if status == "launching", retriesRemaining > 0 {
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(5))
+                self?.restoreInstallationResult(retriesRemaining: retriesRemaining - 1)
+            }
+            return
+        }
+        if status != "success" {
+            installError = "The previous update did not complete. See the installation log."
+        }
+        installationDefaults.removeObject(forKey: Self.pendingLogKey)
     }
 
     // "v0.4.6" -> "0.4.6", "v0.4.6-beta.1" -> "0.4.6". (Pre-releases are already
-    // filtered out by the API query, so this only hardens the comparison.)
+    // rejected by manifest/redirect validation, so this only hardens the comparison.)
     static func normalize(_ s: String) -> String {
         var t = s.trimmingCharacters(in: .whitespaces)
         if t.first == "v" || t.first == "V" { t.removeFirst() }
@@ -203,67 +303,4 @@ final class UpdateChecker: ObservableObject {
         return false
     }
 
-    private static func zipAssetURL(from obj: [String: Any]) -> URL? {
-        guard let assets = obj["assets"] as? [[String: Any]] else { return nil }
-        return assets
-            .compactMap { asset -> URL? in
-                guard let name = asset["name"] as? String,
-                      name.hasSuffix(".zip"),
-                      let raw = asset["browser_download_url"] as? String else { return nil }
-                return URL(string: raw)
-            }
-            .first
-    }
-
-    private func updateScript(for release: Release) throws -> URL {
-        let dir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("kaji-update-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let scriptURL = dir.appendingPathComponent("install-kaji-update.sh")
-        let asset = release.assetURL?.absoluteString ?? ""
-        let script = """
-        #!/usr/bin/env bash
-        set -euo pipefail
-
-        LOG="${TMPDIR:-/tmp}/kaji-update.log"
-        exec >"$LOG" 2>&1
-
-        REPO="\(Self.repo)"
-        DEST="/Applications"
-        URL="\(asset)"
-
-        TMP="$(mktemp -d)"
-        trap 'rm -rf "$TMP"' EXIT
-
-        if [ -z "$URL" ]; then
-          URL="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \\
-            | grep -o '"browser_download_url": *"[^"]*\\.zip"' \\
-            | head -1 | cut -d'"' -f4)"
-        fi
-        [ -n "$URL" ] || exit 2
-
-        curl -fsSL "$URL" -o "$TMP/kaji.zip"
-        unzip -q "$TMP/kaji.zip" -d "$TMP"
-        APP_PATH="$(find "$TMP" -maxdepth 2 -name 'Kaji.app' -print -quit)"
-        if [ -z "$APP_PATH" ]; then
-          APP_PATH="$(find "$TMP" -maxdepth 2 -name '*.app' -print -quit)"
-        fi
-        [ -n "$APP_PATH" ] || exit 3
-
-        sleep 1
-        pkill -f "/Applications/Kaji.app/Contents/MacOS/Kaji" 2>/dev/null || true
-        pkill -f "/Applications/KajiGauge.app/Contents/MacOS/KajiGauge" 2>/dev/null || true
-        sleep 1
-
-        rm -rf "$DEST/Kaji.app"
-        rm -rf "$DEST/KajiGauge.app"
-        cp -R "$APP_PATH" "$DEST/"
-        xattr -dr com.apple.quarantine "$DEST/Kaji.app" 2>/dev/null || true
-        open "$DEST/Kaji.app"
-        """
-        try script.write(to: scriptURL, atomically: true, encoding: .utf8)
-        try FileManager.default.setAttributes([.posixPermissions: 0o700],
-                                              ofItemAtPath: scriptURL.path)
-        return scriptURL
-    }
 }

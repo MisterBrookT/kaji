@@ -560,11 +560,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Only reached from the explicit "Install and Relaunch" confirmation.
     private func installUpdate(_ release: UpdateChecker.Release) {
-        do {
-            try updateChecker.install(release)
-            NSApp.terminate(nil)
-        } catch {
-            NSWorkspace.shared.open(release.url)
+        guard !updateChecker.isInstalling else { return }
+        Task { @MainActor in
+            do {
+                try await updateChecker.install(release)
+                NSApp.terminate(nil)
+            } catch {
+                // Keep the current app/window alive; Settings shows the error
+                // and log instead of silently redirecting to a browser.
+                openSettings()
+            }
         }
     }
 
