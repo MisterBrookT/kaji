@@ -106,6 +106,7 @@ struct SettingsView: View {
             }
         }
         .background(t.bg)
+        .safeAreaInset(edge: .bottom, spacing: 0) { installationStatusBar }
         .frame(minWidth: 640, minHeight: 460)
         .alert(
             sleepGuidanceTitle,
@@ -151,7 +152,30 @@ struct SettingsView: View {
         }
     }
 
+    // Updating may start from any Settings page. Keep progress and failures
+    // visible even when the General page is not selected.
+    @ViewBuilder
+    private var installationStatusBar: some View {
+        if updateChecker.isInstalling || updateChecker.installError != nil {
+            HStack(spacing: 8) {
+                if updateChecker.isInstalling { ProgressView().controlSize(.small) }
+                Text(L10n.t(updateChecker.isInstalling ? .updateInstalling : .updateInstallFailed, prefs.language))
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                Spacer()
+                if let log = updateChecker.installLogURL, FileManager.default.fileExists(atPath: log.path) {
+                    Button(L10n.t(.updateViewLog, prefs.language)) { NSWorkspace.shared.open(log) }
+                }
+            }
+            .foregroundColor(t.cream)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(t.panel)
+            .accessibilityIdentifier("kaji.settings.update.status")
+        }
+    }
+
     private var updateButtonTitle: String {
+        if updateChecker.isInstalling { return L10n.t(.updateInstalling, prefs.language) }
         if let release = updateChecker.available {
             return L10n.t(.updateTo, prefs.language) + " " + release.tag
         }
@@ -353,7 +377,7 @@ struct SettingsView: View {
                     controlLabel(updateButtonTitle, chevron: false, emphasized: updateChecker.available != nil)
                 }
                 .buttonStyle(.plain)
-                .disabled(updateChecker.isChecking)
+                .disabled(updateChecker.isChecking || updateChecker.isInstalling)
                 .help(updateChecker.lastError ?? updateButtonTitle)
                 .accessibilityIdentifier("kaji.settings.update.action")
             }
@@ -365,6 +389,26 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .trailing)
                     .accessibilityIdentifier("kaji.settings.update.error")
+            }
+            if let error = updateChecker.installError {
+                VStack(alignment: .trailing, spacing: 4) {
+                    Text(L10n.t(.updateInstallFailed, prefs.language))
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    Text(error)
+                        .font(.system(size: 10, design: .monospaced))
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundColor(t.mute)
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .accessibilityIdentifier("kaji.settings.update.install-error")
+            }
+            if let log = updateChecker.installLogURL {
+                Button(L10n.t(.updateViewLog, prefs.language)) { NSWorkspace.shared.open(log) }
+                    .buttonStyle(.plain)
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityIdentifier("kaji.settings.update.log")
             }
             Divider().overlay(t.track)
             settingRow(title: L10n.t(.launchAtLogin, prefs.language)) {

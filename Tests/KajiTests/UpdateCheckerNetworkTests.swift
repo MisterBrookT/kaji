@@ -1,7 +1,7 @@
 import XCTest
 @testable import Kaji
 
-/// Deterministic stub: routes requests by host, never touches the network.
+/// Deterministic stub: routes requests by URL path, never touches the network.
 final class UpdateCheckerStubProtocol: URLProtocol {
     enum Stub {
         case response(status: Int, finalURL: URL? = nil, body: Data = Data())
@@ -15,7 +15,7 @@ final class UpdateCheckerStubProtocol: URLProtocol {
 
     override func startLoading() {
         Self.requested.append(request)
-        guard let url = request.url, let stub = Self.stubs[url.host ?? ""] else {
+        guard let url = request.url, let stub = Self.stubs[url.path] else {
             client?.urlProtocol(self, didFailWithError: URLError(.unsupportedURL))
             return
         }
@@ -47,69 +47,144 @@ final class UpdateCheckerNetworkTests: XCTestCase {
         UpdateCheckerStubProtocol.requested = []
     }
 
-    private let apiBody = """
-    {"tag_name":"v9.1.0","html_url":"https://github.com/MisterBrookT/kaji/releases/tag/v9.1.0",
-     "draft":false,"prerelease":false,"body":"### Fixed\\n- Thing works",
-     "assets":[{"name":"Kaji.app.zip","browser_download_url":"https://example.com/Kaji.app.zip"}]}
-    """.data(using: .utf8)!
+    private static let manifestPath = "/MisterBrookT/kaji/releases/latest/download/update.json"
+    private static let latestPath = "/MisterBrookT/kaji/releases/latest"
+    private static let revision = "0123456789abcdef0123456789abcdef01234567"
 
-    func testAPISuccessKeepsNotesAndAssetWithoutFallback() async {
-        UpdateCheckerStubProtocol.stubs["api.github.com"] = .response(status: 200, body: apiBody)
+    private func manifest(schemaVersion: Any = 1, version: String = "9.1.0", tag: String = "v9.1.0",
+                          releaseURL: String? = nil, sourceRevision: String = revision,
+                          notes: String = "### Fixed\\n- Thing works") -> Data {
+        let url = releaseURL ?? "https://github.com/MisterBrookT/kaji/releases/tag/\(tag)"
+        let schema = schemaVersion is String ? "\"\(schemaVersion)\"" : "\(schemaVersion)"
+        return """
+        {"schemaVersion":\(schema),"version":"\(version)","tag":"\(tag)",
+         "releaseURL":"\(url)","sourceRevision":"\(sourceRevision)","notes":"\(notes)"}
+        """.data(using: .utf8)!
+    }
+
+    private func assertNoAPIRequests(file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertFalse(UpdateCheckerStubProtocol.requested.contains { $0.url?.host == "api.github.com" },
+                       file: file, line: line)
+    }
+
+    func testManifestURLIsStaticReleaseAsset() {
+        XCTAssertEqual(UpdateChecker.manifestURL.absoluteString,
+                       "https://github.com/MisterBrookT/kaji/releases/latest/download/update.json")
+    }
+
+    func testManifestSuccessKeepsMetadataWithoutFallback() async {
+        UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .response(status: 200, body: manifest())
         let checker = makeChecker()
         await checker.check()
         XCTAssertNil(checker.lastError)
         XCTAssertEqual(checker.available?.tag, "v9.1.0")
-        XCTAssertEqual(checker.available?.assetURL?.absoluteString, "https://example.com/Kaji.app.zip")
+        XCTAssertEqual(checker.available?.version, "9.1.0")
+        XCTAssertEqual(checker.available?.url.absoluteString,
+                       "https://github.com/MisterBrookT/kaji/releases/tag/v9.1.0")
+        XCTAssertEqual(checker.available?.sourceRevision, Self.revision)
+        XCTAssertNil(checker.available?.assetURL)
         XCTAssertFalse(checker.available?.notes.isEmpty ?? true)
-        XCTAssertFalse(UpdateCheckerStubProtocol.requested.contains { $0.url?.host == "github.com" })
+        XCTAssertEqual(UpdateCheckerStubProtocol.requested.map { $0.url?.path }, [Self.manifestPath])
+        assertNoAPIRequests()
     }
 
-    func testAPI403FallsBackToRedirect() async {
+    func testManifestUpToDate() async {
+        UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .response(status: 200,
+            body: manifest(version: "0.1.0", tag: "v0.1.0"))
+        let checker = makeChecker()
+        await checker.check()
+        XCTAssertNil(checker.lastError)
+        XCTAssertNil(checker.available)
+        XCTAssertNotNil(checker.lastChecked)
+        assertNoAPIRequests()
+    }
+
+    func testInvalidManifestFailsClosedWithoutFallback() async {
+        let cases: [(String, Data)] = [
+            ("schemaVersion", manifest(schemaVersion: 2)),
+            ("schemaVersion", manifest(schemaVersion: "1")),
+            ("schemaVersion", manifest(schemaVersion: true)),
+            ("1 MB", Data(count: 1_048_577)),
+            ("tag", manifest(version: String(repeating: "9", count: 100) + ".1.0", tag: "v9.1.0")),
+            ("tag", manifest(version: "9.1.0", tag: "v9.2.0")),
+            ("tag", manifest(version: "9.1.0-beta.1", tag: "v9.1.0-beta.1")),
+            ("tag", manifest(version: "9.1", tag: "v9.1")),
+            ("tag", manifest(version: "9.1.0", tag: "9.1.0")),
+            ("releaseURL", manifest(releaseURL: "https://github.com/other/kaji/releases/tag/v9.1.0")),
+            ("releaseURL", manifest(releaseURL: "http://github.com/MisterBrookT/kaji/releases/tag/v9.1.0")),
+            ("releaseURL", manifest(releaseURL: "https://github.com/MisterBrookT/kaji/releases/tag/v9.0.0")),
+            ("sourceRevision", manifest(sourceRevision: "0123456")),
+            ("sourceRevision", manifest(sourceRevision: String(Self.revision.uppercased()))),
+            ("JSON", Data("not json".utf8)),
+        ]
+        for (field, body) in cases {
+            UpdateCheckerStubProtocol.stubs = [:]
+            UpdateCheckerStubProtocol.requested = []
+            let final = URL(string: "https://github.com/MisterBrookT/kaji/releases/tag/v9.9.0")!
+            UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .response(status: 200, body: body)
+            UpdateCheckerStubProtocol.stubs[Self.latestPath] = .response(status: 200, finalURL: final)
+            let checker = makeChecker()
+            await checker.check()
+            XCTAssertNil(checker.available, field)
+            XCTAssertNil(checker.lastChecked, field)
+            let error = checker.lastError ?? ""
+            XCTAssertTrue(error.hasPrefix("invalid update manifest:"), error)
+            XCTAssertTrue(error.contains(field), "\(field): \(error)")
+            XCTAssertEqual(UpdateCheckerStubProtocol.requested.map { $0.url?.path }, [Self.manifestPath])
+            assertNoAPIRequests()
+        }
+    }
+
+    func testMissingManifestFallsBackToRedirect() async {
         let final = URL(string: "https://github.com/MisterBrookT/kaji/releases/tag/v9.2.0")!
-        UpdateCheckerStubProtocol.stubs["api.github.com"] = .response(status: 403)
-        UpdateCheckerStubProtocol.stubs["github.com"] = .response(status: 200, finalURL: final)
+        UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .response(status: 404)
+        UpdateCheckerStubProtocol.stubs[Self.latestPath] = .response(status: 200, finalURL: final)
         let checker = makeChecker()
         await checker.check()
         XCTAssertNil(checker.lastError)
         XCTAssertEqual(checker.available?.version, "9.2.0")
         XCTAssertEqual(checker.available?.url, final)
         XCTAssertNil(checker.available?.assetURL)
-        XCTAssertNotNil(checker.lastChecked)
+        XCTAssertNil(checker.available?.sourceRevision)
+        XCTAssertEqual(UpdateCheckerStubProtocol.requested.last?.httpMethod, "HEAD")
+        assertNoAPIRequests()
     }
 
-    func testNetworkErrorFallsBackToRedirectUpToDate() async {
+    func testUnreachableManifestFallsBackToRedirectUpToDate() async {
         let final = URL(string: "https://github.com/MisterBrookT/kaji/releases/tag/v0.1.0")!
-        UpdateCheckerStubProtocol.stubs["api.github.com"] = .failure(.notConnectedToInternet)
-        UpdateCheckerStubProtocol.stubs["github.com"] = .response(status: 200, finalURL: final)
+        UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .failure(.notConnectedToInternet)
+        UpdateCheckerStubProtocol.stubs[Self.latestPath] = .response(status: 200, finalURL: final)
         let checker = makeChecker()
         await checker.check()
         XCTAssertNil(checker.lastError)
         XCTAssertNil(checker.available)
         XCTAssertNotNil(checker.lastChecked)
+        assertNoAPIRequests()
     }
 
     func testInvalidRedirectReportsActionableError() async {
         let final = URL(string: "https://github.com/login")!
-        UpdateCheckerStubProtocol.stubs["api.github.com"] = .response(status: 403)
-        UpdateCheckerStubProtocol.stubs["github.com"] = .response(status: 200, finalURL: final)
+        UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .response(status: 404)
+        UpdateCheckerStubProtocol.stubs[Self.latestPath] = .response(status: 200, finalURL: final)
         let checker = makeChecker()
         await checker.check()
         XCTAssertNil(checker.available)
         XCTAssertNil(checker.lastChecked)
         let error = checker.lastError ?? ""
-        XCTAssertTrue(error.contains("HTTP 403"), error)
+        XCTAssertTrue(error.contains("manifest: HTTP 404"), error)
         XCTAssertTrue(error.contains("unexpected redirect target https://github.com/login"), error)
     }
 
     func testBothFailReportsNetworkDetail() async {
-        UpdateCheckerStubProtocol.stubs["api.github.com"] = .failure(.timedOut)
-        UpdateCheckerStubProtocol.stubs["github.com"] = .response(status: 503)
+        UpdateCheckerStubProtocol.stubs[Self.manifestPath] = .failure(.timedOut)
+        UpdateCheckerStubProtocol.stubs[Self.latestPath] = .response(status: 503)
         let checker = makeChecker()
         await checker.check()
         XCTAssertNil(checker.available)
         let error = checker.lastError ?? ""
-        XCTAssertTrue(error.hasPrefix("api: network:"), error)
+        XCTAssertTrue(error.hasPrefix("manifest: network:"), error)
         XCTAssertTrue(error.contains("fallback: HTTP 503"), error)
+        assertNoAPIRequests()
     }
 
     func testReleaseTagValidation() {

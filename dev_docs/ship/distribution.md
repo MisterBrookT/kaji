@@ -6,11 +6,14 @@ Kaji is **ad-hoc signed only — not Developer ID signed and not notarized**. Th
 
 Each `v*` tag runs `.github/workflows/release.yml` on macOS: tag must equal `Info.plist` `CFBundleShortVersionString`, tests run, `KAJI_UNIVERSAL=1 scripts/build-app.sh` builds arm64 + x86_64 per arch and merges with `lipo`, the bundle is ad-hoc signed and verified, then `Kaji.app` is zipped with `ditto --keepParent`. The release is published only if every step succeeds.
 
-Release asset contract (the shipped in-app updater depends on it):
+Release asset contract:
 
-- Exactly **one** `.zip` asset, `Kaji.app.zip` — the updater installs the first `.zip` it finds, with no architecture filter.
-- The archive root contains only `Kaji.app`.
-- The app is universal, so that one asset runs on Apple Silicon and Intel.
+- Exactly one `.zip` asset, `Kaji.app.zip`, for manual downloads and older updaters.
+- The archive root contains only `Kaji.app`; the app is universal (Apple Silicon and Intel).
+- A data-only `update.json` asset is served at `https://github.com/MisterBrookT/kaji/releases/latest/download/update.json`. Schema 1 contains the stable version/tag, build number, canonical release URL, full source commit and Markdown notes. `scripts/update-manifest.py` generates it from the verified bundle and tag.
+- The current updater reads that static feed, not the GitHub REST API. A missing/unreachable feed may fall back to the public latest-release redirect; malformed metadata fails closed.
+- Installation builds the approved tag locally and verifies the manifest commit when supplied. The running app remains open until staging and validation succeed. Replacement retains a rollback bundle and logs failures; it never silently installs a different `latest` version.
+- The release stays draft during asset upload and is published only after both assets are uploaded.
 
 Release notes come from `scripts/release-notes.sh` (tested by `Tests/release/test_release_notes.sh`): commit subjects since the previous tag are grouped into Fixed / Added / Removed / Changed by leading verb or conventional-commit type; merge/release/bump/chore commits are dropped; an unsigned/unnotarized install notice is always appended. Notes quality depends on commit subjects starting with a clear verb. Per-release working notes live in `.dev/`, not `dev_docs/`.
 
@@ -20,7 +23,7 @@ Source install remains available:
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-Browser-downloaded zips may show `Kaji is damaged and can't be opened…` (Gatekeeper + quarantine). The in-app updater clears quarantine itself.
+Browser-downloaded zips may show `Kaji is damaged and can't be opened…` (Gatekeeper + quarantine). The source updater builds with ad-hoc signing and clears quarantine before replacement. It requires working Git, Swift and Python 3; missing prerequisites are reported without opening an installation or administrator prompt.
 
 ## Temporary Internal Fix
 

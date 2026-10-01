@@ -2,7 +2,8 @@ name: Release
 
 # Tag a version (`git tag vX.Y.Z && git push origin vX.Y.Z`) to publish a
 # universal, ad-hoc signed (NOT notarized) Kaji.app.zip plus categorized notes.
-# The in-app updater installs the first .zip asset, so this is the only one.
+# A static update.json feed pins the source commit and release notes; the
+# updater never needs the GitHub REST API.
 on:
   push:
     tags: ['v*']
@@ -28,6 +29,8 @@ jobs:
           python3 Tests/quota/test_quota.py
           /bin/bash Tests/installer/test_install.sh
           /bin/bash Tests/release/test_release_notes.sh
+          python3 Tests/release/test_update_manifest.py
+          /bin/bash Tests/installer/test_source_update.sh
           swift test
 
       - name: Build universal app bundle (ad-hoc signed)
@@ -49,8 +52,19 @@ jobs:
       - name: Release notes
         run: ./scripts/release-notes.sh "${GITHUB_REF_NAME}" > dist/release-notes.md
 
-      - uses: softprops/action-gh-release@v2
-        with:
-          body_path: dist/release-notes.md
-          files: dist/Kaji.app.zip
-          fail_on_unmatched_files: true
+      - name: Static update manifest
+        run: python3 scripts/update-manifest.py "${GITHUB_REF_NAME}" dist/release-notes.md dist/Kaji.app/Contents/Info.plist > dist/update.json
+
+      # Keep the release hidden while replacing assets so the feed is never
+      # advertised before its corresponding verified build is uploaded.
+      - name: Publish verified release and feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1; then
+            gh release edit "${GITHUB_REF_NAME}" --draft=true
+          else
+            gh release create "${GITHUB_REF_NAME}" --verify-tag --draft --title "${GITHUB_REF_NAME}" --notes-file dist/release-notes.md
+          fi
+          gh release upload "${GITHUB_REF_NAME}" dist/Kaji.app.zip dist/update.json --clobber
+          gh release edit "${GITHUB_REF_NAME}" --notes-file dist/release-notes.md --draft=false --latest
