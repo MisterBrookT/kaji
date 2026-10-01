@@ -9,6 +9,14 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     case permissions = "Permissions"
 
     var id: String { rawValue }
+    var titleKey: L10n.K {
+        switch self {
+        case .general: .general
+        case .work: .work
+        case .quota: .usage
+        case .permissions: .permissions
+        }
+    }
     var systemImage: String {
         switch self {
         case .general: "gearshape"
@@ -20,7 +28,15 @@ enum SettingsSection: String, CaseIterable, Identifiable {
 }
 
 private enum PermissionState: Equatable {
-    case authorized, notAuthorized, needsReauthorization
+    case authorized, notAuthorized, needsUpdate, needsReauthorization
+}
+
+/// Right-column control geometry for the General page; menus and the update
+/// action share it so their edges line up.
+enum SettingsControlMetrics {
+    static let width: CGFloat = 144
+    static let height: CGFloat = 24
+    static let cornerRadius: CGFloat = 6
 }
 
 // MARK: - SettingsView
@@ -74,7 +90,7 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             List(visibleSections, selection: $selection) { section in
-                Label(section == .permissions ? L10n.t(.permissions, prefs.language) : section.rawValue,
+                Label(L10n.t(section.titleKey, prefs.language),
                       systemImage: section.systemImage)
                     .tag(section)
                     .accessibilityIdentifier("kaji.settings.section.\(section.rawValue)")
@@ -84,6 +100,7 @@ struct SettingsView: View {
             Divider().overlay(t.track)
             ScrollView {
                 mainSettings
+                    .onAppear { refreshPermissions() }
                     .frame(maxWidth: 620)
                     .frame(maxWidth: .infinity, alignment: .topLeading)
             }
@@ -128,6 +145,10 @@ struct SettingsView: View {
         .onChange(of: prefs.enabledModules) { _ in
             if !visibleSections.contains(selection) { selection = .general }
         }
+        .onChange(of: selection) { _ in refreshPermissions() }
+        .onChange(of: sleepController.isBusy) { busy in
+            if !busy { refreshPermissions() }
+        }
     }
 
     private var updateButtonTitle: String {
@@ -156,96 +177,10 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             header
             if selection == .general {
-                settingBlock(title: L10n.t(.modules, prefs.language)) {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text(L10n.t(.modulesHint, prefs.language))
-                        .font(.system(size: 10.5, weight: .medium, design: .rounded))
-                        .foregroundColor(t.mute)
-                        .fixedSize(horizontal: false, vertical: true)
-                    moduleRow(.quota, title: L10n.t(.moduleQuota, prefs.language), lockedOn: true)
-                    moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
-                    moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
-                }
-            }
-                settingBlock(title: L10n.t(.appearance, prefs.language)) {
-                VStack(alignment: .leading, spacing: 10) {
-                    settingRow(title: L10n.t(.language, prefs.language)) {
-                        Picker(L10n.t(.language, prefs.language), selection: $prefs.language) {
-                            ForEach(Lang.allCases, id: \.rawValue) { language in
-                                Text(language.label).tag(language)
-                            }
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                        .accessibilityIdentifier("kaji.settings.language")
-                    }
-                    settingRow(title: L10n.t(.usage, prefs.language)) {
-                        Picker(L10n.t(.usage, prefs.language), selection: $prefs.showRemaining) {
-                            Text(L10n.t(.showUsed, prefs.language)).tag(false)
-                            Text(L10n.t(.showRemaining, prefs.language)).tag(true)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.menu)
-                        .fixedSize()
-                        .accessibilityIdentifier("kaji.settings.usage")
-                    }
-                }
-            }
-            settingBlock(title: L10n.t(.updates, prefs.language)) {
-                settingRow(title: L10n.t(.currentVersion, prefs.language)) {
-                    Text(updateChecker.currentVersion)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
-                        .foregroundColor(t.mute)
-                        .accessibilityIdentifier("kaji.settings.update.version")
-                    segment(updateButtonTitle, on: updateChecker.available != nil,
-                            accessibilityIdentifier: "kaji.settings.update.action") {
-                        if let release = updateChecker.available {
-                            updateChecker.reviewingRelease = release
-                        } else {
-                            updateChecker.checkIfDue(force: true)
-                        }
-                    }
-                    .disabled(updateChecker.isChecking)
-                    .help(updateChecker.lastError ?? updateButtonTitle)
-                }
-                if let error = updateChecker.lastError {
-                    Text(error)
-                        .font(.system(size: 10.5, design: .monospaced))
-                        .foregroundColor(t.mute)
-                        .textSelection(.enabled)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityIdentifier("kaji.settings.update.error")
-                }
-            }
-            settingBlock(title: L10n.t(.system, prefs.language)) {
-                VStack(alignment: .leading, spacing: 10) {
-                    settingRow(title: L10n.t(.launchAtLogin, prefs.language)) {
-                        settingsToggle(isOn: $prefs.launchAtLogin,
-                                       title: L10n.t(.launchAtLogin, prefs.language),
-                                       identifier: "kaji.settings.launch-at-login.toggle")
-                    }
-                    settingRow(title: L10n.t(.keepAwake, prefs.language)) {
-                        settingsToggle(
-                            isOn: Binding(get: { sleepController.isEnabled },
-                                          set: { _ in sleepController.toggle() }),
-                            title: L10n.t(.keepAwake, prefs.language),
-                            identifier: "kaji.prevent-sleep.toggle"
-                        )
-                        .disabled(sleepController.isBusy)
-                        .help(L10n.t(.sleepPermissionWhy, prefs.language))
-                    }
-                    if sleepController.lastError != nil {
-                        Text(L10n.t(.sleepRepairMessage, prefs.language))
-                            .font(.system(size: 10.5, weight: .semibold, design: .rounded))
-                            .foregroundColor(t.amber)
-                    }
-                }
-            }
+                generalSettings
             }
             if selection == .permissions {
-                settingBlock(title: L10n.t(.permissions, prefs.language)) {
-                    VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
                         permissionRow(
                             title: L10n.t(.loginPermission, prefs.language),
                             why: L10n.t(.loginPermissionWhy, prefs.language),
@@ -262,11 +197,10 @@ struct SettingsView: View {
                             sleepController.setEnabled(true)
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                                 refreshPermissions()
-                            }
                         }
                     }
                 }
-                .onAppear { refreshPermissions() }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             if selection == .work {
                 settingBlock(title: L10n.t(.work, prefs.language)) {
@@ -282,12 +216,12 @@ struct SettingsView: View {
                             segment("10m", on: prefs.breakMinutes == 10) { prefs.breakMinutes = 10 }
                         }
                         settingRow(title: L10n.t(.skipBreak, prefs.language)) {
-                            segment(prefs.allowBreakSkip ? "On" : "Off", on: prefs.allowBreakSkip) {
+                            segment(L10n.t(prefs.allowBreakSkip ? .on : .off, prefs.language), on: prefs.allowBreakSkip) {
                                 prefs.allowBreakSkip.toggle()
                             }
                         }
                         settingRow(title: L10n.t(.breakOverlay, prefs.language)) {
-                            segment(prefs.breakOverlayEnabled ? "On" : "Off", on: prefs.breakOverlayEnabled) {
+                            segment(L10n.t(prefs.breakOverlayEnabled ? .on : .off, prefs.language), on: prefs.breakOverlayEnabled) {
                                 prefs.breakOverlayEnabled.toggle()
                             }
                         }
@@ -314,6 +248,7 @@ struct SettingsView: View {
         switch SleepController.authorizationStatus {
         case .authorized: sleepPermission = .authorized
         case .notAuthorized: sleepPermission = .notAuthorized
+        case .needsUpdate: sleepPermission = .needsUpdate
         case .needsReauthorization: sleepPermission = .needsReauthorization
         }
     }
@@ -334,8 +269,11 @@ struct SettingsView: View {
                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
                 .foregroundColor(t.mute)
             if status != .authorized {
-                outlineButton(title: L10n.t(.authorize, prefs.language),
-                              systemImage: "checkmark.shield", action: action)
+                Button(action: action) {
+                    controlLabel(L10n.t(status == .needsUpdate ? .updateSleepHelper : .authorize, prefs.language),
+                                 chevron: false)
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(.vertical, 4)
@@ -345,11 +283,151 @@ struct SettingsView: View {
         switch status {
         case .authorized: L10n.t(.authorized, prefs.language)
         case .notAuthorized: L10n.t(.notAuthorized, prefs.language)
+        case .needsUpdate: L10n.t(.sleepHelperUpdateRequired, prefs.language)
         case .needsReauthorization: L10n.t(.needsReauthorization, prefs.language)
         }
     }
 
 
+
+    // General is one flat list: groups are separated by dividers instead of
+    // headings, and every non-switch control shares `SettingsControlMetrics`.
+    private var generalSettings: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            moduleRow(.quota, title: L10n.t(.moduleQuota, prefs.language), lockedOn: true)
+            moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
+            moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
+            Divider().overlay(t.track)
+            settingRow(title: L10n.t(.language, prefs.language)) {
+                Menu {
+                    Picker(L10n.t(.language, prefs.language), selection: $prefs.language) {
+                        ForEach(Lang.allCases, id: \.rawValue) { language in
+                            Text(language.label).tag(language)
+                        }
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Text(prefs.language.label)
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.visible)
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .frame(width: SettingsControlMetrics.width, height: SettingsControlMetrics.height)
+                .background(controlBackground())
+                .accessibilityIdentifier("kaji.settings.language")
+            }
+            settingRow(title: L10n.t(.usage, prefs.language)) {
+                Menu {
+                    Picker(L10n.t(.usage, prefs.language), selection: $prefs.showRemaining) {
+                        Text(L10n.t(.showUsed, prefs.language)).tag(false)
+                        Text(L10n.t(.showRemaining, prefs.language)).tag(true)
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    Text(L10n.t(prefs.showRemaining ? .showRemaining : .showUsed, prefs.language))
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.visible)
+                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+                .foregroundColor(t.cream)
+                .frame(width: SettingsControlMetrics.width, height: SettingsControlMetrics.height)
+                .background(controlBackground())
+                .accessibilityIdentifier("kaji.settings.usage")
+            }
+            Divider().overlay(t.track)
+            settingRow(title: L10n.t(.currentVersion, prefs.language)) {
+                Text(updateChecker.currentVersion)
+                    .font(.system(size: 11, weight: .semibold, design: .rounded).monospacedDigit())
+                    .foregroundColor(t.mute)
+                    .accessibilityIdentifier("kaji.settings.update.version")
+                Button {
+                    if let release = updateChecker.available {
+                        updateChecker.reviewingRelease = release
+                    } else {
+                        updateChecker.checkIfDue(force: true)
+                    }
+                } label: {
+                    controlLabel(updateButtonTitle, chevron: false, emphasized: updateChecker.available != nil)
+                }
+                .buttonStyle(.plain)
+                .disabled(updateChecker.isChecking)
+                .help(updateChecker.lastError ?? updateButtonTitle)
+                .accessibilityIdentifier("kaji.settings.update.action")
+            }
+            if let error = updateChecker.lastError {
+                Text(error)
+                    .font(.system(size: 10.5, design: .monospaced))
+                    .foregroundColor(t.mute)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                    .accessibilityIdentifier("kaji.settings.update.error")
+            }
+            Divider().overlay(t.track)
+            settingRow(title: L10n.t(.launchAtLogin, prefs.language)) {
+                settingsToggle(isOn: $prefs.launchAtLogin,
+                               title: L10n.t(.launchAtLogin, prefs.language),
+                               identifier: "kaji.settings.launch-at-login.toggle")
+            }
+            settingRow(title: L10n.t(.keepAwake, prefs.language)) {
+                settingsToggle(
+                    isOn: Binding(get: { sleepController.isEnabled },
+                                  set: { _ in sleepController.toggle() }),
+                    title: L10n.t(.keepAwake, prefs.language),
+                    identifier: "kaji.prevent-sleep.toggle"
+                )
+                .disabled(sleepController.isBusy)
+                .help(L10n.t(.sleepPermissionWhy, prefs.language))
+            }
+            if sleepPermission == .needsUpdate {
+                Text(L10n.t(.sleepHelperUpdateHint, prefs.language))
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            if sleepController.lastError != nil {
+                Text(L10n.t(.sleepRepairMessage, prefs.language))
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.amber)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+        }
+    }
+
+    /// Shared neutral chrome for menu and action controls in the right column.
+    private func controlLabel(_ title: String, chevron: Bool, emphasized: Bool = false) -> some View {
+        HStack(spacing: 6) {
+            if !chevron { Spacer(minLength: 0) }
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.tail)
+            Spacer(minLength: 0)
+            if chevron {
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.system(size: 8.5, weight: .semibold))
+            }
+        }
+        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+        .foregroundColor(emphasized ? t.bg : t.cream)
+        .padding(.horizontal, 10)
+        .frame(width: SettingsControlMetrics.width, height: SettingsControlMetrics.height)
+        .background(controlBackground(emphasized: emphasized))
+        .contentShape(Rectangle())
+    }
+
+    // Menu labels are bridged to AppKit and can discard SwiftUI backgrounds.
+    // Put chrome around the whole menu rather than inside its native label.
+    private func controlBackground(emphasized: Bool = false) -> some View {
+        RoundedRectangle(cornerRadius: SettingsControlMetrics.cornerRadius, style: .continuous)
+            .fill(emphasized ? t.gold : t.panel)
+            .overlay(
+                RoundedRectangle(cornerRadius: SettingsControlMetrics.cornerRadius, style: .continuous)
+                    .stroke(emphasized ? Color.clear : t.track, lineWidth: 1)
+            )
+    }
 
     private func moduleRow(_ id: KajiModuleID, title: String, lockedOn: Bool) -> some View {
         let enabled = Binding(
@@ -382,7 +460,7 @@ struct SettingsView: View {
             Text(L10n.t(.settings, prefs.language))
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundColor(t.cream)
-            Text(selection.rawValue)
+            Text(L10n.t(selection.titleKey, prefs.language))
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundColor(t.mute)
         }
@@ -447,28 +525,6 @@ struct SettingsView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 7)
         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(t.panel.opacity(0.65)))
-    }
-
-    private func outlineButton(title: String, systemImage: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                Image(systemName: systemImage)
-                    .font(.system(size: 10.5, weight: .semibold))
-                Text(title)
-            }
-        }
-        .buttonStyle(.plain)
-        .font(.system(size: 11, weight: .semibold, design: .rounded))
-        .foregroundColor(t.mute)
-        .lineLimit(1)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color.clear)
-                .overlay(Capsule().stroke(t.track, lineWidth: 1))
-        )
-        .accessibilityLabel(Text(title))
     }
 
     private func segment(

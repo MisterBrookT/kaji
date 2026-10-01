@@ -11,7 +11,7 @@ NONCE="$(uuidgen)-$(uuidgen)"
 PORT="$(jot -r 1 40000 59999)"
 SMOKE_DOMAIN="dev.kaji.ui-smoke.$NONCE"
 SEED_MODULES=(quota work goals)
-SEED_LANGUAGE=en
+SEED_LANGUAGE="${KAJI_UI_SMOKE_LANGUAGE:-en}"
 PAGE_IDS="quota|work|goals"
 SETTINGS_SECTIONS="General|Work|Quota|Permissions"
 

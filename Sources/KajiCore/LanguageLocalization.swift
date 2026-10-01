@@ -59,13 +59,14 @@ public enum L10n {
         case work, focusLength, breakLength, skipBreak, breakOverlay
         case fixedPlan
         case launchAtLogin
-        case modules, modulesHint
+        case general, modules, modulesHint
         case cliIntegrationHint, cliExamplePrompt, copyPrompt
         case moduleQuota, moduleWork, moduleGoals
         case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
         case permissions, loginPermission, loginPermissionWhy
         case sleepPermission, sleepPermissionWhy, authorized, notAuthorized, needsReauthorization, authorize
+        case sleepHelperUpdateRequired, updateSleepHelper, sleepHelperUpdateHint
         case cancel, sleepRepairTitle, sleepRepairMessage, repairHelper
     }
 
@@ -141,10 +142,11 @@ public enum L10n {
         .skipBreak: .init(en: "Allow Skip", zh: "允许跳过", ptBR: "Permitir pular", es: "Permitir omitir"),
         .breakOverlay: .init(en: "Hard Break", zh: "强制休息", ptBR: "Pausa forçada", es: "Descanso forzado"),
         .launchAtLogin: .init(en: "Launch", zh: "开机启动", ptBR: "Iniciar", es: "Iniciar"),
+        .general: .init(en: "General", zh: "常规", ptBR: "Geral", es: "General"),
         .modules: .init(en: "Modules", zh: "模块", ptBR: "Módulos", es: "Módulos"),
         .modulesHint: .init(
             en: "Default is Quota only. Turn on what you need.",
-            zh: "默认只开 Quota。按需打开其余。",
+            zh: "默认只开用量。按需打开其余。",
             ptBR: "Por padrão, só Quota. Ative o que precisar.",
             es: "Por defecto, solo Quota. Activa lo que necesites."
         ),
@@ -161,9 +163,9 @@ public enum L10n {
             es: "Lee `kaji --help` y crea una skill llamada kaji"
         ),
         .copyPrompt: .init(en: "Copy prompt", zh: "复制提示词", ptBR: "Copiar prompt", es: "Copiar prompt"),
-        .moduleQuota: .init(en: "Quota", zh: "Quota", ptBR: "Quota", es: "Quota"),
-        .moduleWork: .init(en: "Work / Break", zh: "Work / Break", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
-        .moduleGoals: .init(en: "Goals", zh: "Goals", ptBR: "Metas", es: "Metas"),
+        .moduleQuota: .init(en: "Quota", zh: "用量", ptBR: "Quota", es: "Quota"),
+        .moduleWork: .init(en: "Work / Break", zh: "工作与休息", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
+        .moduleGoals: .init(en: "Goals", zh: "目标", ptBR: "Metas", es: "Metas"),
         .goalGroup: .init(en: "Group", zh: "分组", ptBR: "Agrupar", es: "Agrupar"),
         .goalGroupingNone: .init(en: "No Grouping", zh: "不分组", ptBR: "Sem agrupamento", es: "Sin agrupar"),
         .goalGroupingByTag: .init(en: "By Tag", zh: "按标签", ptBR: "Por etiqueta", es: "Por etiqueta"),
@@ -181,6 +183,9 @@ public enum L10n {
         .authorized: .init(en: "Authorized", zh: "已授权", ptBR: "Autorizado", es: "Autorizado"),
         .notAuthorized: .init(en: "Not authorized", zh: "未授权", ptBR: "Não autorizado", es: "No autorizado"),
         .needsReauthorization: .init(en: "Needs re-authorization", zh: "需要重新授权", ptBR: "Requer nova autorização", es: "Requiere nueva autorización"),
+        .sleepHelperUpdateRequired: .init(en: "Helper update required", zh: "需要更新助手", ptBR: "Atualização do assistente necessária", es: "Hay que actualizar el asistente"),
+        .updateSleepHelper: .init(en: "Update Helper", zh: "更新助手", ptBR: "Atualizar assistente", es: "Actualizar asistente"),
+        .sleepHelperUpdateHint: .init(en: "Keep-awake may still be on; update the helper to control it.", zh: "当前防休眠可能仍开启；助手需更新才能控制。", ptBR: "O bloqueio de repouso pode estar ativo; atualize o assistente para controlá-lo.", es: "El bloqueo de reposo puede seguir activo; actualiza el asistente para controlarlo."),
         .authorize: .init(en: "Authorize", zh: "授权", ptBR: "Autorizar", es: "Autorizar"),
         .cancel: .init(en: "Cancel", zh: "取消", ptBR: "Cancelar", es: "Cancelar"),
         .sleepRepairTitle: .init(en: "Repair Prevent Sleep", zh: "修复防休眠助手", ptBR: "Reparar auxiliar antirrepouso", es: "Reparar asistente antirreposo"),
