@@ -183,7 +183,13 @@ func run() throws {
     _ = try waitForServer(port: port)
 
     let statusPath = URL(fileURLWithPath: artifacts).appendingPathComponent("status.png").path
-    _ = try render(port: port, nonce: nonce, surface: "status", selection: "status", outputPath: statusPath)
+    let statusReply = try render(port: port, nonce: nonce, surface: "status", selection: "status", outputPath: statusPath)
+    if let expectedAppearance = ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_APPEARANCE"] {
+        guard statusReply["appearance"] as? String == expectedAppearance else {
+            throw SmokeError(description: "ASSERT appearance: FAIL expected \(expectedAppearance), got \(statusReply["appearance"] ?? "missing")")
+        }
+        print("ASSERT appearance: PASS \(expectedAppearance)")
+    }
     try assertPNG(statusPath, label: "status")
 
     for page in pageIDs {

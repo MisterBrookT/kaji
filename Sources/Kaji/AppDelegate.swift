@@ -75,6 +75,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // The isolated offscreen smoke process needs an explicit appearance;
+        // AppleInterfaceStyle alone does not override the macOS dark setting.
+        let environment = ProcessInfo.processInfo.environment
+        if environment["KAJI_UI_SMOKE_NONCE"] != nil {
+            switch environment["KAJI_UI_SMOKE_APPEARANCE"] {
+            case "Light": NSApp.appearance = NSAppearance(named: .aqua)
+            case "Dark": NSApp.appearance = NSAppearance(named: .darkAqua)
+            default: break
+            }
+        }
         // Establish the visible app surface before starting optional module lifecycles.
         setupStatusItem()
         setupPopover()
@@ -704,6 +714,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return [
             "surface": surface,
             "selection": selection,
+            "appearance": NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "Dark" : "Light",
             "path": outputURL.path,
             "width": Int(size.width),
             "height": Int(size.height),
