@@ -123,6 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.rebuildPopoverContentIfShown()
             }
             .store(in: &cancellables)
+        prefs.$language
+            .receive(on: RunLoop.main)
+            .sink { [weak self] language in
+                self?.settingsWindow?.title = "Kaji " + L10n.t(.settings, language)
+            }
+            .store(in: &cancellables)
         prefs.$primaryFavorites
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.rebuildMenuSurfaces() }
@@ -757,7 +763,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         controller.view.configureKajiHost()
         let window = NSWindow(contentViewController: controller)
-        window.title = "Kaji Settings"
+        window.title = "Kaji " + L10n.t(.settings, prefs.language)
         window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.setContentSize(NSSize(width: 760, height: 560))
         window.minSize = NSSize(width: 640, height: 460)

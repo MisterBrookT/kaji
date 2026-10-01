@@ -38,7 +38,7 @@ final class SleepController: ObservableObject {
     var onStateChanged: ((Bool) -> Void)?
 
     enum AuthorizationStatus: Equatable {
-        case authorized, notAuthorized, needsReauthorization
+        case authorized, notAuthorized, needsUpdate, needsReauthorization
     }
 
     struct Environment {
@@ -58,10 +58,17 @@ final class SleepController: ObservableObject {
     private let environment: Environment
 
     static var authorizationStatus: AuthorizationStatus {
-        switch SleepHelperInstaller.live.status() {
+        authorizationStatus(for: SleepHelperInstaller.live.status())
+    }
+
+    // Binary mismatch after an app upgrade is an update/repair requirement,
+    // not evidence that macOS revoked permission. Keep the integrity check.
+    static func authorizationStatus(for status: SleepHelperInstallStatus) -> AuthorizationStatus {
+        switch status {
         case .installed: .authorized
         case .notInstalled: .notAuthorized
-        case .needsRepair, .unavailable: .needsReauthorization
+        case .needsRepair: .needsUpdate
+        case .unavailable: .needsReauthorization
         }
     }
 
