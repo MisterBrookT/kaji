@@ -32,7 +32,8 @@ final class UpdateInstallationTests: XCTestCase {
                                                destinationAppURL: URL(fileURLWithPath: "/Apps/Kaji.app"),
                                                logURL: directory.appendingPathComponent("install.log"),
                                                hostPID: 4242, runner: runner)
-        return UpdateChecker(available: release, installer: installer, installationDefaults: defaults)
+        return UpdateChecker(available: release, installer: installer, installationDefaults: defaults,
+                             binaryUpdater: nil)
     }
 
     func testSourceOnlyReleaseBuildsApprovedTagAndCommitBeforeHandoff() async throws {

@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 需要 macOS 13+（Apple Silicon），以及 `git`、`swift`、`python3`。安装脚本会从最新 release tag 本机构建并装到 `/Applications`。
 
-已有用户可在 Kaji 中点击 **更新**。Release 提供测试用 `.app.zip` 和 **Fixed / Added / Removed** 分类更新说明。构建仅做 ad-hoc 签名，尚未经过 Apple 公证；只在信任本仓库时更新。浏览器下载可能被 Gatekeeper 拦截。仍可本机构建：`./scripts/build-local.sh`。
+从 1.0.1 起，**检查更新**通过 Sparkle 下载带签名的二进制更新，安装前会显示更新说明。旧版本可能需要先运行一次安装命令才能获得 Sparkle。构建仍只有 ad-hoc 签名，未经过 Apple 公证：浏览器下载的 ZIP/DMG 可能被 Gatekeeper 拦截。首次安装请用源码安装命令；Sparkle 不会消除首次安装的警告。
 
 出问题或想卸载：[常见问题与排查](docs/faq.md)。
 

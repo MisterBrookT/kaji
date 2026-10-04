@@ -368,7 +368,9 @@ struct SettingsView: View {
                     .foregroundColor(t.mute)
                     .accessibilityIdentifier("kaji.settings.update.version")
                 Button {
-                    if let release = updateChecker.available {
+                    if updateChecker.presentBinaryUpdateCheck() {
+                        return
+                    } else if let release = updateChecker.available {
                         updateChecker.reviewingRelease = release
                     } else {
                         updateChecker.checkIfDue(force: true)

@@ -38,7 +38,7 @@ curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh |
 
 macOS 13+ (Apple Silicon), plus `git`, `swift` and `python3`. The installer builds from the latest release tag and installs to `/Applications`.
 
-Existing users can choose **Update** in Kaji. Releases include a testing `.app.zip` and a **Fixed / Added / Removed** changelog. These builds are ad-hoc signed, not Apple-notarized; only update if you trust this repository. Browser downloads may be blocked by Gatekeeper. Building locally remains available: `./scripts/build-local.sh`.
+From 1.0.1, **Check for Updates** uses Sparkle to download signed binary updates and show the changelog before installation. Older builds may need the install command once to get Sparkle. Builds are still ad-hoc signed, not Apple-notarized: browser ZIP/DMG downloads may be blocked by Gatekeeper. Use the source installer for the first installation; Sparkle does not remove that warning.
 
 Trouble, or want it gone? [FAQ & troubleshooting](docs/faq.md).
 

@@ -33,15 +33,15 @@ See [how quota works](quota.md) for the exact source of each number.
 
 ## How do updates work?
 
-Updates are user-initiated. When a newer release is detected, an **Update** button appears in the popover footer beside Settings; it is hidden when no update is available. You can also check manually in **Settings → General → Updates**. Releases include a testing `.app.zip` and a **Fixed / Added / Removed** changelog; the changelog is shown before you confirm installation.
+Updates are user-initiated. When a newer release is detected, an **Update** button appears beside Settings in the popover. You can also check in **Settings → General → Version**. From 1.0.1, Sparkle shows release notes, verifies the signed feed and archive, downloads the app and handles installation/relaunch. It does not compile source on each update. Automatic downloads and system-profile submission are disabled.
 
-Version 0.9.6 accidentally omitted the update entry from its interface. If you are still on that version, install the latest release manually once; subsequent updates can use the in-app controls.
+Versions older than 1.0.1 do not contain Sparkle. Use the source install command once to get it (1.0.0 can also use its source updater). Publishing a feed cannot retroactively change an already-installed updater.
 
-Kaji is ad-hoc signed, not Apple Developer ID signed or notarized. Browser downloads may be blocked by Gatekeeper. The in-app updater clears quarantine, so only use it if you trust this repository. The source installer remains available if you prefer to build locally.
+Kaji is ad-hoc signed, not Apple Developer ID signed or notarized. Browser-downloaded ZIPs and DMGs may both be blocked by Gatekeeper. Sparkle's Ed25519 update signatures are separate from Apple signing: they secure updates after Kaji is already running, but do not fix first-install warnings. Use the source installer for initial setup and only install software you trust.
 
 ## macOS asks for my password when I enable sleep control
 
-The sleep module installs a privileged helper (`/Library/PrivilegedHelperTools/dev.kaji.sleep-helper` plus `/Library/LaunchDaemons/dev.kaji.sleep-helper.plist`) because changing system sleep behavior requires root. Nothing else in Kaji asks for elevation. Leave the module off and no helper is installed.
+The sleep module installs a privileged helper (`/Library/PrivilegedHelperTools/dev.kaji.sleep-helper` plus `/Library/LaunchDaemons/dev.kaji.sleep-helper.plist`) because changing system sleep behavior requires root. Leave the module off and no sleep helper is installed. Sparkle updates normally need no administrator rights for a user-owned app; a protected install location can require approval to replace the app.
 
 ## The popover has a blank strip above the header
 

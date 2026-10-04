@@ -50,6 +50,7 @@ jobs:
           /bin/bash Tests/installer/test_install.sh
           /bin/bash Tests/release/test_release_notes.sh
           python3 Tests/release/test_update_manifest.py
+          python3 Tests/release/test_sparkle_appcast.py
           /bin/bash Tests/installer/test_source_update.sh
 
       # Unit + in-process UI tests (see Tests/KajiTests/UITestHarness.swift).
@@ -61,9 +62,13 @@ jobs:
       - name: Assemble universal app bundle
         run: KAJI_UNIVERSAL=1 ./scripts/build-app.sh
 
+      - name: Real Sparkle signing and tamper regression
+        run: /bin/bash Tests/release/test_sparkle_signing.sh
+
       - name: Verify non-interactive ad-hoc signature
         run: |
           test "$(codesign -dv --verbose=4 dist/Kaji.app 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"
           codesign --verify --deep --strict dist/Kaji.app
           lipo dist/Kaji.app/Contents/MacOS/Kaji -verify_arch arm64 x86_64
           lipo dist/Kaji.app/Contents/Library/HelperTools/KajiSleepHelper -verify_arch arm64 x86_64
+          lipo dist/Kaji.app/Contents/Frameworks/Sparkle.framework/Sparkle -verify_arch arm64 x86_64

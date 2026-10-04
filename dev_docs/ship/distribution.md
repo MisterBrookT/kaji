@@ -8,12 +8,14 @@ Each `v*` tag runs `.github/workflows/release.yml` on macOS: tag must equal `Inf
 
 Release asset contract:
 
-- Exactly one `.zip` asset, `Kaji.app.zip`, for manual downloads and older updaters.
+- One primary update archive, `Kaji.app.zip`, for manual downloads and updaters. Explicitly archived historical builds may have separately named assets; they are never the update target.
 - The archive root contains only `Kaji.app`; the app is universal (Apple Silicon and Intel).
 - A data-only `update.json` asset is served at `https://github.com/MisterBrookT/kaji/releases/latest/download/update.json`. Schema 1 contains the stable version/tag, build number, canonical release URL, full source commit and Markdown notes. `scripts/update-manifest.py` generates it from the verified bundle and tag.
 - The current updater reads that static feed, not the GitHub REST API. A missing/unreachable feed may fall back to the public latest-release redirect; malformed metadata fails closed.
-- Installation builds the approved tag locally and verifies the manifest commit when supplied. The running app remains open until staging and validation succeed. Replacement retains a rollback bundle and logs failures; it never silently installs a different `latest` version.
-- The release stays draft during asset upload and is published only after both assets are uploaded.
+- Configured app bundles use Sparkle 2.10 for user-initiated binary updates. `appcast.xml` is served alongside the JSON at the same public GitHub release. Both the feed and archive are Ed25519-signed; the embedded `SUPublicEDKey` verifies them before extraction. No GitHub account/token is required by the app.
+- Sparkle is initialized lazily on an explicit check, with automatic checks/downloads and system-profile submission disabled. It owns confirmation, installation, quit and relaunch. The lightweight JSON check remains the passive version cue.
+- Legacy/unconfigured hosts keep the pinned source fallback: build the approved tag and verify its manifest commit, stage/validate before quitting, retain a rollback bundle and expose failure logs. Source installation also bootstraps existing clients that do not yet contain Sparkle.
+- The release stays draft during upload and is published only after the ZIP, JSON and signed appcast are verified and uploaded.
 
 Release notes come from `scripts/release-notes.sh` (tested by `Tests/release/test_release_notes.sh`): commit subjects since the previous tag are grouped into Fixed / Added / Removed / Changed by leading verb or conventional-commit type; merge/release/bump/chore commits are dropped; an unsigned/unnotarized install notice is always appended. Notes quality depends on commit subjects starting with a clear verb. Per-release working notes live in `.dev/`, not `dev_docs/`.
 
@@ -34,7 +36,15 @@ xattr -dr com.apple.quarantine /Applications/Kaji.app
 open /Applications/Kaji.app
 ```
 
-Public users should use the install command until notarized builds exist.
+Public users should use the install command until notarized builds exist. Sparkle does not remove this **first-install** limitation: packaging the same app as a DMG instead of ZIP does not confer Gatekeeper trust.
+
+## Sparkle Signing (Independent of Apple Signing)
+
+Sparkle's Ed25519 key authenticates updates, not Apple's first-launch trust. Ad-hoc-signed hosts can receive properly signed Sparkle updates without an Apple Developer membership. Developer ID and notarization remain necessary for warning-free browser-downloaded first installation.
+
+The public update key is committed in `Info.plist`. The private key is stored outside the repository and as the repository's `KAJI_SPARKLE_PRIVATE_KEY` GitHub Actions secret. Never commit it, emit it to logs, or use Sparkle tools' implicit login-Keychain lookup. `scripts/sparkle-appcast.py` requires an explicit nonempty key file, uses SDK tools, and checks version/build, canonical download URL, length, archive signature and feed signature before publication. The release job creates a mode-0600 temporary file and removes it on exit. Keep an independent secure backup: losing this key without a Developer ID trust chain prevents normal key rotation.
+
+The manually assembled SwiftPM app embeds the universal Sparkle framework and its helper/XPC code, preserves framework symlinks, supplies a Frameworks rpath and signs nested code inside-out. Local builds stay ad-hoc and non-interactive; no keychain is discovered, created or unlocked.
 
 ## Proper Release Path
 
@@ -100,6 +110,8 @@ Safer alternative: App Store Connect API key for `notarytool`.
 
 ## References
 
+- Sparkle setup/security: https://sparkle-project.org/documentation/
+- Sparkle installer security: https://github.com/sparkle-project/Sparkle/blob/2.x/Documentation/Installation.md
 - Apple Developer ID: https://developer.apple.com/developer-id/
 - Apple notarization docs: https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution
 - Apple notarization troubleshooting: https://developer.apple.com/documentation/security/resolving-common-notarization-issues

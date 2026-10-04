@@ -30,6 +30,7 @@ jobs:
           /bin/bash Tests/installer/test_install.sh
           /bin/bash Tests/release/test_release_notes.sh
           python3 Tests/release/test_update_manifest.py
+          python3 Tests/release/test_sparkle_appcast.py
           /bin/bash Tests/installer/test_source_update.sh
           swift test
 
@@ -38,11 +39,14 @@ jobs:
 
       - name: Verify bundle
         run: |
-          for bin in dist/Kaji.app/Contents/MacOS/Kaji dist/Kaji.app/Contents/Library/HelperTools/KajiSleepHelper; do
+          for bin in dist/Kaji.app/Contents/MacOS/Kaji dist/Kaji.app/Contents/Library/HelperTools/KajiSleepHelper dist/Kaji.app/Contents/Frameworks/Sparkle.framework/Sparkle; do
             lipo "$bin" -verify_arch arm64 x86_64
           done
           codesign --verify --deep --strict dist/Kaji.app
           test "$(codesign -dv --verbose=4 dist/Kaji.app 2>&1 | sed -n 's/^Signature=//p')" = "adhoc"
+
+      - name: Real Sparkle signing and tamper regression
+        run: /bin/bash Tests/release/test_sparkle_signing.sh
 
       - name: Zip (Kaji.app at archive root)
         run: |
@@ -55,6 +59,17 @@ jobs:
       - name: Static update manifest
         run: python3 scripts/update-manifest.py "${GITHUB_REF_NAME}" dist/release-notes.md dist/Kaji.app/Contents/Info.plist > dist/update.json
 
+      - name: Sign and verify Sparkle appcast (no Keychain)
+        env:
+          KAJI_SPARKLE_PRIVATE_KEY: ${{ secrets.KAJI_SPARKLE_PRIVATE_KEY }}
+        run: |
+          test -n "$KAJI_SPARKLE_PRIVATE_KEY" || { echo 'Missing KAJI_SPARKLE_PRIVATE_KEY'; exit 1; }
+          umask 077
+          key_file="$RUNNER_TEMP/kaji-sparkle-private-key"
+          trap 'rm -f "$key_file"' EXIT
+          printf '%s' "$KAJI_SPARKLE_PRIVATE_KEY" > "$key_file"
+          python3 scripts/sparkle-appcast.py "${GITHUB_REF_NAME}" --tools .build/artifacts/sparkle/Sparkle/bin --key-file "$key_file"
+
       # Keep the release hidden while replacing assets so the feed is never
       # advertised before its corresponding verified build is uploaded.
       - name: Publish verified release and feed
@@ -66,5 +81,5 @@ jobs:
           else
             gh release create "${GITHUB_REF_NAME}" --verify-tag --draft --title "${GITHUB_REF_NAME}" --notes-file dist/release-notes.md
           fi
-          gh release upload "${GITHUB_REF_NAME}" dist/Kaji.app.zip dist/update.json --clobber
+          gh release upload "${GITHUB_REF_NAME}" dist/Kaji.app.zip dist/update.json dist/appcast.xml --clobber
           gh release edit "${GITHUB_REF_NAME}" --notes-file dist/release-notes.md --draft=false --latest
