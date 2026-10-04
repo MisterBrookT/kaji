@@ -24,7 +24,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var detailPopover: NSPopover?
     private var settingsWindow: NSWindow?
     var hostingView: KajiHostingView<StatusItemView>!
-    private let updateChecker = UpdateChecker()
+    private let updateChecker: UpdateChecker
     private let sleepController = SleepController()
     private lazy var workSession = WorkSessionController(prefs: prefs)
     let dailyGoals: DailyGoalStore
@@ -66,8 +66,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         self.init(defaults: .standard)
     }
 
-    init(defaults: UserDefaults, store: QuotaStore? = nil) {
+    init(defaults: UserDefaults, store: QuotaStore? = nil, updateChecker: UpdateChecker? = nil) {
         self.store = store ?? QuotaStore()
+        self.updateChecker = updateChecker ?? UpdateChecker()
         prefs = Prefs(defaults: defaults)
         dailyGoals = DailyGoalStore(defaults: defaults)
         fixedPlanStore = FixedPlanStore(defaults: defaults)
@@ -559,6 +560,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleUpdateAction() {
+        if presentNativeUpdate() { return }
         if updateChecker.available == nil {
             updateChecker.checkIfDue(force: true)
             return
@@ -571,6 +573,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Only reached from the explicit "Install and Relaunch" confirmation.
     private func installUpdate(_ release: UpdateChecker.Release) {
         guard !updateChecker.isInstalling else { return }
+        if presentNativeUpdate() { return }
         Task { @MainActor in
             do {
                 try await updateChecker.install(release)
@@ -653,6 +656,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sleepController.performGuidanceAction()
         case "cancel-sleep-guidance":
             sleepController.cancelApprovalRequest()
+        case "check-for-updates":
+            guard presentNativeUpdate() else { throw TestUIAutomationError.invalidAction }
         default:
             throw TestUIAutomationError.invalidAction
         }
@@ -715,6 +720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "surface": surface,
             "selection": selection,
             "appearance": NSApp.effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? "Dark" : "Light",
+            "binaryUpdater": updateChecker.usesBinaryUpdater,
             "path": outputURL.path,
             "width": Int(size.width),
             "height": Int(size.height),
@@ -756,9 +762,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// confirmation sheet in the Settings window. Installing stays behind the
     /// sheet's explicit "Install and Relaunch".
     func reviewUpdate(_ release: UpdateChecker.Release) {
-        popover.performClose(nil)
+        popover?.performClose(nil)
+        if presentNativeUpdate() { return }
         openSettings()
         updateChecker.reviewingRelease = release
+    }
+
+    /// Native binary updater owns its UI, activation, quit and relaunch; never terminate here.
+    @discardableResult
+    func presentNativeUpdate() -> Bool {
+        guard updateChecker.usesBinaryUpdater else { return false }
+        popover?.performClose(nil)
+        return updateChecker.presentBinaryUpdateCheck()
     }
 
     private func openSettings() {

@@ -190,6 +190,12 @@ func run() throws {
         }
         print("ASSERT appearance: PASS \(expectedAppearance)")
     }
+    if ProcessInfo.processInfo.environment["KAJI_UI_SMOKE_REQUIRE_SPARKLE"] == "1" {
+        guard statusReply["binaryUpdater"] as? Bool == true else {
+            throw SmokeError(description: "ASSERT Sparkle configuration: FAIL")
+        }
+        print("ASSERT Sparkle configuration: PASS")
+    }
     try assertPNG(statusPath, label: "status")
 
     for page in pageIDs {

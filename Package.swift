@@ -12,6 +12,9 @@ let package = Package(
         .executable(name: "KajiSleepHelper", targets: ["KajiSleepHelper"]),
         .library(name: "KajiCore", targets: ["KajiCore"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0")
+    ],
     targets: [
         // Pure logic shared by the app and tests (no AppKit).
         .target(
@@ -20,8 +23,15 @@ let package = Package(
         ),
         .executableTarget(
             name: "Kaji",
-            dependencies: ["KajiCore", "KajiSleepSupport"],
-            path: "Sources/Kaji"
+            dependencies: [
+                "KajiCore",
+                "KajiSleepSupport",
+                .product(name: "Sparkle", package: "Sparkle")
+            ],
+            path: "Sources/Kaji",
+            linkerSettings: [
+                .unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])
+            ]
         ),
         .executableTarget(
             name: "KajiCommand",

@@ -11,11 +11,12 @@ import KajiCore
 // If a newer one exists it publishes `available`, which drives a passive cue:
 // a dot on the menubar glyph + an "Update to vX" item in the popover.
 //
-// The update action is explicit: it runs the same GitHub release installer path
-// as the README one-liner, clears quarantine, and relaunches Kaji. Fully silent
-// background updates should wait until the app is signed + notarized, at which
-// point this can graduate to Sparkle with a real appcast. The check hits only
-// public github.com release URLs (never api.github.com) — no telemetry, no account, no payload sent.
+// Explicit actions use Sparkle's signed binary feed on configured .app hosts;
+// source builds remain the legacy/unconfigured fallback. Sparkle Ed25519
+// signatures secure updates independently of Apple Developer ID/notarization,
+// which are still required for a warning-free browser-downloaded first install.
+// Passive checks use public GitHub assets, never api.github.com. Sparkle checks
+// are manual; automatic downloads and system-profile submission are disabled.
 @MainActor
 final class UpdateChecker: ObservableObject {
     static let repo = "MisterBrookT/kaji"
@@ -42,6 +43,7 @@ final class UpdateChecker: ObservableObject {
     @Published private(set) var installLogURL: URL?
 
     private let installer: SourceUpdateInstaller
+    private let binaryUpdater: BinaryUpdatePresenting?
     private let installationDefaults: UserDefaults
     private static let pendingLogKey = "pendingSourceUpdateLog"
     private let session: URLSession
@@ -56,13 +58,28 @@ final class UpdateChecker: ObservableObject {
          session: URLSession = URLSession(configuration: .ephemeral),
          currentVersion: String? = nil,
          installer: SourceUpdateInstaller = SourceUpdateInstaller(),
-         installationDefaults: UserDefaults = .standard) {
+         installationDefaults: UserDefaults = .standard,
+         binaryUpdater: BinaryUpdatePresenting? = SparkleBinaryUpdater()) {
+        self.binaryUpdater = binaryUpdater
         self.available = available
         self.session = session
         self.currentVersionOverride = currentVersion
         self.installer = installer
         self.installationDefaults = installationDefaults
         restoreInstallationResult()
+    }
+
+    /// True when explicit update actions go to the native binary updater
+    /// instead of the source-build sheet.
+    var usesBinaryUpdater: Bool { binaryUpdater?.isAvailable == true }
+
+    /// Starts the native update flow. Returns false when the caller must use
+    /// the source fallback. The binary updater owns quit/relaunch.
+    @discardableResult
+    func presentBinaryUpdateCheck() -> Bool {
+        guard let binaryUpdater, binaryUpdater.isAvailable else { return false }
+        binaryUpdater.checkForUpdates()
+        return true
     }
 
     var currentVersion: String {

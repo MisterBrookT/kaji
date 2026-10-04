@@ -55,7 +55,7 @@ final class UpdateReleaseNotesTests: XCTestCase {
             assetURL: nil
         )
         do {
-            try await UpdateChecker().install(release)
+            try await UpdateChecker(binaryUpdater: nil).install(release)
             XCTFail("must reject mismatched approved version/tag before building")
         } catch {
             XCTAssertEqual(error as? UpdateChecker.InstallError, .invalidRelease)
