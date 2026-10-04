@@ -332,14 +332,12 @@ struct SettingsView: View {
                     .pickerStyle(.inline)
                     .labelsHidden()
                 } label: {
-                    Text(prefs.language.label)
+                    controlLabel(prefs.language.label, chevron: true)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.visible)
-                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                .foregroundColor(t.cream)
-                .frame(width: SettingsControlMetrics.width, height: SettingsControlMetrics.height)
-                .background(controlBackground())
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .accessibilityIdentifier("kaji.settings.language")
             }
             settingRow(title: L10n.t(.usage, prefs.language)) {
@@ -351,14 +349,12 @@ struct SettingsView: View {
                     .pickerStyle(.inline)
                     .labelsHidden()
                 } label: {
-                    Text(L10n.t(prefs.showRemaining ? .showRemaining : .showUsed, prefs.language))
+                    controlLabel(L10n.t(prefs.showRemaining ? .showRemaining : .showUsed, prefs.language), chevron: true)
                 }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.visible)
-                .font(.system(size: 11.5, weight: .semibold, design: .rounded))
-                .foregroundColor(t.cream)
-                .frame(width: SettingsControlMetrics.width, height: SettingsControlMetrics.height)
-                .background(controlBackground())
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
                 .accessibilityIdentifier("kaji.settings.usage")
             }
             Divider().overlay(t.track)
@@ -446,7 +442,6 @@ struct SettingsView: View {
     /// Shared neutral chrome for menu and action controls in the right column.
     private func controlLabel(_ title: String, chevron: Bool, emphasized: Bool = false) -> some View {
         HStack(spacing: 6) {
-            if !chevron { Spacer(minLength: 0) }
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.tail)
