@@ -439,23 +439,25 @@ struct SettingsView: View {
         }
     }
 
-    /// Shared neutral chrome for menu and action controls in the right column.
+    /// Quiet right-column value: plain text plus a small indicator, no field
+    /// chrome, so menus and actions sit with the switches instead of looking
+    /// like text inputs. Only an available update gets a filled pill.
     private func controlLabel(_ title: String, chevron: Bool, emphasized: Bool = false) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 4) {
             Text(title)
                 .lineLimit(1)
                 .truncationMode(.tail)
-            Spacer(minLength: 0)
             if chevron {
                 Image(systemName: "chevron.up.chevron.down")
                     .font(.system(size: 8.5, weight: .semibold))
+                    .foregroundColor(t.mute)
             }
         }
-        .font(.system(size: 11.5, weight: .semibold, design: .rounded))
+        .font(.system(size: 12, weight: .semibold, design: .rounded))
         .foregroundColor(emphasized ? t.bg : t.cream)
-        .padding(.horizontal, 10)
-        .frame(width: SettingsControlMetrics.width, height: SettingsControlMetrics.height)
-        .background(controlBackground(emphasized: emphasized))
+        .padding(.horizontal, emphasized ? 10 : 0)
+        .frame(height: SettingsControlMetrics.height)
+        .background(emphasized ? AnyView(controlBackground(emphasized: true)) : AnyView(Color.clear))
         .contentShape(Rectangle())
     }
 
