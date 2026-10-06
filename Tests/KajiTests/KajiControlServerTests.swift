@@ -116,6 +116,30 @@ final class KajiControlServerTests: XCTestCase {
         XCTAssertEqual(action.object["target"] as? Bool, true)
     }
 
+    func testMalformedRequestsAreRejectedBeforeBodyArithmetic() {
+        let prefix = "POST /v1/goals HTTP/1.1\r\nHost: 127.0.0.1:37841\r\n"
+        for length in ["-1", String(Int.max), "1048577", "99999999999999999999999999", "1, 1", "+1"] {
+            assertInvalid(prefix + "Content-Length: \(length)\r\n\r\n")
+        }
+        assertInvalid(prefix + "Content-Length: 1\r\nContent-Length: 1\r\n\r\na")
+        assertInvalid(prefix + "Content-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\na")
+        assertInvalid("GET /v1/state HTTP/1.1\r\nHost: attacker.test:37841\r\n\r\n")
+        assertInvalid("GET /v1/state HTTP/1.1\r\nHost: 127.0.0.1:37841\r\nOrigin: https://attacker.test\r\n\r\n")
+        assertInvalid(prefix + "Content-Length: 2\r\nContent-Type: text/plain\r\n\r\n{}")
+        assertInvalid(String(repeating: "x", count: 16_385))
+        let valid = prefix + "Content-Length: 2\r\nContent-Type: application/json\r\n\r\n{}"
+        guard case .complete(let request) = ControlHTTPRequest.parse(Data(valid.utf8), port: 37_841) else {
+            return XCTFail("Valid JSON request was rejected")
+        }
+        XCTAssertNoThrow(try request.jsonBody())
+    }
+
+    private func assertInvalid(_ text: String, file: StaticString = #filePath, line: UInt = #line) {
+        guard case .invalid = ControlHTTPRequest.parse(Data(text.utf8), port: 37_841) else {
+            return XCTFail("Expected invalid request: \(text.prefix(100))", file: file, line: line)
+        }
+    }
+
     private func waitUntilReachable(_ url: URL) async throws {
         for _ in 0..<50 {
             var request = URLRequest(url: url)

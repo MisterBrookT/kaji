@@ -19,6 +19,61 @@ final class QuotaStoreTests: XCTestCase {
         )
     }
 
+    func testOverlappingRefreshAndStopSuppressStaleResult() async {
+        let entered = expectation(description: "runner entered")
+        let release = DispatchSemaphore(value: 0)
+        let calls = LockedCounter()
+        let store = QuotaStore(runner: { _ in
+            let call = calls.increment()
+            if call == 1 { entered.fulfill() }
+            release.wait()
+            return .failure(call == 1 ? "stale result" : "latest result")
+        })
+        store.refresh()
+        await fulfillment(of: [entered], timeout: 2)
+        store.refresh()
+        XCTAssertEqual(calls.value, 1)
+        store.stop()
+        store.refresh()
+        try? await Task.sleep(for: .milliseconds(30))
+        XCTAssertEqual(calls.value, 1, "restart must not overlap the stopped worker")
+        release.signal()
+        // Restart is deferred until the stopped worker releases its slot.
+        let next = expectation(description: "new runner entered")
+        // The original runner is reused, so release its second call as well.
+        release.signal()
+        store.refresh()
+        for _ in 0..<100 where calls.value < 2 {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        if calls.value == 2 { next.fulfill() }
+        await fulfillment(of: [next], timeout: 2)
+        XCTAssertEqual(calls.value, 2)
+        for _ in 0..<100 where store.lastError == nil {
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        XCTAssertEqual(store.lastError, "latest result")
+    }
+
+    func testExecutorDrainsNoisyStderrAndBoundsInheritedPipes() throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/sh")
+        process.arguments = ["-c", "(sleep 3) & head -c 200000 /dev/zero >&2; printf 'done'"]
+        let start = Date()
+        let output = try QuotaStore.execute(process, timeout: 0.5)
+        XCTAssertEqual(output.status, 0)
+        XCTAssertEqual(String(data: output.stdout, encoding: .utf8), "done")
+        XCTAssertEqual(output.stderr.count, 200000)
+        XCTAssertLessThan(Date().timeIntervalSince(start), 2)
+    }
+
+    private final class LockedCounter: @unchecked Sendable {
+        private let lock = NSLock()
+        private var count = 0
+        var value: Int { lock.lock(); defer { lock.unlock() }; return count }
+        func increment() -> Int { lock.lock(); defer { lock.unlock() }; count += 1; return count }
+    }
+
     func testMenuBarOrderRanksByConstraint() {
         let providers = [
             provider("claude", fiveHourPercent: 56),

@@ -207,19 +207,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Check on launch; re-check when the app is reactivated (cheap, throttled
         // to once per interval inside the checker).
         updateChecker.checkIfDue()
-        startBreakWatchdog()
-
         updateStatusItem()
     }
 
-    private func applyModuleLifecycle(_ modules: Set<KajiModuleID>) {
+    var isBreakWatchdogRunning: Bool { breakWatchdogTimer != nil }
+
+    func applyModuleLifecycle(_ modules: Set<KajiModuleID>) {
         if modules.contains(.work) {
             workSession.start()
+            if breakWatchdogTimer == nil { startBreakWatchdog() }
         } else {
+            breakWatchdogTimer?.invalidate()
+            breakWatchdogTimer = nil
             workSession.stopAndReset()
             closeBreakOverlay()
         }
-
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -237,6 +239,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        SleepLeaseClient.shared.close()
         closeDetailPopover()
         store.stop()
         breakWatchdogTimer?.invalidate()

@@ -124,7 +124,7 @@ final class SleepController: ObservableObject {
                 commandSucceeded = false
                 approvalFlow.requireRepair(for: enabled)
             }
-            let observed = commandSucceeded ? enabled : environment.readState()
+            let observed = environment.readState()
             isBusy = false
             targetEnabled = nil
             isEnabled = observed
@@ -157,7 +157,7 @@ final class SleepController: ObservableObject {
                     throw SleepControllerError.installationFailed
                 }
                 let commandSucceeded = await request(target, attempts: 3)
-                let observed = commandSucceeded ? target : environment.readState()
+                let observed = environment.readState()
                 isBusy = false
                 targetEnabled = nil
                 isEnabled = observed
@@ -193,7 +193,10 @@ final class SleepController: ObservableObject {
         machServiceName: String = kajiSleepHelperMachService,
         timeout: TimeInterval = 3
     ) async -> Bool {
-        await withCheckedContinuation { continuation in
+        if !disabled, let released = await SleepLeaseClient.shared.disable(timeout: timeout) {
+            return released
+        }
+        return await withCheckedContinuation { continuation in
             let connection = NSXPCConnection(machServiceName: machServiceName)
             connection.remoteObjectInterface = NSXPCInterface(with: SleepHelperProtocol.self)
 
@@ -215,7 +218,9 @@ final class SleepController: ObservableObject {
                 completion.finish(false)
                 return
             }
-            helper.setSleepDisabled(disabled) { ok, _ in completion.finish(ok) }
+            helper.setSleepDisabled(disabled) { ok, _ in
+                completion.finish(ok, keepLease: ok && disabled)
+            }
         }
     }
 
@@ -265,12 +270,76 @@ private final class SleepRequestCompletion: @unchecked Sendable {
         self.continuation = continuation
     }
 
-    func finish(_ value: Bool) {
+    func finish(_ value: Bool, keepLease: Bool = false) {
         guard gate.claim() else { return }
         connection.interruptionHandler = nil
         connection.invalidationHandler = nil
+        if keepLease { SleepLeaseClient.shared.hold(connection) }
+        else { connection.invalidate() }
         continuation.resume(returning: value)
-        connection.invalidate()
+    }
+}
+
+// A live connection owns the helper lease. If the app exits, launchd/XPC closes
+// it and the daemon restores the recorded prior value. Renewal bounds a broken
+// connection that fails to deliver an invalidation callback.
+final class SleepLeaseClient: @unchecked Sendable {
+    static let shared = SleepLeaseClient()
+    private let lock = NSLock()
+    private var connection: NSXPCConnection?
+    private var timer: DispatchSourceTimer?
+
+    func hold(_ newConnection: NSXPCConnection) {
+        lock.lock()
+        connection?.invalidate()
+        timer?.cancel()
+        connection = newConnection
+        let leaseTimer = DispatchSource.makeTimerSource(queue: .global(qos: .utility))
+        leaseTimer.schedule(deadline: .now() + 15, repeating: 15)
+        leaseTimer.setEventHandler { [weak self, weak newConnection] in
+            guard let self, let newConnection,
+                  let proxy = newConnection.remoteObjectProxyWithErrorHandler({ _ in self.close() }) as? SleepHelperProtocol else {
+                self?.close()
+                return
+            }
+            proxy.renewLease { valid in if !valid { self.close() } }
+        }
+        timer = leaseTimer
+        leaseTimer.resume()
+        lock.unlock()
+    }
+
+    private func currentConnection() -> NSXPCConnection? {
+        lock.lock()
+        defer { lock.unlock() }
+        return connection
+    }
+
+    func disable(timeout: TimeInterval) async -> Bool? {
+        guard let active = currentConnection() else { return nil }
+        return await withCheckedContinuation { continuation in
+            let gate = SleepRequestGate()
+            let complete: @Sendable (Bool) -> Void = { [self] result in
+                guard gate.claim() else { return }
+                self.close()
+                continuation.resume(returning: result)
+            }
+            DispatchQueue.global().asyncAfter(deadline: .now() + timeout) { complete(false) }
+            guard let proxy = active.remoteObjectProxyWithErrorHandler({ _ in complete(false) }) as? SleepHelperProtocol else {
+                complete(false)
+                return
+            }
+            proxy.setSleepDisabled(false) { ok, _ in complete(ok) }
+        }
+    }
+
+    func close() {
+        lock.lock()
+        timer?.cancel()
+        timer = nil
+        connection?.invalidate()
+        connection = nil
+        lock.unlock()
     }
 }
 
