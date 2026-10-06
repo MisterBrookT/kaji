@@ -47,6 +47,7 @@ jobs:
 
       - name: Installer and release-notes regression tests
         run: |
+          /bin/bash Tests/release/test_adhoc_policy.sh
           /bin/bash Tests/installer/test_install.sh
           /bin/bash Tests/release/test_release_notes.sh
           python3 Tests/release/test_update_manifest.py

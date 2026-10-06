@@ -36,7 +36,7 @@ Quota is on by default. Work timer and goals are modules you turn on if you want
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-macOS 13+ (Apple Silicon), plus `git`, `swift` and `python3`. The installer builds from the latest release tag and installs to `/Applications`.
+Kaji runs on macOS 13+ (Apple Silicon). Source installation also needs working `git`, `python3`, and Swift 6+: standard Xcode 16 / Command Line Tools for building require macOS 14.5+, though a compatible custom Swift 6 toolchain may work on macOS 13. The installer builds from the latest release tag and installs to `/Applications`.
 
 From 1.0.1, **Check for Updates** uses Sparkle to download signed binary updates and show the changelog before installation. Older builds may need the install command once to get Sparkle. Builds are still ad-hoc signed, not Apple-notarized: browser ZIP/DMG downloads may be blocked by Gatekeeper. Use the source installer for the first installation; Sparkle does not remove that warning.
 

@@ -36,7 +36,7 @@ Claude Code 和 Codex 都按滚动窗口计量。Kaji 把答案放进菜单栏�
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-需要 macOS 13+（Apple Silicon），以及 `git`、`swift`、`python3`。安装脚本会从最新 release tag 本机构建并装到 `/Applications`。
+Kaji 可在 macOS 13+（Apple Silicon）运行。源码安装还需要可用的 `git`、`python3` 和 Swift 6+：标准 Xcode 16／命令行工具构建需要 macOS 14.5+，但兼容的自定义 Swift 6 工具链可能在 macOS 13 上工作。安装脚本会从最新 release tag 本机构建并装到 `/Applications`。
 
 从 1.0.1 起，**检查更新**通过 Sparkle 下载带签名的二进制更新，安装前会显示更新说明。旧版本可能需要先运行一次安装命令才能获得 Sparkle。构建仍只有 ad-hoc 签名，未经过 Apple 公证：浏览器下载的 ZIP/DMG 可能被 Gatekeeper 拦截。首次安装请用源码安装命令；Sparkle 不会消除首次安装的警告。
 

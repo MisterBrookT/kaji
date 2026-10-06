@@ -27,6 +27,7 @@ jobs:
       - name: Tests
         run: |
           python3 Tests/quota/test_quota.py
+          /bin/bash Tests/release/test_adhoc_policy.sh
           /bin/bash Tests/installer/test_install.sh
           /bin/bash Tests/release/test_release_notes.sh
           python3 Tests/release/test_update_manifest.py

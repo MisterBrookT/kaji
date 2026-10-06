@@ -9,6 +9,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Permanent distribution policy: reject inherited signing identities before
+# building anything. Never use Developer ID, timestamps or signing keychains.
+if [[ "${KAJI_CODESIGN_IDENTITY:--}" != "-" ]]; then
+	echo "error: Kaji supports only ad-hoc signing; unset KAJI_CODESIGN_IDENTITY." >&2
+	exit 1
+fi
+
 APP_NAME="Kaji"
 BUNDLE="dist/${APP_NAME}.app"
 EXEC_NAME="Kaji"
@@ -87,8 +94,8 @@ else
 	<key>CFBundleExecutable</key><string>Kaji</string>
 	<key>CFBundleIconFile</key><string>AppIcon</string>
 	<key>CFBundlePackageType</key><string>APPL</string>
-	<key>CFBundleShortVersionString</key><string>1.0.2</string>
-	<key>CFBundleVersion</key><string>43</string>
+	<key>CFBundleShortVersionString</key><string>1.0.3</string>
+	<key>CFBundleVersion</key><string>44</string>
 	<key>LSMinimumSystemVersion</key><string>13.0</string>
 	<key>LSUIElement</key><true/>
 	<key>NSHighResolutionCapable</key><true/>
@@ -126,14 +133,8 @@ cp "Resources/break-window-rain.png" "${BUNDLE}/Contents/Resources/break-window-
 # PkgInfo (harmless, conventional).
 printf 'APPL????' > "${BUNDLE}/Contents/PkgInfo"
 
-# Local builds are always ad-hoc signed and must never touch a user keychain.
-# Distribution signing is opt-in: CI or a release operator must pass the exact
-# identity through KAJI_CODESIGN_IDENTITY in a non-interactive environment.
-KAJI_CODESIGN_IDENTITY=${KAJI_CODESIGN_IDENTITY:--}
-SIGN_ARGS=(--force --sign "${KAJI_CODESIGN_IDENTITY}")
-if [[ "$KAJI_CODESIGN_IDENTITY" != "-" ]]; then
-	SIGN_ARGS+=(--options runtime --timestamp)
-fi
+# All builds are ad-hoc signed and must never touch a user keychain.
+SIGN_ARGS=(--force --sign -)
 xattr -cr "${BUNDLE}"
 # Nested code is signed inside-out (no --deep): Sparkle's XPC services and
 # helpers first, then the framework, then the helper tool, then the app.

@@ -72,7 +72,7 @@ Rules:
 
 - Local builds must use ad-hoc signing (`codesign --sign -`) and remain fully non-interactive.
 - Build scripts must never discover, create, unlock, or add a signing keychain to the user's keychain search list.
-- Developer ID signing is allowed only when `KAJI_CODESIGN_IDENTITY` is supplied explicitly by CI or a release operator. Missing configuration must fall back to ad-hoc signing, never a password prompt.
+- Never use Developer ID signing for Kaji. Do not add Apple certificate provisioning, notarization, or signing-keychain setup. Release builds remain ad-hoc signed; first installation builds locally from source. See `dev_docs/ship/distribution.md` for the permanent distribution decision.
 
 ## Code touch rules (when implementing lean modules)
 
