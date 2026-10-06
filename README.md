@@ -7,28 +7,29 @@
   </picture>aji
 </h1>
 
-**The menu bar worth keeping for AI coding.**
-
-See how much quota is left. Add the rest only if you want it.
+**AI coding quota, quietly in your menu bar.**
 
 [中文](README.zh.md)
 
-<a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
-<img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="MIT license"></a>
-<img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Latest release">
-
-<img src="dev_docs/assets/use-quota.png" width="560" alt="Kaji quota popover: Claude Code, Codex and Cursor, each with its two usage windows, percentage and reset time" />
+<img src="dev_docs/assets/use-quota.png" width="560" alt="Quota usage and reset times for Claude Code, Codex and Cursor" />
 
 </div>
 
-## What it is
+## Features
 
-Claude Code and Codex meter you on rolling windows. Kaji puts the answer in the menu bar: how much is used, and when it resets.
+- **Quota:** usage percentages and reset times for your AI tools.
+- **Work / Break:** optional focus timer and break reminders.
+- **Goals:** optional daily and longer-term goals, with a CLI for agents.
 
-Each provider shows both of its windows — the short session window and the long one — with a percentage and the reset time. Nothing to open, nothing to ask.
+Only quota is on by default. Turn off what you don't need. Black, white and gray, in light or dark mode.
 
-Quota is on by default. Work timer and goals are modules you turn on if you want them. `Kaji` is Japanese `舵 / かじ` — rudder.
+## Privacy
+
+- Reads local tool data and credentials; contacts providers directly for quota and token renewal.
+- Prompts and goals stay on your Mac. No analytics, Kaji account, or Kaji server.
+- Update checks and downloads use GitHub. You choose when to install updates.
+
+[How quota works](docs/quota.md)
 
 ## Install
 
@@ -36,59 +37,10 @@ Quota is on by default. Work timer and goals are modules you turn on if you want
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-Kaji runs on macOS 13+ (Apple Silicon). Source installation also needs working `git`, `python3`, and Swift 6+: standard Xcode 16 / Command Line Tools for building require macOS 14.5+, though a compatible custom Swift 6 toolchain may work on macOS 13. The installer builds from the latest release tag and installs to `/Applications`.
-
-From 1.0.1, **Check for Updates** uses Sparkle to download signed binary updates and show the changelog before installation. Older builds may need the install command once to get Sparkle. Builds are still ad-hoc signed, not Apple-notarized: browser ZIP/DMG downloads may be blocked by Gatekeeper. Use the source installer for the first installation; Sparkle does not remove that warning.
-
-Trouble, or want it gone? [FAQ & troubleshooting](docs/faq.md).
-
-## Modules
-
-| Module | Default | What you get |
-| --- | --- | --- |
-| **Quota** | on | Usage and reset time per window, per provider |
-| **Work / Break** | off | Focus timer, menu-bar countdown, break overlay |
-| **Goals** | off | Today / Week / Vision, tags, notes, `kaji` CLI |
-
-Turning a module off removes its page *and* stops its timers and polling. One theme: black, white, gray — light and dark.
-
-<details>
-<summary>Work timer and goals</summary>
-
-<br>
-
-A countdown you can read without opening anything, and a break that actually interrupts.
-
-<img src="dev_docs/assets/use-work.png" width="480" alt="Work panel: 07:57 remaining, 45m focus and 2m break, with start, skip and reset" />
-
-Today / Week / Vision goals, with a `kaji` CLI so an agent can add and close them for you.
-
-<img src="dev_docs/assets/use-goals.png" width="480" alt="Goals panel: today's goals grouped by tag with completion dots" />
-
-</details>
-
-## Privacy
-
-Kaji reads the files your AI tools already write, and for providers that only publish quota server-side, calls that provider's usage endpoint with the credentials already on your Mac.
-
-- **Read locally:** `~/.claude/projects/**/*.jsonl`, `~/.codex/sessions/**/rollout-*.jsonl`, and the local credential stores when a provider needs them.
-- **Leaves your Mac:** provider usage requests with *your* token, Claude token renewal at `console.anthropic.com`, and update checks/downloads from GitHub. Only enabled providers are queried. Renewed Claude credentials are saved back to their original local store.
-- **No analytics, no account, no server of ours.** Prompts, usage and goals are never sent anywhere. The CLI talks to the app over `127.0.0.1` only.
-
-How each number is computed: [how quota works](docs/quota.md).
-
-## Docs
-
-- [How quota works](docs/quota.md) · [FAQ](docs/faq.md) · [CLI reference](docs/cli.md)
-- [Product principles](docs/product-principles.md) · [module architecture](docs/module-architecture.md) · [design language](docs/design-language.md)
-- [AGENTS.md](AGENTS.md) — contributor and agent notes
+[Requirements and troubleshooting](docs/faq.md) | [CLI](docs/cli.md)
 
 ## Contributing
 
-Issues and PRs welcome. Run `swift test` first; layout invariants and UI-test layering are in [AGENTS.md](AGENTS.md).
+Issues and PRs welcome. See [AGENTS.md](AGENTS.md).
 
-## License
-
-MIT. See [LICENSE](LICENSE).
-
-Not affiliated with Anthropic, OpenAI, Anysphere, or any other provider. Product names and marks belong to their owners.
+[MIT](LICENSE). Not affiliated with the AI providers.

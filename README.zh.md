@@ -7,28 +7,29 @@
   </picture>aji
 </h1>
 
-**值得一直留在菜单栏的 AI coding 工具。**
-
-一眼看到还剩多少额度，其余功能想要再开。
+**AI 编程额度，安静地留在菜单栏。**
 
 [English](README.md)
 
-<a href="https://github.com/MisterBrookT/kaji/stargazers"><img src="https://img.shields.io/github/stars/MisterBrookT/kaji?style=flat&label=stars&labelColor=1A1A1A&color=8A8A8A" alt="GitHub stars"></a>
-<img src="https://img.shields.io/badge/macOS-13%2B%20%C2%B7%20Apple%20Silicon-8A8A8A?labelColor=1A1A1A" alt="macOS 13+, Apple Silicon">
-<a href="LICENSE"><img src="https://img.shields.io/github/license/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="MIT license"></a>
-<img src="https://img.shields.io/github/v/release/MisterBrookT/kaji?color=8A8A8A&labelColor=1A1A1A" alt="Latest release">
-
-<img src="dev_docs/assets/use-quota.png" width="560" alt="Kaji quota 面板：Claude Code、Codex、Cursor 各自的两个用量窗口、百分比与重置时间" />
+<img src="dev_docs/assets/use-quota.png" width="560" alt="Claude Code、Codex 和 Cursor 的额度用量与重置时间" />
 
 </div>
 
-## 是什么
+## 功能
 
-Claude Code 和 Codex 都按滚动窗口计量。Kaji 把答案放进菜单栏：用了多少，什么时候重置。
+- **额度：** AI 工具的用量百分比与重置时间。
+- **专注 / 休息：** 可选的专注计时与休息提醒。
+- **目标：** 可选的日常与长期目标，提供 CLI 供 agent 操作。
 
-每个 provider 显示它的两个窗口——短的会话窗口和长的那个——各自带百分比与重置时间。不用打开任何东西，也不用问。
+默认只开额度，不需要的功能就关掉。黑白灰，支持浅色与深色。
 
-默认只开 Quota。专注计时、目标都是可选模块，想要再开。`Kaji` 来自日语 `舵 / かじ`。
+## 隐私
+
+- 读取本机的工具数据与凭据，直接向服务商查询额度、续期 token。
+- prompt 和目标留在本机。没有统计、Kaji 账号或 Kaji 服务器。
+- 通过 GitHub 检查和下载更新，安装前由你确认。
+
+[额度如何计算](docs/quota.md)
 
 ## 安装
 
@@ -36,59 +37,10 @@ Claude Code 和 Codex 都按滚动窗口计量。Kaji 把答案放进菜单栏�
 curl -fsSL https://raw.githubusercontent.com/MisterBrookT/kaji/main/install.sh | bash
 ```
 
-Kaji 可在 macOS 13+（Apple Silicon）运行。源码安装还需要可用的 `git`、`python3` 和 Swift 6+：标准 Xcode 16／命令行工具构建需要 macOS 14.5+，但兼容的自定义 Swift 6 工具链可能在 macOS 13 上工作。安装脚本会从最新 release tag 本机构建并装到 `/Applications`。
-
-从 1.0.1 起，**检查更新**通过 Sparkle 下载带签名的二进制更新，安装前会显示更新说明。旧版本可能需要先运行一次安装命令才能获得 Sparkle。构建仍只有 ad-hoc 签名，未经过 Apple 公证：浏览器下载的 ZIP/DMG 可能被 Gatekeeper 拦截。首次安装请用源码安装命令；Sparkle 不会消除首次安装的警告。
-
-出问题或想卸载：[常见问题与排查](docs/faq.md)。
-
-## 模块
-
-| 模块 | 默认 | 能力 |
-| --- | --- | --- |
-| **Quota** | 开 | 每个 provider、每个窗口的用量与重置时间 |
-| **Work / Break** | 关 | 专注计时、菜单栏倒计时、休息遮罩 |
-| **Goals** | 关 | Today / Week / Vision、标签、说明、`kaji` CLI |
-
-关掉一个模块不只是隐藏页面，同时会停掉它的定时器与轮询。只有一套主题：黑白灰，浅色与深色。
-
-<details>
-<summary>专注计时与目标</summary>
-
-<br>
-
-不用打开任何界面就能读到的倒计时，以及真的会打断你的休息。
-
-<img src="dev_docs/assets/use-work.png" width="480" alt="Work 面板：剩余 07:57，45m 专注 / 2m 休息" />
-
-Today / Week / Vision 三层目标，并提供 `kaji` CLI，让 agent 帮你增删与完成。
-
-<img src="dev_docs/assets/use-goals.png" width="480" alt="Goals 面板：按标签分组的今日目标" />
-
-</details>
-
-## 隐私
-
-Kaji 读取 AI 工具本来就写在你 Mac 上的文件；对于只在服务端公布额度的 provider，用你本机已有的凭据调用它自己的用量接口。
-
-- **本地读取：** `~/.claude/projects/**/*.jsonl`、`~/.codex/sessions/**/rollout-*.jsonl`，以及必要时的本地凭据。
-- **离开本机的请求：** 带你自己 token 的 provider 用量请求、向 `console.anthropic.com` 续期 Claude token，以及从 GitHub 检查和下载更新。只查询已启用的 provider；续期后的 Claude 凭据写回原来的本地存储。
-- **没有统计、没有账号、没有我们的服务器。** prompt、用量、目标都不会被上传。CLI 只通过 `127.0.0.1` 与 App 通信。
-
-每个数字怎么算：[quota 原理](docs/quota.md)。
-
-## 文档
-
-- [quota 原理](docs/quota.md) · [常见问题](docs/faq.md) · [CLI 参考](docs/cli.md)
-- [产品原则](docs/product-principles.md) · [模块架构](docs/module-architecture.md) · [设计语言](docs/design-language.md)
-- [AGENTS.md](AGENTS.md)：贡献者 / agent 笔记
+[环境要求与排查](docs/faq.md) | [CLI](docs/cli.md)
 
 ## 贡献
 
-欢迎 issue 与 PR。提 PR 前请跑 `swift test`；布局不变量与 UI 测试分层见 [AGENTS.md](AGENTS.md)。
+欢迎 issue 与 PR，见 [AGENTS.md](AGENTS.md)。
 
-## License
-
-MIT，见 [LICENSE](LICENSE)。
-
-与 Anthropic、OpenAI、Anysphere 及其他 provider 无隶属关系；相关名称与商标归各自所有者。
+[MIT](LICENSE)。与 AI 服务商无隶属关系。

@@ -1,5 +1,11 @@
 # FAQ and troubleshooting
 
+## What do I need to install Kaji?
+
+Kaji runs on macOS 13 or newer, on Apple Silicon or Intel. The install command builds from source and needs working Git, Python 3 and Swift 6 or newer. Standard Xcode 16 requires macOS 14.5 or newer; a compatible custom Swift toolchain may have different requirements.
+
+The installer checks prerequisites before building, installs to `/Applications`, and preserves the previous app if replacement or launch checks fail.
+
 ## The quota panel says python3 is missing
 
 Kaji's quota reader is a bundled Python script, and an app launched from Finder inherits a minimal `PATH` (`/usr/bin:/bin:/usr/sbin:/sbin`) rather than your shell's. Kaji probes, in order:
