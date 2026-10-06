@@ -56,9 +56,8 @@ That was a layout regression class in older builds — the popover's content hei
 ## How do I uninstall?
 
 ```sh
-# quit and remove the app
+# quit the app; if sleep control was enabled, finish helper removal below FIRST
 pkill -f "/Applications/Kaji.app/Contents/MacOS/Kaji" || true
-rm -rf /Applications/Kaji.app
 
 # preferences, goals, quota caches
 defaults delete dev.kaji || true
@@ -68,13 +67,34 @@ rm -rf ~/.helm/sessions
 rm -f ~/.local/bin/kaji
 ```
 
-If you enabled sleep control, also remove the privileged helper:
+If you enabled sleep control, wait for the helper to restore your prior sleep
+setting after quitting. Check whether its root-owned lease marker remains:
+
+```sh
+sudo cat /Library/PrivilegedHelperTools/dev.kaji.sleep-helper.lease 2>/dev/null || true
+sudo pmset -g
+```
+
+Older helper versions did not create a marker. If Prevent Sleep was enabled by
+an older version and the marker is absent, this version cannot infer your original
+setting: inspect `pmset -g` and decide whether to turn it off manually before
+removal. Normally a new helper's marker disappears automatically. **If it remains, do not stop or
+delete the helper yet.** The marker contains the original `disablesleep` value
+(`0` or `1`). If it says `0` and `pmset -g` still shows `SleepDisabled 1`, restore
+with `sudo pmset -a disablesleep 0`. If the marker says `1`, leave the setting
+alone. If it is missing or unreadable, do not guess; inspect the setting before
+making any changes. After restoration, remove the helper, then the app:
 
 ```sh
 sudo launchctl bootout system/dev.kaji.sleep-helper || true
 sudo rm -f /Library/LaunchDaemons/dev.kaji.sleep-helper.plist
 sudo rm -f /Library/PrivilegedHelperTools/dev.kaji.sleep-helper
+sudo rm -f /Library/PrivilegedHelperTools/dev.kaji.sleep-helper.lease
+rm -rf /Applications/Kaji.app
 ```
+
+There is currently no in-app helper uninstall button. An updated app may need
+administrator-approved helper repair because its ad-hoc code hash changes.
 
 ## Will Kaji hide my other menu-bar icons, like Ice or Bartender?
 
