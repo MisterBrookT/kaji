@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import Darwin
 
 // MARK: - Configuration constants
 enum Config {
@@ -87,9 +88,14 @@ final class QuotaStore: ObservableObject {
 
     private var timer: Timer?
     private let isPreview: Bool
+    private let runner: @Sendable (String) -> ScriptResult
+    private var inFlight: Task<Void, Never>?
+    private var pendingRefresh = false
+    private var generation = 0
 
     init() {
         isPreview = false
+        runner = { Self.runScript(path: $0) }
         UserDefaults.standard.removeObject(forKey: "sparklineHistory")
         UserDefaults.standard.removeObject(forKey: "tokenHistory")
         UserDefaults.standard.removeObject(forKey: "tokenHistoryV2")
@@ -99,8 +105,14 @@ final class QuotaStore: ObservableObject {
     /// start the poll timer or touch UserDefaults.
     init(previewProviders: [ProviderView], updated: Date? = nil) {
         isPreview = true
+        runner = { _ in .failure("preview") }
         self.providers = previewProviders
         self.lastUpdated = updated
+    }
+
+    init(runner: @escaping @Sendable (String) -> ScriptResult) {
+        isPreview = false
+        self.runner = runner
     }
 
     /// Resolve the quota reader, in priority order:
@@ -120,7 +132,7 @@ final class QuotaStore: ObservableObject {
     }
 
     func start() {
-        guard !isPreview else { return }
+        guard !isPreview, timer == nil else { return }
         refresh()
         let t = Timer.scheduledTimer(withTimeInterval: Config.refreshInterval,
                                      repeats: true) { [weak self] _ in
@@ -133,20 +145,37 @@ final class QuotaStore: ObservableObject {
     func stop() {
         timer?.invalidate()
         timer = nil
+        generation &+= 1
+        pendingRefresh = false
     }
 
     /// Run quota.py off the main thread, then fold results back on main.
     func refresh() {
+        guard !isPreview else { return }
+        if inFlight != nil {
+            pendingRefresh = true
+            return
+        }
         let path = scriptPath
-        Task.detached(priority: .utility) {
-            let result = Self.runScript(path: path)
-            await MainActor.run { self.apply(result) }
+        let currentGeneration = generation
+        let runner = runner
+        inFlight = Task.detached(priority: .utility) { [weak self] in
+            let result = runner(path)
+            await MainActor.run {
+                guard let self else { return }
+                self.inFlight = nil
+                if self.generation == currentGeneration { self.apply(result) }
+                if self.pendingRefresh {
+                    self.pendingRefresh = false
+                    self.refresh()
+                }
+            }
         }
     }
 
     // MARK: - Script execution
 
-    private enum ScriptResult {
+    enum ScriptResult {
         case success(QuotaSnapshot)
         case failure(String)
     }
@@ -155,6 +184,7 @@ final class QuotaStore: ObservableObject {
     // spawn `--version` checks every 30s poll. Guarded by a lock (runScript runs
     // on a detached task).
     nonisolated(unsafe) private static var cachedInterpreter: String?
+    nonisolated(unsafe) private static var cachedOverride: String?
     nonisolated private static let interpreterLock = NSLock()
 
     /// First python3 candidate that actually runs. Rejects the Command Line
@@ -162,12 +192,14 @@ final class QuotaStore: ObservableObject {
     nonisolated private static func resolveInterpreter() -> String? {
         interpreterLock.lock()
         defer { interpreterLock.unlock() }
+        let override = UserDefaults.standard.string(forKey: Config.kPythonInterpreter).flatMap { $0.isEmpty ? nil : $0 }
+        if cachedOverride != override {
+            cachedInterpreter = nil
+            cachedOverride = override
+        }
         if let cached = cachedInterpreter { return cached }
         var candidates: [String] = []
-        if let override = UserDefaults.standard.string(forKey: Config.kPythonInterpreter),
-           !override.isEmpty {
-            candidates.append(override)
-        }
+        if let override { candidates.append(override) }
         candidates += Config.pythonCandidates
         for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
             if probeInterpreter(path) {
@@ -185,17 +217,7 @@ final class QuotaStore: ObservableObject {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: path)
         p.arguments = ["--version"]
-        p.standardOutput = Pipe()
-        p.standardError = Pipe()
-        do { try p.run() } catch { return false }
-        // Watchdog: a hung candidate would otherwise hold `interpreterLock`
-        // forever and freeze every future refresh. `--version` is instant; kill
-        // after 5s.
-        let killer = DispatchWorkItem { if p.isRunning { p.terminate() } }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 5, execute: killer)
-        p.waitUntilExit()
-        killer.cancel()
-        return p.terminationStatus == 0
+        return (try? execute(p, timeout: 5).status) == 0
     }
 
     nonisolated private static func runScript(path: String) -> ScriptResult {
@@ -206,37 +228,20 @@ final class QuotaStore: ObservableObject {
         proc.executableURL = URL(fileURLWithPath: interpreter)
         proc.arguments = [path, "--json"]
 
-        let outPipe = Pipe()
-        let errPipe = Pipe()
-        proc.standardOutput = outPipe
-        proc.standardError = errPipe
-
+        let output: (status: Int32, stdout: Data, stderr: Data)
         do {
-            try proc.run()
+            output = try execute(proc, timeout: 90)
         } catch {
+            interpreterLock.lock()
+            if cachedInterpreter == interpreter { cachedInterpreter = nil }
+            interpreterLock.unlock()
             return .failure("launch failed: \(error.localizedDescription)")
         }
-
-        // Watchdog: quota.py's network/subprocess calls are individually bounded
-        // (~10s each, cached 180s), so a healthy run finishes well under this.
-        // A genuine hang (wedged interpreter / stuck child) would otherwise pin
-        // a detached worker forever — terminate, then hard-kill.
-        let killer = DispatchWorkItem {
-            if proc.isRunning { proc.terminate() }
-            DispatchQueue.global().asyncAfter(deadline: .now() + 3) {
-                if proc.isRunning { kill(proc.processIdentifier, SIGKILL) }
-            }
-        }
-        DispatchQueue.global().asyncAfter(deadline: .now() + 90, execute: killer)
-
-        let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-        let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-        proc.waitUntilExit()
-        killer.cancel()
-
-        if proc.terminationStatus != 0 {
+        let outData = output.stdout
+        let errData = output.stderr
+        if output.status != 0 {
             let err = String(data: errData, encoding: .utf8) ?? ""
-            return .failure("exit \(proc.terminationStatus): \(err.trimmingCharacters(in: .whitespacesAndNewlines))")
+            return .failure("exit \(output.status): \(err.trimmingCharacters(in: .whitespacesAndNewlines))")
         }
 
         guard !outData.isEmpty else {
@@ -249,6 +254,50 @@ final class QuotaStore: ObservableObject {
         } catch {
             return .failure("decode failed: \(error.localizedDescription)")
         }
+    }
+
+    /// Drain both pipes without waiting for EOF from descendants that inherited them.
+    nonisolated static func execute(_ process: Process, timeout: TimeInterval) throws -> (status: Int32, stdout: Data, stderr: Data) {
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+        try process.run()
+        stdout.fileHandleForWriting.closeFile()
+        stderr.fileHandleForWriting.closeFile()
+        let descriptors = [stdout.fileHandleForReading.fileDescriptor, stderr.fileHandleForReading.fileDescriptor]
+        for fd in descriptors { _ = fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK) }
+        var buffers = [Data(), Data()]
+        var open = [true, true]
+        let deadline = Date().addingTimeInterval(max(0, timeout))
+        var killDeadline: Date?
+        while true {
+            let now = Date()
+            if now >= deadline && killDeadline == nil {
+                if process.isRunning { process.terminate() }
+                killDeadline = now.addingTimeInterval(3)
+            }
+            if let killDeadline, now >= killDeadline, process.isRunning {
+                _ = kill(process.processIdentifier, SIGKILL)
+            }
+            var polls = descriptors.enumerated().map { index, fd in
+                pollfd(fd: open[index] ? fd : -1, events: Int16(POLLIN | POLLHUP), revents: 0)
+            }
+            _ = polls.withUnsafeMutableBufferPointer { poll($0.baseAddress, nfds_t($0.count), 20) }
+            for index in descriptors.indices where open[index] {
+                var bytes = [UInt8](repeating: 0, count: 8192)
+                let count = read(descriptors[index], &bytes, bytes.count)
+                if count > 0 { buffers[index].append(contentsOf: bytes.prefix(count)) }
+                else if count == 0 { open[index] = false }
+            }
+            // Once the direct child exits, allow a brief final drain but never
+            // wait for a grandchild's inherited write descriptors to close.
+            if !process.isRunning && (now >= deadline || !open.contains(true)) { break }
+            if !process.isRunning && killDeadline == nil { killDeadline = now.addingTimeInterval(0.1) }
+            if !process.isRunning, let killDeadline, now >= killDeadline { break }
+        }
+        process.waitUntilExit()
+        return (process.terminationStatus, buffers[0], buffers[1])
     }
 
     // MARK: - Apply results

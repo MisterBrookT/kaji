@@ -58,13 +58,17 @@ final class KajiControlServer {
             listener.stateUpdateHandler = { [weak self] state in
                 if case .failed = state {
                     Task { @MainActor in
-                        self?.listener?.cancel()
-                        self?.listener = nil
+                        guard let self, self.listener === listener else { return }
+                        self.listener?.cancel()
+                        self.listener = nil
                     }
                 }
             }
             listener.newConnectionHandler = { [weak self] connection in
-                Task { @MainActor in self?.accept(connection) }
+                Task { @MainActor in
+                    guard let self, self.listener === listener else { connection.cancel(); return }
+                    self.accept(connection)
+                }
             }
             listener.start(queue: queue)
         } catch {
@@ -80,8 +84,16 @@ final class KajiControlServer {
     }
 
     private func accept(_ connection: NWConnection) {
+        guard connections.count < 16 else { connection.cancel(); return }
         connections[ObjectIdentifier(connection)] = connection
         connection.start(queue: queue)
+        let id = ObjectIdentifier(connection)
+        queue.asyncAfter(deadline: .now() + 5) { [weak self] in
+            Task { @MainActor in
+                guard let self, self.connections[id] != nil else { return }
+                self.finish(connection)
+            }
+        }
         receive(on: connection, buffer: Data())
     }
 
@@ -90,9 +102,21 @@ final class KajiControlServer {
             [weak self] data, _, isComplete, error in
             var next = buffer
             if let data { next.append(data) }
-            if let request = ControlHTTPRequest.parse(next) {
+            guard next.count <= ControlHTTPRequest.maximumRequestSize else {
+                Task { @MainActor in self?.finish(connection) }
+                return
+            }
+            switch ControlHTTPRequest.parse(next, port: self?.port.rawValue ?? KajiControlServer.port) {
+            case .invalid:
+                Task { @MainActor in self?.finish(connection) }
+                return
+            case .incomplete:
+                break
+            case .complete(let request):
                 Task { @MainActor in
-                    guard let self else { connection.cancel(); return }
+                    guard let self, self.connections[ObjectIdentifier(connection)] != nil else {
+                        connection.cancel(); return
+                    }
                     let response = self.handle(request)
                     connection.send(content: response, completion: .contentProcessed { _ in
                         Task { @MainActor in self.finish(connection) }
@@ -100,10 +124,13 @@ final class KajiControlServer {
                 }
                 return
             }
-            if isComplete || error != nil || next.count > 1_048_576 {
+            if isComplete || error != nil {
                 Task { @MainActor in self?.finish(connection) }
             } else {
-                Task { @MainActor in self?.receive(on: connection, buffer: next) }
+                Task { @MainActor in
+                    guard let self, self.connections[ObjectIdentifier(connection)] != nil else { return }
+                    self.receive(on: connection, buffer: next)
+                }
             }
         }
     }
@@ -206,33 +233,63 @@ final class KajiControlServer {
     private enum ControlError: Error { case invalid(String) }
 }
 
-private struct ControlHTTPRequest {
+struct ControlHTTPRequest {
+    static let maximumBodySize = 1_048_576
+    static let maximumRequestSize = maximumBodySize + 16_384
+    enum ParseResult {
+        case incomplete
+        case invalid
+        case complete(ControlHTTPRequest)
+    }
     let method: String
     let path: String
     let body: Data
+    let contentType: String?
 
     func jsonBody() throws -> [String: Any] {
+        guard contentType?.lowercased() == "application/json" else { throw BodyError.invalid }
         guard let value = try JSONSerialization.jsonObject(with: body) as? [String: Any] else {
             throw BodyError.invalid
         }
         return value
     }
 
-    static func parse(_ data: Data) -> ControlHTTPRequest? {
+    static func parse(_ data: Data, port: UInt16) -> ParseResult {
+        guard data.count <= maximumRequestSize else { return .invalid }
         let marker = Data("\r\n\r\n".utf8)
-        guard let headerRange = data.range(of: marker),
-              let header = String(data: data[..<headerRange.lowerBound], encoding: .utf8) else { return nil }
+        guard let headerRange = data.range(of: marker) else {
+            return data.count > 16_384 ? .invalid : .incomplete
+        }
+        guard headerRange.upperBound <= 16_384,
+              let header = String(data: data[..<headerRange.lowerBound], encoding: .utf8) else { return .invalid }
         let lines = header.components(separatedBy: "\r\n")
         let requestLine = lines.first?.split(separator: " ") ?? []
-        guard requestLine.count >= 2 else { return nil }
-        let contentLength = lines.dropFirst().compactMap { line -> Int? in
-            let parts = line.split(separator: ":", maxSplits: 1)
-            guard parts.count == 2, parts[0].trimmingCharacters(in: .whitespaces).lowercased() == "content-length" else { return nil }
-            return Int(parts[1].trimmingCharacters(in: .whitespaces))
-        }.first ?? 0
+        guard requestLine.count == 3, requestLine[2] == "HTTP/1.1" else { return .invalid }
+        var headers: [String: String] = [:]
+        for line in lines.dropFirst() {
+            let parts = line.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false)
+            guard parts.count == 2 else { return .invalid }
+            let name = parts[0].lowercased()
+            guard !name.isEmpty, headers[name] == nil else { return .invalid }
+            headers[name] = parts[1].trimmingCharacters(in: .whitespaces)
+        }
+        guard let host = headers["host"],
+              host == "127.0.0.1:\(port)" || host == "localhost:\(port)",
+              headers["origin"] == nil,
+              headers["transfer-encoding"] == nil else { return .invalid }
+        let length: Int
+        if let raw = headers["content-length"] {
+            guard !raw.isEmpty, raw.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }),
+                  let parsed = Int(raw), parsed <= maximumBodySize else { return .invalid }
+            length = parsed
+        } else { length = 0 }
+        if length > 0 {
+            guard headers["content-type"]?.lowercased() == "application/json" else { return .invalid }
+        }
         let bodyStart = headerRange.upperBound
-        guard data.count >= bodyStart + contentLength else { return nil }
-        return ControlHTTPRequest(method: String(requestLine[0]), path: String(requestLine[1]), body: data.subdata(in: bodyStart..<(bodyStart + contentLength)))
+        guard data.count - bodyStart >= length else { return .incomplete }
+        guard data.count - bodyStart == length else { return .invalid }
+        return .complete(ControlHTTPRequest(method: String(requestLine[0]), path: String(requestLine[1]), body: data.subdata(in: bodyStart..<(bodyStart + length)), contentType: headers["content-type"]))
     }
 
     private enum BodyError: Error { case invalid }
