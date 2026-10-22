@@ -367,6 +367,7 @@ struct KajiPopoverView: View {
 
     /// Rows expanded by the user; nil = default (only the active account).
     @State private var accountExpansion = AccountExpansion()
+    @State private var pendingExhaustedPin: String?
 
     private func isExpanded(_ a: ProviderView) -> Bool {
         accountExpansion.isExpanded(a.id, active: a.isActiveAccount)
@@ -440,7 +441,14 @@ struct KajiPopoverView: View {
                             .foregroundColor(t.ash)
                             .frame(width: 40, alignment: .trailing)
                     } else {
-                        Button("Use") { store.pinClaudeRoute(id) }
+                        Button("Use") {
+                            if AccountPinPolicy.requiresConfirmation(a) {
+                                pendingExhaustedPin = id
+                            } else {
+                                pendingExhaustedPin = nil
+                                store.pinClaudeRoute(id)
+                            }
+                        }
                             .buttonStyle(.plain)
                             .font(.system(size: 10, weight: .bold, design: .rounded))
                             .foregroundColor(t.cream)
@@ -449,6 +457,28 @@ struct KajiPopoverView: View {
                             .accessibilityIdentifier("kaji.quota.account.\(id).use")
                     }
                 }
+            }
+            if pendingExhaustedPin == id {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("This account has 0% left. Pinning may cause quota errors. Use anyway?")
+                        .font(.system(size: 10, design: .rounded))
+                        .foregroundColor(t.cream)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack {
+                        Button("Cancel") { pendingExhaustedPin = nil }
+                            .accessibilityIdentifier("kaji.quota.account.\(id).cancel")
+                        Spacer()
+                        Button("Use anyway") {
+                            pendingExhaustedPin = nil
+                            store.pinClaudeRoute(id)
+                        }
+                        .accessibilityIdentifier("kaji.quota.account.\(id).confirm")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10, weight: .semibold, design: .rounded))
+                }
+                .padding(.leading, 18)
+                .accessibilityElement(children: .contain)
             }
             if expanded {
                 VStack(alignment: .leading, spacing: 5) {

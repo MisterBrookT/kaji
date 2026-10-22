@@ -120,3 +120,21 @@ final class AccountInteractionTests: XCTestCase {
     }
 }
 
+
+final class AccountPinPolicyTests: XCTestCase {
+    func testOnlyKnownFreshExhaustedClaudeNeedsConfirmation() {
+        var a = ProviderView(id: "account:own", mark: "C", displayName: "brook",
+                             fiveHourPercent: 100, weekPercent: 10, resetDate: nil,
+                             weekResetDate: nil, logoKey: "claude")
+        XCTAssertTrue(AccountPinPolicy.requiresConfirmation(a))
+        a.accountState = .stale
+        XCTAssertFalse(AccountPinPolicy.requiresConfirmation(a))
+        a.accountState = .unknown
+        XCTAssertFalse(AccountPinPolicy.requiresConfirmation(a))
+        a.accountState = .signedOut
+        XCTAssertFalse(AccountPinPolicy.requiresConfirmation(a))
+        a.accountState = .ok
+        a.logoKey = "codex"
+        XCTAssertFalse(AccountPinPolicy.requiresConfirmation(a))
+    }
+}
