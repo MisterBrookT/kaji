@@ -18,6 +18,15 @@ struct AccountQuota: Codable, Equatable {
 struct AccountUsage: Equatable {
     var left: Double?
     var coolUntil: Double?   // epoch ms
+    var checkedAt: Double? = nil   // epoch ms of the last quota.py reading
+}
+
+/// What a single account row can honestly claim.
+enum AccountState: Equatable {
+    case ok
+    case signedOut      // profile has no login (ready == false)
+    case unknown        // signed in, but no quota reading
+    case stale          // last reading older than `staleAfterMs`
 }
 
 struct PixAccountsFiles {
@@ -58,7 +67,8 @@ struct PixAccountsFiles {
         for (id, v) in json("accounts-usage.json") {
             guard let d = v as? [String: Any] else { continue }
             out[id] = AccountUsage(left: (d["left"] as? NSNumber)?.doubleValue,
-                                   coolUntil: (d["coolUntil"] as? NSNumber)?.doubleValue)
+                                   coolUntil: (d["coolUntil"] as? NSNumber)?.doubleValue,
+                                   checkedAt: (d["checkedAt"] as? NSNumber)?.doubleValue)
         }
         return out
     }
@@ -69,6 +79,20 @@ struct PixAccountsFiles {
 }
 
 enum AccountRouting {
+    static let staleAfterMs: Double = 15 * 60 * 1000
+
+    /// % left of one window (100 - used); nil stays nil, never 100.
+    static func left(_ used: Double?) -> Double? {
+        used.map { min(100, max(0, 100 - $0)) }
+    }
+
+    static func state(ready: Bool?, hasReading: Bool, checkedAt: Double?, nowMs: Double) -> AccountState {
+        if ready == false { return .signedOut }
+        if !hasReading { return .unknown }
+        if let checkedAt, nowMs - checkedAt > staleAfterMs { return .stale }
+        return .ok
+    }
+
     /// % left = 100 - the tighter window's used %.
     static func percentLeft(_ v: ProviderView) -> Double? {
         let used = [v.fiveHourPercent, v.weekPercent].compactMap { $0 }.max()
@@ -95,5 +119,21 @@ enum AccountRouting {
         var pick = awake.first { $0.id == storedActive } ?? awake.first
         for a in awake where pick.map({ band(a) > band($0) }) ?? false { pick = a }
         return pick?.id
+    }
+}
+
+/// Account copy, kept pure so tests can pin the wording.
+enum AccountCopy {
+    static func header(active: String?, pinned: Bool) -> String {
+        "Using \(active ?? "—") · \(pinned ? "Pinned" : "Auto")"
+    }
+
+    static func summary(left: Double?, state: AccountState) -> String {
+        switch state {
+        case .signedOut: return "signed out"
+        case .unknown: return "unknown"
+        case .stale: return left.map { "\(Int($0.rounded()))% left · stale" } ?? "stale"
+        case .ok: return left.map { "\(Int($0.rounded()))% left" } ?? "unknown"
+        }
     }
 }
