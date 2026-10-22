@@ -775,8 +775,9 @@ def _codex_map_rate_limits(rl, pct_key, reset_key, window_key, plan_key):
     return out
 
 
-def _fetch_codex_limits():
-    """codex app-server JSON-RPC account/rateLimits/read (official path)."""
+def _fetch_codex_limits(codex_home=None):
+    """codex app-server JSON-RPC account/rateLimits/read (official path).
+    `codex_home` selects another codex login (CODEX_HOME)."""
     import queue as _queue
     import threading
     # `-a untrusted` was REMOVED from codex's approval policy enum (0.153.x
@@ -790,7 +791,8 @@ def _fetch_codex_limits():
     proc = subprocess.Popen(
         [codex_bin, "-s", "read-only", "-a", "never", "app-server"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL, text=True, env=_cli_env())
+        stderr=subprocess.DEVNULL, text=True,
+        env=dict(_cli_env(), **({"CODEX_HOME": str(codex_home)} if codex_home else {})))
     # Drain stdout on a background thread. select()+text readline() can leave a
     # second JSON-RPC response stranded in the userspace buffer (select reports
     # the fd not-ready while a full line already sits decoded), stalling the
@@ -1540,6 +1542,163 @@ def collect():
     return rows
 
 
+# ── Accounts (shared with pix accountkit) ───────────────────────────────────
+# ~/.pix/accounts.json lists Claude Code logins, one config dir each; Kaji adds
+# provider "codex" entries (dir = CODEX_HOME) and treats ~/.codex as an implicit
+# codex account. Non-default Claude profiles are READ-ONLY here: Kaji never
+# refreshes their tokens (rotating a refresh token would sign that profile out).
+
+def _pix_home():
+    return Path(os.environ.get("PIX_HOME") or HOME / ".pix")
+
+
+def _read_json(path, default):
+    try:
+        return json.loads(Path(path).read_text())
+    except Exception:
+        return default
+
+
+def pix_accounts():
+    listed = _read_json(_pix_home() / "accounts.json", {}).get("accounts")
+    if not isinstance(listed, list):
+        listed = [{"id": "minarabench", "label": "minarabench",
+                   "configDir": str(HOME / ".claude-minarabench")},
+                  {"id": "own", "label": "brook"}]
+    out = []
+    for a in listed:
+        if not isinstance(a, dict) or not a.get("id"):
+            continue
+        a = dict(a)
+        a.setdefault("label", a["id"])
+        a["provider"] = a.get("provider") or "claude"
+        out.append(a)
+    if not any(a["provider"] == "codex" for a in out):
+        out.append({"id": "codex", "label": "codex", "provider": "codex",
+                    "dir": str(HOME / ".codex")})
+    return out
+
+
+def claude_keychain_service(config_dir=None):
+    """Matches pix claude-auth.ts claudeKeychainService."""
+    if not config_dir:
+        return CLAUDE_KEYCHAIN_SERVICE
+    digest = hashlib.sha256(os.path.realpath(os.path.expanduser(config_dir)).encode()).hexdigest()
+    return CLAUDE_KEYCHAIN_SERVICE + "-" + digest[:8]
+
+
+def claude_profile_ready(config_dir):
+    if not config_dir:
+        return True
+    d = Path(os.path.expanduser(config_dir))
+    return (d / ".claude.json").exists() or (d / ".credentials.json").exists()
+
+
+def _claude_profile_token(config_dir):
+    """Read-only token for a non-default profile; None when missing/expired."""
+    texts = []
+    try:
+        pr = subprocess.run(["security", "find-generic-password", "-s",
+                             claude_keychain_service(config_dir), "-w"],
+                            capture_output=True, text=True, timeout=5)
+        if pr.returncode == 0:
+            texts.append(pr.stdout.strip())
+    except Exception:
+        pass
+    try:
+        texts.append((Path(os.path.expanduser(config_dir)) / ".credentials.json").read_text())
+    except Exception:
+        pass
+    for text in texts:
+        try:
+            token = _usable_claude_token(json.loads(text))
+        except Exception:
+            token = None
+        if token:
+            return token
+    return None
+
+
+def _account_limits(account, provider_limits):
+    if account["provider"] == "codex":
+        home = os.path.expanduser(account.get("dir") or "")
+        if not home or os.path.realpath(home) == os.path.realpath(HOME / ".codex"):
+            return provider_limits.get("codex")
+        return _scrub_expired(_limits_cached(
+            "codex-limits-%s-cache.json" % account["id"],
+            lambda: _fetch_codex_limits(home)))
+    config_dir = account.get("configDir")
+    if not config_dir:
+        return provider_limits.get("claude")
+    if not claude_profile_ready(config_dir):
+        return None
+
+    def fetch():
+        token = _claude_profile_token(config_dir)
+        return _get_claude_usage(token) if token else None
+    return _scrub_expired(_limits_cached(
+        "claude-limits-%s-cache.json" % account["id"], fetch, ttl=CLAUDE_LIMITS_TTL))
+
+
+def percent_left(limits):
+    """100 - the tighter of the 5-hour and weekly windows, with its reset."""
+    left, resets = None, None
+    for win in ("five_hour", "seven_day"):
+        used = (limits or {}).get(win + "_used_percent")
+        if isinstance(used, (int, float)) and not isinstance(used, bool):
+            l = max(0.0, 100.0 - used)
+            if left is None or l < left:
+                left, resets = l, limits.get(win + "_resets_at")
+    return left, resets
+
+
+def record_account_usage(entries, now_ms=None):
+    """Merge Claude % left into ~/.pix/accounts-usage.json; keeps coolUntil
+    and every other key (e.g. pix's _active). Atomic tmp + rename."""
+    path = _pix_home() / "accounts-usage.json"
+    data = _read_json(path, {})
+    if not isinstance(data, dict):
+        data = {}
+    now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
+    changed = False
+    for e in entries:
+        if e["provider"] != "claude":
+            continue
+        left, resets = percent_left(e.get("limits"))
+        if left is None:
+            continue
+        cur = dict(data.get(e["id"]) or {})
+        cur.update({"left": left, "checkedAt": now_ms})
+        if resets is not None:
+            cur["resetsAt"] = resets
+        data[e["id"]] = cur
+        changed = True
+    if not changed:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".%d.tmp" % os.getpid())
+        tmp.write_text(json.dumps(data, indent=2))
+        tmp.replace(path)
+    except Exception:
+        pass
+
+
+def collect_accounts(provider_limits):
+    entries = []
+    for a in pix_accounts():
+        try:
+            limits = _account_limits(a, provider_limits)
+        except Exception:
+            limits = None
+        e = {"id": a["id"], "provider": a["provider"], "label": a["label"],
+             "ready": a["provider"] != "claude" or claude_profile_ready(a.get("configDir"))}
+        if limits:
+            e["limits"] = limits
+        entries.append(e)
+    return entries
+
+
 def emit_json():
     rows = collect()
     out = {}
@@ -1566,6 +1725,9 @@ def emit_json():
             out[name]["by_project"] = by_project
         if context:
             out[name]["context"] = context
+    accounts = collect_accounts({k: (v or {}).get("limits") for k, v in out.items()})
+    record_account_usage(accounts)
+    out["accounts"] = accounts
     # compact, no spaces — small payload for run_child_process
     sys.stdout.write(json.dumps(out, separators=(",", ":")))
     sys.stdout.write("\n")

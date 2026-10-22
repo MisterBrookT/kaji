@@ -33,6 +33,18 @@ struct StatusItemView: View {
 
     @Environment(\.colorScheme) private var scheme
 
+    /// Tiny account label beside a ring: first 3 characters.
+    static func shortLabel(_ label: String?) -> String? {
+        guard let label, !label.isEmpty else { return nil }
+        return String(label.prefix(3))
+    }
+
+    /// Extra status-item width a ring's label needs.
+    static func labelWidth(_ label: String?) -> CGFloat {
+        guard let short = shortLabel(label) else { return 0 }
+        return 2 + CGFloat(short.count) * 5
+    }
+
     var body: some View {
         HStack(spacing: 5) {
             Button(action: onQuotaClick) {
@@ -41,7 +53,15 @@ struct StatusItemView: View {
                         DualRing(provider: nil, showRemaining: showRemaining)
                     } else {
                         ForEach(providers.prefix(4)) { p in
-                            DualRing(provider: p, showRemaining: showRemaining)
+                            HStack(spacing: 1) {
+                                DualRing(provider: p, showRemaining: showRemaining)
+                                if let label = Self.shortLabel(p.accountLabel) {
+                                    Text(label)
+                                        .font(.system(size: 8, weight: .medium, design: .rounded))
+                                        .foregroundStyle(scheme == .dark ? Color.white : Color.black)
+                                        .fixedSize()
+                                }
+                            }
                         }
                     }
                 }
@@ -175,10 +195,16 @@ private struct DualRing: View {
                  lineWidth: nearLimit ? innerLW + 0.9 : innerLW,
                  fraction: fiveFraction, color: base)
             if let provider {
-                ProviderLogo(key: provider.id, color: base, size: 9)
+                ProviderLogo(key: provider.logo, color: base, size: 9)
             }
         }
         .frame(width: dim, height: dim)
+        .overlay(alignment: .bottomTrailing) {
+            if provider?.isActiveAccount == true {
+                Circle().fill(base).frame(width: 4, height: 4)
+                    .accessibilityLabel("active account")
+            }
+        }
     }
 
     private func ring(inset: CGFloat, lineWidth: CGFloat,

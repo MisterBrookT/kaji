@@ -103,5 +103,36 @@ struct ProviderQuota: Codable, Equatable {
     }
 }
 
-// The top-level object is a free-form map of provider-name -> ProviderQuota.
-typealias QuotaSnapshot = [String: ProviderQuota]
+// The top-level object is a free-form map of provider-name -> ProviderQuota,
+// plus an optional "accounts" array (one entry per account, see Accounts.swift).
+struct QuotaSnapshot: Decodable, Equatable {
+    var providers: [String: ProviderQuota]
+    var accounts: [AccountQuota]
+
+    init(providers: [String: ProviderQuota], accounts: [AccountQuota] = []) {
+        self.providers = providers
+        self.accounts = accounts
+    }
+
+    private struct Key: CodingKey {
+        var stringValue: String
+        var intValue: Int? { nil }
+        init(stringValue: String) { self.stringValue = stringValue }
+        init?(intValue: Int) { nil }
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: Key.self)
+        var providers: [String: ProviderQuota] = [:]
+        var accounts: [AccountQuota] = []
+        for key in c.allKeys {
+            if key.stringValue == "accounts" {
+                accounts = (try? c.decode([AccountQuota].self, forKey: key)) ?? []
+            } else {
+                providers[key.stringValue] = try c.decode(ProviderQuota.self, forKey: key)
+            }
+        }
+        self.providers = providers
+        self.accounts = accounts
+    }
+}
