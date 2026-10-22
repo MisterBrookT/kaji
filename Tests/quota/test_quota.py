@@ -32,6 +32,7 @@ CODEX_SESSIONS.mkdir(parents=True)
 # Must be set BEFORE import: CODEX_SESSIONS is resolved at module load.
 os.environ["HELM_CLAUDE_PROJECTS"] = str(CLAUDE_PROJECTS)
 os.environ["HELM_CODEX_SESSIONS"] = str(CODEX_SESSIONS)
+os.environ["PIX_HOME"] = str(Path(TMP) / "pix")
 os.environ["HELM_ARK_AGENT_KEY"] = str(Path(TMP) / "no-such-key")
 
 sys.path.insert(0, str(ROOT / "Resources"))
@@ -754,6 +755,50 @@ class TestJSONShape(unittest.TestCase):
         self.assertEqual(data["claude"]["tokens_today"], 1115)
         self.assertEqual(data["codex"]["tokens_today"], 100)
         self.assertEqual(data["codex"]["by_project"], {"/tmp/a": 100})
+        self.assertIsInstance(data["accounts"], list)
+
+
+class TestAccounts(unittest.TestCase):
+    def setUp(self):
+        self.home = Path(os.environ["PIX_HOME"])
+        self.home.mkdir(parents=True, exist_ok=True)
+        for f in ("accounts.json", "accounts-usage.json"):
+            (self.home / f).unlink(missing_ok=True)
+
+    def test_defaults_plus_implicit_codex(self):
+        ids = [(a["id"], a["provider"]) for a in quota.pix_accounts()]
+        self.assertEqual(ids, [("minarabench", "claude"), ("own", "claude"), ("codex", "codex")])
+
+    def test_listed_codex_account_replaces_implicit_one(self):
+        (self.home / "accounts.json").write_text(json.dumps({"accounts": [
+            {"id": "own", "label": "brook"},
+            {"id": "work", "label": "work", "provider": "codex", "dir": "/tmp/cx"}]}))
+        self.assertEqual([a["id"] for a in quota.pix_accounts()], ["own", "work"])
+
+    def test_keychain_service_matches_pix(self):
+        import hashlib
+        self.assertEqual(quota.claude_keychain_service(None), "Claude Code-credentials")
+        want = hashlib.sha256(os.path.realpath("/tmp/p").encode()).hexdigest()[:8]
+        self.assertEqual(quota.claude_keychain_service("/tmp/p"), "Claude Code-credentials-" + want)
+
+    def test_percent_left_uses_tighter_window(self):
+        self.assertEqual(quota.percent_left({"five_hour_used_percent": 30, "five_hour_resets_at": "a",
+                                             "seven_day_used_percent": 80, "seven_day_resets_at": "b"}),
+                         (20.0, "b"))
+        self.assertEqual(quota.percent_left(None), (None, None))
+
+    def test_record_usage_merges_and_keeps_cooldown(self):
+        (self.home / "accounts-usage.json").write_text(json.dumps(
+            {"own": {"left": 90, "coolUntil": 5}, "_active": {"id": "own"}}))
+        quota.record_account_usage([
+            {"id": "own", "provider": "claude", "limits": {"five_hour_used_percent": 40}},
+            {"id": "codex", "provider": "codex", "limits": {"five_hour_used_percent": 10}},
+            {"id": "x", "provider": "claude"}], now_ms=7)
+        d = json.loads((self.home / "accounts-usage.json").read_text())
+        self.assertEqual(d["own"], {"left": 60.0, "coolUntil": 5, "checkedAt": 7})
+        self.assertEqual(d["_active"], {"id": "own"})
+        self.assertNotIn("codex", d)
+        self.assertNotIn("x", d)
 
 
 if __name__ == "__main__":

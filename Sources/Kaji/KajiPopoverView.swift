@@ -347,6 +347,9 @@ struct KajiPopoverView: View {
 
     private var quotaPanel: some View {
         VStack(alignment: .leading, spacing: 9) {
+            if !store.accounts.isEmpty {
+                accountsList
+            }
             if shown.isEmpty {
                 emptyQuota
             } else {
@@ -358,6 +361,58 @@ struct KajiPopoverView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
+
+    /// Accounts with % left. Tapping a Claude account pins it
+    /// (~/.pix/claude-route); "Auto" unpins. Codex rows are display-only.
+    private var accountsList: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            accountRow(id: "auto", logo: nil, label: "Auto", left: nil,
+                       active: false, pinned: store.claudeRoute == "auto", pinnable: true)
+            ForEach(store.accounts) { a in
+                accountRow(id: String(a.id.dropFirst("account:".count)), logo: a.logo,
+                           label: a.displayName, left: AccountRouting.percentLeft(a),
+                           active: a.isActiveAccount,
+                           pinned: store.claudeRoute == String(a.id.dropFirst("account:".count)),
+                           pinnable: a.logo == "claude")
+            }
+        }
+        .accessibilityIdentifier("kaji.quota.accounts")
+    }
+
+    private func accountRow(id: String, logo: String?, label: String, left: Double?,
+                            active: Bool, pinned: Bool, pinnable: Bool) -> some View {
+        let row = HStack(spacing: 7) {
+            if let logo {
+                ProviderLogo(key: logo, color: t.gold, size: 11)
+            } else {
+                Image(systemName: "arrow.triangle.branch").font(.system(size: 9)).foregroundColor(t.gold)
+            }
+            Text(label)
+                .font(.system(size: 11.5, weight: active ? .semibold : .regular, design: .rounded))
+                .foregroundColor(t.cream).lineLimit(1)
+            if active { Circle().fill(t.cream).frame(width: 4, height: 4) }
+            Spacer(minLength: 6)
+            if logo != nil {
+                Text(left.map { "\(Int($0.rounded()))% left" } ?? "—")
+                    .font(.system(size: 10.5, design: .rounded)).monospacedDigit()
+                    .foregroundColor(t.ash)
+            }
+            if pinnable {
+                Image(systemName: pinned ? "pin.fill" : "pin")
+                    .font(.system(size: 9)).foregroundColor(pinned ? t.cream : t.mute)
+            }
+        }
+        .contentShape(Rectangle())
+        return Group {
+            if pinnable {
+                Button { store.pinClaudeRoute(id) } label: { row }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("kaji.quota.account.\(id)")
+            } else {
+                row
+            }
+        }
+    }
 
     // Quota row (minimal list style):
     //   provider mark + name

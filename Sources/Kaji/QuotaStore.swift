@@ -49,6 +49,12 @@ struct ProviderView: Identifiable, Equatable {
     let weekPercent: Double?
     let resetDate: Date?           // five-hour reset
     let weekResetDate: Date?       // seven-day reset
+    /// Account rings only: provider logo key, tiny label, active-route mark.
+    var logoKey: String? = nil
+    var accountLabel: String? = nil
+    var isActiveAccount = false
+
+    var logo: String { logoKey ?? id }
 
     /// 0...1 fraction for the 5h ring trim. Clamped. nil percent -> 0 (empty).
     var usedFraction: Double {
@@ -83,6 +89,11 @@ struct ProviderView: Identifiable, Equatable {
 @MainActor
 final class QuotaStore: ObservableObject {
     @Published private(set) var providers: [ProviderView] = []
+    /// One view per account ("account:<id>"), empty when quota.py emits none.
+    @Published private(set) var accounts: [ProviderView] = []
+    @Published private(set) var claudeRoute = "auto"
+    private var accountEntries: [AccountQuota] = []
+    var pixFiles = PixAccountsFiles.standard
     @Published private(set) var lastError: String?
     @Published private(set) var lastUpdated: Date?
 
@@ -323,11 +334,11 @@ final class QuotaStore: ObservableObject {
         // Keep every display-ready provider emitted by quota.py in the store.
         // Visibility is a user preference applied by the views; filtering only
         // to default-visible providers here would hide Ark from the toggles.
-        let keys = Providers.sorted(snap.keys.filter { Providers.isAvailable($0) })
+        let keys = Providers.sorted(snap.providers.keys.filter { Providers.isAvailable($0) })
 
         var views: [ProviderView] = []
         for key in keys {
-            guard let q = snap[key] else { continue }
+            guard let q = snap.providers[key] else { continue }
             let limits = q.limits
             let five = limits?.fiveHourUsedPercent
 
@@ -343,6 +354,48 @@ final class QuotaStore: ObservableObject {
         }
 
         providers = views
+        accountEntries = snap.accounts
+        rebuildAccounts()
+    }
+
+    /// Re-read ~/.pix route/usage and recompute account views + active mark.
+    func rebuildAccounts(nowMs: Double = Date().timeIntervalSince1970 * 1000) {
+        let files = pixFiles
+        let route = files.route
+        let claudeIDs = Set(accountEntries.filter { $0.provider == "claude" }.map(\.id))
+        claudeRoute = claudeIDs.contains(route) ? route : "auto"
+        let active = AccountRouting.activeClaudeID(
+            accounts: accountEntries, route: route, usage: files.usage,
+            storedActive: files.storedActive, bandWidth: files.bandWidth, nowMs: nowMs)
+        accounts = accountEntries.map { a in
+            ProviderView(id: "account:" + a.id,
+                         mark: Providers.mark(for: a.provider),
+                         displayName: a.label,
+                         fiveHourPercent: a.limits?.fiveHourUsedPercent,
+                         weekPercent: a.limits?.sevenDayUsedPercent,
+                         resetDate: a.limits?.fiveHourResetsAt?.date,
+                         weekResetDate: a.limits?.sevenDayResetsAt?.date,
+                         logoKey: a.provider,
+                         accountLabel: a.label,
+                         isActiveAccount: a.provider == "claude" && a.id == active)
+        }
+    }
+
+    /// Pin a Claude account ("auto" to unpin) by writing ~/.pix/claude-route.
+    func pinClaudeRoute(_ value: String) {
+        do { try pixFiles.writeRoute(value) } catch {
+            NSLog("[Kaji] writing claude-route failed: %@", error.localizedDescription)
+        }
+        rebuildAccounts()
+    }
+
+    /// Menu bar rings: accounts replace their provider's ring (claude/codex);
+    /// other visible providers follow, most-constrained first.
+    static func menuBarRings(accounts: [ProviderView], providers: [ProviderView], count: Int) -> [ProviderView] {
+        guard !accounts.isEmpty else { return menuBarOrder(in: providers, count: count) }
+        let covered = Set(accounts.map(\.logo))
+        let others = menuBarOrder(in: providers.filter { !covered.contains($0.id) }, count: count)
+        return Array((accounts + others).prefix(max(0, count)))
     }
 
     /// Ranking signal: how constrained a provider looks right now — the worse
