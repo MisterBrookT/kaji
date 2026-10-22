@@ -153,3 +153,10 @@ struct AccountExpansion: Equatable {
         userChoice = set
     }
 }
+
+/// Only a fresh, known zero is exhausted. Quota is not model availability.
+enum AccountPinPolicy {
+    static func requiresConfirmation(_ account: ProviderView) -> Bool {
+        account.logo == "claude" && account.accountState == .ok && account.percentLeft == 0
+    }
+}

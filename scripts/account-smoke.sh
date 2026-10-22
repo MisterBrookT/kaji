@@ -37,6 +37,19 @@ tree | grep -q "kaji.quota.account.$OTHER.use" && { echo "FAIL other row should 
 shot 1-initial
 press "kaji.quota.account.$OTHER.toggle"; check "kaji.quota.account.$OTHER.use" "expand shows Use + 5h/7d"; shot 2-expanded
 press "kaji.quota.account.$OTHER.use"
+if tree | grep -q "kaji.quota.account.$OTHER.confirm"; then
+    [[ "$(cat "$PIX/claude-route")" == auto ]] || { echo 'FAIL warning changed route'; exit 1; }
+    check '0% left. Pinning may cause quota errors' 'exhausted warning visible'
+    shot exhausted-warning
+    press "kaji.quota.account.$OTHER.cancel"
+    [[ "$(cat "$PIX/claude-route")" == auto ]] || { echo 'FAIL cancel changed route'; exit 1; }
+    echo 'PASS exhausted Use and Cancel leave route unchanged'
+    press "kaji.quota.account.$OTHER.use"
+    press "kaji.quota.account.$OTHER.confirm"
+    echo 'PASS deliberate Use anyway'
+elif [[ "${KAJI_REQUIRE_EXHAUSTED_WARNING:-0}" == 1 ]]; then
+    echo 'FAIL expected known exhausted account warning'; exit 1
+fi
 [[ "$(cat "$PIX/claude-route")" == "$OTHER" ]] && echo "PASS Use wrote route=$OTHER" || { echo "FAIL route"; exit 1; }
 check "Pinned$" "header says Pinned"; check "kaji.quota.account.$OTHER.toggle .*, in use" "pinned account marked in use"; shot 3-pinned
 press kaji.quota.account.auto
