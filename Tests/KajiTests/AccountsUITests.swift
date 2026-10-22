@@ -85,3 +85,38 @@ final class AccountPanelRenderTests: XCTestCase {
         writePNG(rep, name: "popover-accounts")
     }
 }
+
+@MainActor
+final class AccountInteractionTests: XCTestCase {
+    private func snap(_ ownUsed: Double, _ benchUsed: Double) throws -> QuotaSnapshot {
+        let json = #"{"accounts":[{"id":"own","provider":"claude","label":"brook","ready":true,"limits":{"five_hour_used_percent":\#(ownUsed)}},{"id":"bench","provider":"claude","label":"bench","ready":true,"limits":{"five_hour_used_percent":\#(benchUsed)}}]}"#
+        return try JSONDecoder().decode(QuotaSnapshot.self, from: Data(json.utf8))
+    }
+
+    func testExpansionDefaultsToActiveAndSurvivesRefresh() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        try #"{"_active":{"id":"bench"}}"#.write(to: dir.appendingPathComponent("accounts-usage.json"), atomically: true, encoding: .utf8)
+        let s = QuotaStore(previewProviders: [])
+        s.pixFiles = PixAccountsFiles(home: dir)
+        s.ingest(try snap(50, 10))
+        var e = AccountExpansion()
+        let open = { (s.accounts.filter { e.isExpanded($0.id, active: $0.isActiveAccount) }).map(\.accountID!) }
+        XCTAssertEqual(open(), ["bench"], "active row open initially")
+        e.toggle("account:own", accounts: s.accounts)
+        XCTAssertEqual(open(), ["own", "bench"])
+        e.toggle("account:bench", accounts: s.accounts)
+        XCTAssertEqual(open(), ["own"])
+        // Refresh: new numbers, open rows stay as the user left them.
+        s.ingest(try snap(80, 30))
+        XCTAssertEqual(open(), ["own"])
+        XCTAssertEqual(s.accounts.first?.percentLeft, 20)
+        // Refresh picks up a route pinned outside Kaji (pix / CLI).
+        try "own\n".write(to: dir.appendingPathComponent("claude-route"), atomically: true, encoding: .utf8)
+        s.rebuildAccounts()
+        XCTAssertEqual(s.claudeRoute, "own")
+        XCTAssertEqual(s.activeClaudeLabel, "brook")
+    }
+}
+

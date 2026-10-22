@@ -137,3 +137,19 @@ enum AccountCopy {
         }
     }
 }
+
+/// Which account rows are open. Until the user toggles one, only the active
+/// account is open; after that the user's choice survives refreshes.
+struct AccountExpansion: Equatable {
+    private(set) var userChoice: Set<String>?
+
+    func isExpanded(_ id: String, active: Bool) -> Bool {
+        userChoice?.contains(id) ?? active
+    }
+
+    mutating func toggle(_ id: String, accounts: [ProviderView]) {
+        var set = userChoice ?? Set(accounts.filter(\.isActiveAccount).map(\.id))
+        if set.contains(id) { set.remove(id) } else { set.insert(id) }
+        userChoice = set
+    }
+}

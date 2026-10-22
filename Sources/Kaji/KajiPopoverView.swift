@@ -366,16 +366,14 @@ struct KajiPopoverView: View {
     }
 
     /// Rows expanded by the user; nil = default (only the active account).
-    @State private var expandedAccountIDs: Set<String>?
+    @State private var accountExpansion = AccountExpansion()
 
     private func isExpanded(_ a: ProviderView) -> Bool {
-        expandedAccountIDs?.contains(a.id) ?? a.isActiveAccount
+        accountExpansion.isExpanded(a.id, active: a.isActiveAccount)
     }
 
     private func toggleExpanded(_ a: ProviderView) {
-        var set = expandedAccountIDs ?? Set(store.accounts.filter(\.isActiveAccount).map(\.id))
-        if set.contains(a.id) { set.remove(a.id) } else { set.insert(a.id) }
-        expandedAccountIDs = set
+        accountExpansion.toggle(a.id, accounts: store.accounts)
     }
 
     /// Every number here is % LEFT. Header names the Claude account pix
@@ -402,6 +400,7 @@ struct KajiPopoverView: View {
                 accountRow(a)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("kaji.quota.accounts")
     }
 
@@ -410,49 +409,54 @@ struct KajiPopoverView: View {
         let expanded = isExpanded(a)
         let left = a.percentLeft
         let low = (left ?? 100) <= 20
+        let canUse = a.logo == "claude" && a.accountState != .signedOut
         return VStack(alignment: .leading, spacing: 6) {
-            Button { toggleExpanded(a) } label: {
-                HStack(spacing: 7) {
-                    ProviderLogo(key: a.logo, color: low ? t.amber : t.gold, size: 11)
-                    Text(a.displayName)
-                        .font(.system(size: 11.5, weight: a.isActiveAccount ? .semibold : .regular, design: .rounded))
-                        .foregroundColor(t.cream).lineLimit(1)
-                    if a.isActiveAccount {
-                        Circle().fill(t.cream).frame(width: 4, height: 4)
-                            .accessibilityLabel("in use")
+            HStack(spacing: 8) {
+                Button { toggleExpanded(a) } label: {
+                    HStack(spacing: 7) {
+                        ProviderLogo(key: a.logo, color: low ? t.amber : t.gold, size: 11)
+                        Text(a.displayName)
+                            .font(.system(size: 11.5, weight: a.isActiveAccount ? .semibold : .regular, design: .rounded))
+                            .foregroundColor(t.cream).lineLimit(1)
+                        if a.isActiveAccount {
+                            Circle().fill(t.cream).frame(width: 4, height: 4)
+                                .accessibilityLabel("in use")
+                        }
+                        Spacer(minLength: 6)
+                        Text(AccountCopy.summary(left: left, state: a.accountState))
+                            .font(.system(size: 10.5, weight: .semibold, design: .rounded)).monospacedDigit()
+                            .foregroundColor(a.accountState == .ok ? (low ? t.amber : t.cream) : t.ash)
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .semibold)).foregroundColor(t.ash)
                     }
-                    Spacer(minLength: 6)
-                    Text(AccountCopy.summary(left: left, state: a.accountState))
-                        .font(.system(size: 10.5, weight: .semibold, design: .rounded)).monospacedDigit()
-                        .foregroundColor(a.accountState == .ok ? (low ? t.amber : t.cream) : t.ash)
-                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8, weight: .semibold)).foregroundColor(t.ash)
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("kaji.quota.account.\(id).toggle")
+                if expanded && canUse {
+                    if store.claudeRoute == id {
+                        Text("Pinned")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(t.ash)
+                            .frame(width: 40, alignment: .trailing)
+                    } else {
+                        Button("Use") { store.pinClaudeRoute(id) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(t.cream)
+                            .frame(width: 40, alignment: .trailing)
+                            .help("Pin pix to this account")
+                            .accessibilityIdentifier("kaji.quota.account.\(id).use")
+                    }
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("kaji.quota.account.\(id).toggle")
             if expanded {
                 VStack(alignment: .leading, spacing: 5) {
                     accountWindow("5h", used: a.fiveHourPercent, reset: a.resetDate)
                     accountWindow("7d", used: a.weekPercent, reset: a.weekResetDate)
-                    if a.logo == "claude" && a.accountState != .signedOut {
-                        HStack {
-                            Spacer()
-                            if store.claudeRoute == id {
-                                Text("Pinned").font(.system(size: 10, weight: .semibold, design: .rounded))
-                                    .foregroundColor(t.ash)
-                            } else {
-                                Button("Use") { store.pinClaudeRoute(id) }
-                                    .buttonStyle(.plain)
-                                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                                    .foregroundColor(t.cream)
-                                    .accessibilityIdentifier("kaji.quota.account.\(id).use")
-                            }
-                        }
-                    }
                 }
                 .padding(.leading, 18)
+                .accessibilityElement(children: .contain)
                 .accessibilityIdentifier("kaji.quota.account.\(id).details")
             }
         }
@@ -536,7 +540,9 @@ struct KajiPopoverView: View {
                                   design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(hasReading ? (emphasized ? t.cream : t.mute) : t.ash)
-                    .frame(width: 30, alignment: .trailing)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 30, alignment: .trailing)
             }
             Text(hasReading ? resetCaption(resetDate) : QuotaCaption.unavailable)
                 .font(.system(size: 9, weight: .medium, design: .rounded))
