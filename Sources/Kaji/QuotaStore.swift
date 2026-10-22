@@ -53,6 +53,11 @@ struct ProviderView: Identifiable, Equatable {
     var logoKey: String? = nil
     var accountLabel: String? = nil
     var isActiveAccount = false
+    var accountState: AccountState = .ok
+
+    /// Tighter-window % left for account rows/rings (nil = no reading).
+    var percentLeft: Double? { AccountRouting.percentLeft(self) }
+    var accountID: String? { id.hasPrefix("account:") ? String(id.dropFirst(8)) : nil }
 
     var logo: String { logoKey ?? id }
 
@@ -92,6 +97,10 @@ final class QuotaStore: ObservableObject {
     /// One view per account ("account:<id>"), empty when quota.py emits none.
     @Published private(set) var accounts: [ProviderView] = []
     @Published private(set) var claudeRoute = "auto"
+    /// Label of the Claude account pix will use next (pinned or auto pick).
+    @Published private(set) var activeClaudeLabel: String?
+    /// Provider sections an account list already covers (hidden in the popover).
+    var accountCoveredProviders: Set<String> { Set(accounts.map(\.logo)) }
     private var accountEntries: [AccountQuota] = []
     var pixFiles = PixAccountsFiles.standard
     @Published private(set) var lastError: String?
@@ -330,7 +339,7 @@ final class QuotaStore: ObservableObject {
         }
     }
 
-    private func ingest(_ snap: QuotaSnapshot) {
+    func ingest(_ snap: QuotaSnapshot) {
         // Keep every display-ready provider emitted by quota.py in the store.
         // Visibility is a user preference applied by the views; filtering only
         // to default-visible providers here would hide Ark from the toggles.
@@ -364,8 +373,9 @@ final class QuotaStore: ObservableObject {
         let route = files.route
         let claudeIDs = Set(accountEntries.filter { $0.provider == "claude" }.map(\.id))
         claudeRoute = claudeIDs.contains(route) ? route : "auto"
+        let usage = files.usage
         let active = AccountRouting.activeClaudeID(
-            accounts: accountEntries, route: route, usage: files.usage,
+            accounts: accountEntries, route: route, usage: usage,
             storedActive: files.storedActive, bandWidth: files.bandWidth, nowMs: nowMs)
         accounts = accountEntries.map { a in
             ProviderView(id: "account:" + a.id,
@@ -377,8 +387,14 @@ final class QuotaStore: ObservableObject {
                          weekResetDate: a.limits?.sevenDayResetsAt?.date,
                          logoKey: a.provider,
                          accountLabel: a.label,
-                         isActiveAccount: a.provider == "claude" && a.id == active)
+                         isActiveAccount: a.provider == "claude" && a.id == active,
+                         accountState: AccountRouting.state(
+                            ready: a.ready,
+                            hasReading: a.limits?.fiveHourUsedPercent != nil || a.limits?.sevenDayUsedPercent != nil,
+                            checkedAt: a.provider == "claude" ? usage[a.id]?.checkedAt : nil,
+                            nowMs: nowMs))
         }
+        activeClaudeLabel = accounts.first(where: \.isActiveAccount)?.displayName
     }
 
     /// Pin a Claude account ("auto" to unpin) by writing ~/.pix/claude-route.

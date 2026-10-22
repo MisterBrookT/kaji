@@ -664,6 +664,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             sleepController.performGuidanceAction()
         case "cancel-sleep-guidance":
             sleepController.cancelApprovalRequest()
+        case "open-popover":
+            // Ice/Bartender can hide the status item; smoke still needs the
+            // real popover on screen to press its buttons.
+            showPopover(.quota)
+        case "refresh-quota":
+            store.rebuildAccounts()
         case "check-for-updates":
             guard presentNativeUpdate() else { throw TestUIAutomationError.invalidAction }
         default:

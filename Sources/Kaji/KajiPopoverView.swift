@@ -346,14 +346,18 @@ struct KajiPopoverView: View {
 
 
     private var quotaPanel: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        // Providers an account list covers (claude/codex) are shown per
+        // account only; a second aggregate section mixed used vs left.
+        let covered = store.accountCoveredProviders
+        let rest = shown.filter { !covered.contains($0.id) }
+        return VStack(alignment: .leading, spacing: 9) {
             if !store.accounts.isEmpty {
                 accountsList
             }
-            if shown.isEmpty {
+            if rest.isEmpty && store.accounts.isEmpty {
                 emptyQuota
             } else {
-                ForEach(shown.prefix(4)) { provider in
+                ForEach(rest.prefix(4)) { provider in
                     quotaRow(provider)
                 }
             }
@@ -361,57 +365,111 @@ struct KajiPopoverView: View {
         .frame(maxWidth: .infinity, alignment: .topLeading)
     }
 
+    /// Rows expanded by the user; nil = default (only the active account).
+    @State private var accountExpansion = AccountExpansion()
 
-    /// Accounts with % left. Tapping a Claude account pins it
-    /// (~/.pix/claude-route); "Auto" unpins. Codex rows are display-only.
+    private func isExpanded(_ a: ProviderView) -> Bool {
+        accountExpansion.isExpanded(a.id, active: a.isActiveAccount)
+    }
+
+    private func toggleExpanded(_ a: ProviderView) {
+        accountExpansion.toggle(a.id, accounts: store.accounts)
+    }
+
+    /// Every number here is % LEFT. Header names the Claude account pix
+    /// routes to next; "Use" pins one (~/.pix/claude-route), "Auto" unpins.
+    /// Codex accounts are display-only.
     private var accountsList: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            accountRow(id: "auto", logo: nil, label: "Auto", left: nil,
-                       active: false, pinned: store.claudeRoute == "auto", pinnable: true)
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 5) {
+                Text(AccountCopy.header(active: store.activeClaudeLabel, pinned: store.claudeRoute != "auto"))
+                    .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+                    .lineLimit(1)
+                    .accessibilityIdentifier("kaji.quota.using")
+                Spacer(minLength: 4)
+                if store.claudeRoute != "auto" {
+                    Button("Auto") { store.pinClaudeRoute("auto") }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.cream)
+                        .accessibilityIdentifier("kaji.quota.account.auto")
+                }
+            }
             ForEach(store.accounts) { a in
-                accountRow(id: String(a.id.dropFirst("account:".count)), logo: a.logo,
-                           label: a.displayName, left: AccountRouting.percentLeft(a),
-                           active: a.isActiveAccount,
-                           pinned: store.claudeRoute == String(a.id.dropFirst("account:".count)),
-                           pinnable: a.logo == "claude")
+                accountRow(a)
             }
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("kaji.quota.accounts")
     }
 
-    private func accountRow(id: String, logo: String?, label: String, left: Double?,
-                            active: Bool, pinned: Bool, pinnable: Bool) -> some View {
-        let row = HStack(spacing: 7) {
-            if let logo {
-                ProviderLogo(key: logo, color: t.gold, size: 11)
-            } else {
-                Image(systemName: "arrow.triangle.branch").font(.system(size: 9)).foregroundColor(t.gold)
+    private func accountRow(_ a: ProviderView) -> some View {
+        let id = a.accountID ?? a.id
+        let expanded = isExpanded(a)
+        let left = a.percentLeft
+        let low = (left ?? 100) <= 20
+        let canUse = a.logo == "claude" && a.accountState != .signedOut
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Button { toggleExpanded(a) } label: {
+                    HStack(spacing: 7) {
+                        ProviderLogo(key: a.logo, color: low ? t.amber : t.gold, size: 11)
+                        Text(a.displayName)
+                            .font(.system(size: 11.5, weight: a.isActiveAccount ? .semibold : .regular, design: .rounded))
+                            .foregroundColor(t.cream).lineLimit(1)
+                        if a.isActiveAccount {
+                            Circle().fill(t.cream).frame(width: 4, height: 4)
+                                .accessibilityLabel("in use")
+                        }
+                        Spacer(minLength: 6)
+                        Text(AccountCopy.summary(left: left, state: a.accountState))
+                            .font(.system(size: 10.5, weight: .semibold, design: .rounded)).monospacedDigit()
+                            .foregroundColor(a.accountState == .ok ? (low ? t.amber : t.cream) : t.ash)
+                        Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .semibold)).foregroundColor(t.ash)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("kaji.quota.account.\(id).toggle")
+                if expanded && canUse {
+                    if store.claudeRoute == id {
+                        Text("Pinned")
+                            .font(.system(size: 10, weight: .semibold, design: .rounded))
+                            .foregroundColor(t.ash)
+                            .frame(width: 40, alignment: .trailing)
+                    } else {
+                        Button("Use") { store.pinClaudeRoute(id) }
+                            .buttonStyle(.plain)
+                            .font(.system(size: 10, weight: .bold, design: .rounded))
+                            .foregroundColor(t.cream)
+                            .frame(width: 40, alignment: .trailing)
+                            .help("Pin pix to this account")
+                            .accessibilityIdentifier("kaji.quota.account.\(id).use")
+                    }
+                }
             }
-            Text(label)
-                .font(.system(size: 11.5, weight: active ? .semibold : .regular, design: .rounded))
-                .foregroundColor(t.cream).lineLimit(1)
-            if active { Circle().fill(t.cream).frame(width: 4, height: 4) }
-            Spacer(minLength: 6)
-            if logo != nil {
-                Text(left.map { "\(Int($0.rounded()))% left" } ?? "—")
-                    .font(.system(size: 10.5, design: .rounded)).monospacedDigit()
-                    .foregroundColor(t.ash)
-            }
-            if pinnable {
-                Image(systemName: pinned ? "pin.fill" : "pin")
-                    .font(.system(size: 9)).foregroundColor(pinned ? t.cream : t.mute)
+            if expanded {
+                VStack(alignment: .leading, spacing: 5) {
+                    accountWindow("5h", used: a.fiveHourPercent, reset: a.resetDate)
+                    accountWindow("7d", used: a.weekPercent, reset: a.weekResetDate)
+                }
+                .padding(.leading, 18)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("kaji.quota.account.\(id).details")
             }
         }
-        .contentShape(Rectangle())
-        return Group {
-            if pinnable {
-                Button { store.pinClaudeRoute(id) } label: { row }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("kaji.quota.account.\(id)")
-            } else {
-                row
-            }
-        }
+    }
+
+    private func accountWindow(_ label: String, used: Double?, reset: Date?) -> some View {
+        let left = AccountRouting.left(used)
+        return quotaWindowLine(label: label,
+                               percentValue: left,
+                               fraction: (left ?? 0) / 100,
+                               resetDate: reset,
+                               nearLimit: (left ?? 100) <= 20,
+                               emphasized: label == "5h")
     }
 
     // Quota row (minimal list style):
@@ -482,7 +540,9 @@ struct KajiPopoverView: View {
                                   design: .rounded))
                     .monospacedDigit()
                     .foregroundColor(hasReading ? (emphasized ? t.cream : t.mute) : t.ash)
-                    .frame(width: 30, alignment: .trailing)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 30, alignment: .trailing)
             }
             Text(hasReading ? resetCaption(resetDate) : QuotaCaption.unavailable)
                 .font(.system(size: 9, weight: .medium, design: .rounded))

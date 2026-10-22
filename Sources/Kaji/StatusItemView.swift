@@ -54,7 +54,7 @@ struct StatusItemView: View {
                     } else {
                         ForEach(providers.prefix(4)) { p in
                             HStack(spacing: 1) {
-                                DualRing(provider: p, showRemaining: showRemaining)
+                                DualRing(provider: p, showRemaining: showRemaining || p.accountID != nil)
                                 if let label = Self.shortLabel(p.accountLabel) {
                                     Text(label)
                                         .font(.system(size: 8, weight: .medium, design: .rounded))
