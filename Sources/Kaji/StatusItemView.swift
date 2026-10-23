@@ -162,11 +162,14 @@ struct DualRing: View {
 
     var body: some View {
         ZStack {
+            // At 0% left there is no arc to colour, so the warning also
+            // tints the track and logo.
             ring(inset: 0, lineWidth: 2,
                  fraction: (left ?? 0) / 100,
-                 color: low ? Color.orange : base)
+                 color: low ? Color.orange : base,
+                 track: low ? Color.orange.opacity(0.45) : trackColor)
             if let provider {
-                ProviderLogo(key: provider.logo, color: base, size: 9)
+                ProviderLogo(key: provider.logo, color: low ? Color.orange : base, size: 9)
             }
         }
         .frame(width: dim, height: dim)
@@ -180,10 +183,10 @@ struct DualRing: View {
     }
 
     private func ring(inset: CGFloat, lineWidth: CGFloat,
-                      fraction: Double, color: Color) -> some View {
+                      fraction: Double, color: Color, track: Color) -> some View {
         ZStack {
             Circle()
-                .stroke(trackColor,
+                .stroke(track,
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             Circle()
                 .trim(from: 0, to: fraction)
