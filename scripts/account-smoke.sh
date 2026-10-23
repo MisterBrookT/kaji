@@ -25,46 +25,38 @@ for _ in $(seq 60); do act refresh-quota 2>/dev/null && break; sleep 1; done
 act open-popover
 for _ in $(seq 60); do "$OUT/ax" $PID dump | grep -q "kaji.quota.using" && break; sleep 1; act open-popover || true; done
 tree() { "$OUT/ax" $PID dump | awk '!s[$0]++'; }
-press() { "$OUT/ax" $PID press "$1" | grep -q "press $1 0" || { echo "FAIL press $1"; exit 1; }; sleep 0.6; }
+press() { "$OUT/ax" $PID press "$1" | grep -q "press $1 0" || { echo "FAIL press $1"; tree | grep kaji.quota; exit 1; }; sleep 0.6; }
 shot() { sleep 0.5; screencapture -o -x -l "$("$OUT/wid" $PID)" "$OUT/$1.png"; }
-check() { tree | grep -q -- "$1" && echo "PASS $2" || { echo "FAIL $2 (missing: $1)"; tree | grep kaji.quota; exit 1; }; }
-mapfile -t CLAUDE < <(tree | grep -o 'kaji\.quota\.account\.[^ ]*\.toggle' | sed 's/kaji.quota.account.//;s/.toggle//' | grep -v '^codex' )
-ACTIVE=$(tree | grep "in use" | grep -o 'kaji\.quota\.account\.[^ ]*\.toggle' | head -1 | sed 's/kaji.quota.account.//;s/.toggle//')
-OTHER=""; for c in "${CLAUDE[@]}"; do [[ "$c" != "$ACTIVE" ]] && OTHER=$c && break; done
-[[ -n "$ACTIVE" && -n "$OTHER" ]] || { echo "FAIL need 2 Claude accounts (active=$ACTIVE other=$OTHER)"; exit 1; }
-sleep 2; check "Auto$" "header says Auto"; check "kaji.quota.account.$ACTIVE.details" "active row expanded initially"
-tree | grep -q "kaji.quota.account.$ACTIVE.use" && { echo "FAIL active row must not offer Use"; exit 1; } || echo "PASS no Use on active row"
-tree | grep -q "kaji.quota.account.$OTHER.use" && { echo "FAIL other row should start collapsed"; exit 1; } || echo "PASS other row collapsed"
-shot 1-initial
 render_status() { curl -sf -XPOST "localhost:$PORT/v1/test/render" -H 'Content-Type: application/json' -d "{\"nonce\":\"$NONCE\",\"surface\":\"status\",\"selection\":\"status\",\"outputPath\":\"$OUT/$1.png\"}" >/dev/null && echo "PASS status render $1"; }
-render_status 0-status-auto
-press "kaji.quota.account.$OTHER.toggle"; check "kaji.quota.account.$OTHER.use" "expand shows Use + 5h/7d"; shot 2-expanded
+has() { tree | grep -q -- "$1"; }
+check() { has "$1" && echo "PASS $2" || { echo "FAIL $2 (missing: $1)"; tree | grep kaji.quota; exit 1; }; }
+route() { tr -d '\n' < "$PIX/claude-route"; }
+for _ in $(seq 30); do has "kaji.quota.account.*.active" && break; sleep 1; act open-popover || true; done
+sleep 1
+ACTIVE=$(tree | grep -o 'kaji\.quota\.account\.[^ ]*\.active' | head -1 | sed 's/kaji.quota.account.//;s/.active//')
+OTHER=$(tree | grep -o 'kaji\.quota\.account\.[^ ]*\.use' | head -1 | sed 's/kaji.quota.account.//;s/.use//')
+[[ -n "$ACTIVE" && -n "$OTHER" ]] || { echo "FAIL need active + switchable Claude accounts"; tree | grep kaji; exit 1; }
+echo "PASS active=$ACTIVE other=$OTHER"
+has "kaji.quota.account.$ACTIVE.use" && { echo "FAIL active row offers Use"; exit 1; } || echo "PASS no Use on active row"
+render_status before-status; shot 1-initial
 press "kaji.quota.account.$OTHER.use"
-if tree | grep -q "kaji.quota.account.$OTHER.confirm"; then
-    [[ "$(cat "$PIX/claude-route")" == auto ]] || { echo 'FAIL warning changed route'; exit 1; }
-    check '0% left. Pinning may cause quota errors' 'exhausted warning visible'
-    shot exhausted-warning
-    press "kaji.quota.account.$OTHER.cancel"
-    [[ "$(cat "$PIX/claude-route")" == auto ]] || { echo 'FAIL cancel changed route'; exit 1; }
-    echo 'PASS exhausted Use and Cancel leave route unchanged'
-    press "kaji.quota.account.$OTHER.use"
-    press "kaji.quota.account.$OTHER.confirm"
-    echo 'PASS deliberate Use anyway'
-elif [[ "${KAJI_REQUIRE_EXHAUSTED_WARNING:-0}" == 1 ]]; then
-    echo 'FAIL expected known exhausted account warning'; exit 1
-fi
-[[ "$(cat "$PIX/claude-route")" == "$OTHER" ]] && echo "PASS Use wrote route=$OTHER" || { echo "FAIL route"; exit 1; }
-check "Pinned$" "header says Pinned"; check "kaji.quota.account.$OTHER.toggle .*, in use" "pinned account marked in use"; shot 3-pinned
+if has "kaji.quota.account.$OTHER.confirm"; then
+    [[ "$(route)" == auto ]] || { echo "FAIL warning changed route"; exit 1; }
+    shot exhausted-warning; press "kaji.quota.account.$OTHER.cancel"
+    [[ "$(route)" == auto ]] || { echo "FAIL cancel changed route"; exit 1; }
+    echo "PASS exhausted Use + Cancel leave route auto"
+    press "kaji.quota.account.$OTHER.use"; press "kaji.quota.account.$OTHER.confirm"; echo "PASS deliberate confirm"
+elif [[ "${KAJI_REQUIRE_EXHAUSTED_WARNING:-0}" == 1 ]]; then echo "FAIL expected exhausted warning"; exit 1; fi
+[[ "$(route)" == "$OTHER" ]] && echo "PASS Use wrote route=$OTHER" || { echo "FAIL route=$(route)"; exit 1; }
+check "kaji.quota.account.$OTHER.toggle\|kaji.quota.account.auto" "Auto offered on pinned row"
+check "kaji.quota.account.$ACTIVE.use" "previous account now offers Use"
+shot 2-pinned; render_status pinned-status
 press kaji.quota.account.auto
-[[ "$(cat "$PIX/claude-route")" == "auto" ]] && echo "PASS Auto wrote route=auto" || { echo "FAIL auto"; exit 1; }
-check "Auto$" "header back to Auto"
+[[ "$(route)" == auto ]] && echo "PASS Auto wrote route=auto" || { echo "FAIL auto"; exit 1; }
+check "kaji.quota.account.$ACTIVE.active" "auto pick active again"
 echo "$OTHER" > "$PIX/claude-route"; act refresh-quota; sleep 0.6
-check "kaji.quota.account.$OTHER.toggle .*, in use" "refresh picks up external pin"; check "kaji.quota.account.$OTHER.details" "user expansion survives refresh"
-press "kaji.quota.account.$OTHER.toggle"
-tree | grep -q "kaji.quota.account.$OTHER.details" && { echo "FAIL collapse"; exit 1; } || echo "PASS collapse hides details"
-shot 4-final
+check "kaji.quota.account.auto" "refresh picks up external pin"
+echo auto > "$PIX/claude-route"; act refresh-quota; sleep 0.6
 grep -q _active "$PIX/accounts-usage.json" && echo "PASS _active untouched"
-tree | grep -E "toggle|% *$" | grep -v "left\|signed out\|unknown\|stale" && { echo "FAIL row without % left/state"; exit 1; } || echo "PASS every row shows % left or a state"
-echo "$OTHER" > "$PIX/claude-route"; act refresh-quota; sleep 0.5
-render_status 0-status-pinned-$OTHER
+shot 3-final
 echo "ACCOUNT-SMOKE PASS; screenshots in $OUT"

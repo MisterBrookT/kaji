@@ -19,7 +19,7 @@ public enum QuotaCaption {
     /// Percent text for a window. `nil` is an em dash, never "0%".
     public static func percent(_ value: Double?) -> String {
         guard let value else { return "\u{2014}" }
-        return "\(Int(value.rounded()))% left"
+        return "\(Int(value.rounded()))%"
     }
 
     /// Whether a window has a usable reading at all.

@@ -16,6 +16,7 @@ import KajiCore
 // Glyphs are always adaptive mono (system Light / Dark) — no Color product path.
 struct StatusItemView: View {
     let providers: [ProviderView]
+    var showRemaining: Bool = false
     /// When a newer release exists, a small accent dot rides the top-trailing
     /// corner of the glyph as a passive "update available" cue (open popover ->
     /// "Update to vX" to act on it). No notification permission needed.
@@ -37,11 +38,10 @@ struct StatusItemView: View {
             Button(action: onQuotaClick) {
                 HStack(spacing: 5) {
                     if providers.isEmpty {
-                        DualRing(provider: nil)
+                        DualRing(provider: nil, showRemaining: showRemaining)
                     } else {
                         ForEach(providers.prefix(4)) { p in
-                            DualRing(provider: p)
-                                .help("\(p.displayName): \(p.percentLeft.map { "\(Int($0.rounded()))% left" } ?? "unknown")\(p.isActiveAccount ? " · in use" : "")")
+                            DualRing(provider: p, showRemaining: showRemaining)
                         }
                     }
                 }
@@ -140,53 +140,52 @@ private struct WorkStatusSlot: View {
 // INNER = the 5-hour window (bright `base`, thickened when near-limit — the
 // actionable number). The 5-hour signal sits at the center of the glyph, so
 // the urgent number stays the visually dominant one.
-struct DualRing: View {
+private struct DualRing: View {
     let provider: ProviderView?
+    let showRemaining: Bool
 
     @Environment(\.colorScheme) private var scheme
 
-    private let dim: CGFloat = 18
+    private let dim: CGFloat = 21
+    private let outerLW: CGFloat = 2.0
+    private let innerLW: CGFloat = 1.7
+    private let gap: CGFloat = 1.3
 
     private var base: Color { scheme == .dark ? .white : .black }
+    private var weekColor: Color { base.opacity(0.65) }
     private var trackColor: Color { base.opacity(0.22) }
 
-    static func arcFraction(usedPercent: Double?) -> Double {
-        guard let usedPercent else { return 0 }
-        let used = min(max(usedPercent / 100, 0), 1)
-        return 1 - used
+    private var fiveFraction: Double {
+        guard let provider else { return 0 }
+        return showRemaining ? 1.0 - provider.usedFraction : provider.usedFraction
     }
-
-    /// Binding limit: the tighter of 5h/7d, as % left (nil = no reading).
-    private var left: Double? { provider?.percentLeft }
-    private var low: Bool { (left ?? 100) <= 20 }
+    private var weekFraction: Double {
+        guard let provider else { return 0 }
+        return showRemaining ? 1.0 - provider.weekFraction : provider.weekFraction
+    }
+    private var nearLimit: Bool { provider?.isNearLimit ?? false }
 
     var body: some View {
         ZStack {
-            // At 0% left there is no arc to colour, so the warning also
-            // tints the track and logo.
-            ring(inset: 0, lineWidth: 2,
-                 fraction: (left ?? 0) / 100,
-                 color: low ? Color.orange : base,
-                 track: low ? Color.orange.opacity(0.45) : trackColor)
+            // OUTER = 7-day arc: dimmer, normal width.
+            ring(inset: 0, lineWidth: outerLW,
+                 fraction: weekFraction, color: weekColor)
+            // INNER = 5-hour arc: bright, thickened when near-limit.
+            ring(inset: outerLW + gap,
+                 lineWidth: nearLimit ? innerLW + 0.9 : innerLW,
+                 fraction: fiveFraction, color: base)
             if let provider {
-                ProviderLogo(key: provider.logo, color: low ? Color.orange : base, size: 9)
+                ProviderLogo(key: provider.id, color: base, size: 9)
             }
         }
         .frame(width: dim, height: dim)
-        .frame(width: 21, height: 22, alignment: .top)
-        .overlay(alignment: .bottom) {
-            if provider?.isActiveAccount == true {
-                Capsule().fill(base).frame(width: 7, height: 2)
-                    .accessibilityLabel("active account")
-            }
-        }
     }
 
     private func ring(inset: CGFloat, lineWidth: CGFloat,
-                      fraction: Double, color: Color, track: Color) -> some View {
+                      fraction: Double, color: Color) -> some View {
         ZStack {
             Circle()
-                .stroke(track,
+                .stroke(trackColor,
                         style: StrokeStyle(lineWidth: lineWidth, lineCap: .round))
             Circle()
                 .trim(from: 0, to: fraction)
