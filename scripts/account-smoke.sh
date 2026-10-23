@@ -36,6 +36,8 @@ sleep 2; check "Auto$" "header says Auto"; check "kaji.quota.account.$ACTIVE.det
 tree | grep -q "kaji.quota.account.$ACTIVE.use" && { echo "FAIL active row must not offer Use"; exit 1; } || echo "PASS no Use on active row"
 tree | grep -q "kaji.quota.account.$OTHER.use" && { echo "FAIL other row should start collapsed"; exit 1; } || echo "PASS other row collapsed"
 shot 1-initial
+render_status() { curl -sf -XPOST "localhost:$PORT/v1/test/render" -H 'Content-Type: application/json' -d "{\"nonce\":\"$NONCE\",\"surface\":\"status\",\"selection\":\"status\",\"outputPath\":\"$OUT/$1.png\"}" >/dev/null && echo "PASS status render $1"; }
+render_status 0-status-auto
 press "kaji.quota.account.$OTHER.toggle"; check "kaji.quota.account.$OTHER.use" "expand shows Use + 5h/7d"; shot 2-expanded
 press "kaji.quota.account.$OTHER.use"
 if tree | grep -q "kaji.quota.account.$OTHER.confirm"; then
@@ -64,5 +66,5 @@ shot 4-final
 grep -q _active "$PIX/accounts-usage.json" && echo "PASS _active untouched"
 tree | grep -E "toggle|% *$" | grep -v "left\|signed out\|unknown\|stale" && { echo "FAIL row without % left/state"; exit 1; } || echo "PASS every row shows % left or a state"
 echo "$OTHER" > "$PIX/claude-route"; act refresh-quota; sleep 0.5
-curl -sf -XPOST "localhost:$PORT/v1/test/render" -H 'Content-Type: application/json' -d "{\"nonce\":\"$NONCE\",\"surface\":\"status\",\"selection\":\"status\",\"outputPath\":\"$OUT/0-status.png\"}" >/dev/null && echo "PASS status render"
+render_status 0-status-pinned-$OTHER
 echo "ACCOUNT-SMOKE PASS; screenshots in $OUT"

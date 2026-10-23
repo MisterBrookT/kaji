@@ -594,7 +594,8 @@ struct KajiPopoverView: View {
 
     /// "21:40 \u{00B7} 2h 14m left" / "Sun 12:00 \u{00B7} 3d left".
     private func resetCaption(_ date: Date?) -> String {
-        guard let date else { return "\u{2014}" }
+        // A reading with no reset time: the window has not started yet.
+        guard let date else { return "no reset scheduled" }
         let clock = ResetFormat.resetClock(date)
         guard let left = ResetFormat.dur(date) else { return clock }
         if left == "now" { return "resetting" }
