@@ -26,13 +26,14 @@ act open-popover
 for _ in $(seq 60); do "$OUT/ax" $PID dump | grep -q "kaji.quota.using" && break; sleep 1; act open-popover || true; done
 tree() { "$OUT/ax" $PID dump | awk '!s[$0]++'; }
 press() { "$OUT/ax" $PID press "$1" | grep -q "press $1 0" || { echo "FAIL press $1"; exit 1; }; sleep 0.6; }
-shot() { screencapture -o -x -l "$("$OUT/wid" $PID)" "$OUT/$1.png"; }
+shot() { sleep 0.5; screencapture -o -x -l "$("$OUT/wid" $PID)" "$OUT/$1.png"; }
 check() { tree | grep -q -- "$1" && echo "PASS $2" || { echo "FAIL $2 (missing: $1)"; tree | grep kaji.quota; exit 1; }; }
 mapfile -t CLAUDE < <(tree | grep -o 'kaji\.quota\.account\.[^ ]*\.toggle' | sed 's/kaji.quota.account.//;s/.toggle//' | grep -v '^codex' )
 ACTIVE=$(tree | grep "in use" | grep -o 'kaji\.quota\.account\.[^ ]*\.toggle' | head -1 | sed 's/kaji.quota.account.//;s/.toggle//')
 OTHER=""; for c in "${CLAUDE[@]}"; do [[ "$c" != "$ACTIVE" ]] && OTHER=$c && break; done
 [[ -n "$ACTIVE" && -n "$OTHER" ]] || { echo "FAIL need 2 Claude accounts (active=$ACTIVE other=$OTHER)"; exit 1; }
-check "Auto$" "header says Auto"; check "kaji.quota.account.$ACTIVE.use" "active row expanded initially"
+sleep 2; check "Auto$" "header says Auto"; check "kaji.quota.account.$ACTIVE.details" "active row expanded initially"
+tree | grep -q "kaji.quota.account.$ACTIVE.use" && { echo "FAIL active row must not offer Use"; exit 1; } || echo "PASS no Use on active row"
 tree | grep -q "kaji.quota.account.$OTHER.use" && { echo "FAIL other row should start collapsed"; exit 1; } || echo "PASS other row collapsed"
 shot 1-initial
 press "kaji.quota.account.$OTHER.toggle"; check "kaji.quota.account.$OTHER.use" "expand shows Use + 5h/7d"; shot 2-expanded
@@ -56,10 +57,12 @@ press kaji.quota.account.auto
 [[ "$(cat "$PIX/claude-route")" == "auto" ]] && echo "PASS Auto wrote route=auto" || { echo "FAIL auto"; exit 1; }
 check "Auto$" "header back to Auto"
 echo "$OTHER" > "$PIX/claude-route"; act refresh-quota; sleep 0.6
-check "kaji.quota.account.$OTHER.toggle .*, in use" "refresh picks up external pin"; check "kaji.quota.account.$OTHER.use\|Pinned" "user expansion survives refresh"
+check "kaji.quota.account.$OTHER.toggle .*, in use" "refresh picks up external pin"; check "kaji.quota.account.$OTHER.details" "user expansion survives refresh"
 press "kaji.quota.account.$OTHER.toggle"
 tree | grep -q "kaji.quota.account.$OTHER.details" && { echo "FAIL collapse"; exit 1; } || echo "PASS collapse hides details"
 shot 4-final
 grep -q _active "$PIX/accounts-usage.json" && echo "PASS _active untouched"
-tree | grep "toggle" | grep -v "left\|signed out\|unknown\|stale" && { echo "FAIL row without % left/state"; exit 1; } || echo "PASS every row shows % left or a state"
+tree | grep -E "toggle|% *$" | grep -v "left\|signed out\|unknown\|stale" && { echo "FAIL row without % left/state"; exit 1; } || echo "PASS every row shows % left or a state"
+echo "$OTHER" > "$PIX/claude-route"; act refresh-quota; sleep 0.5
+curl -sf -XPOST "localhost:$PORT/v1/test/render" -H 'Content-Type: application/json' -d "{\"nonce\":\"$NONCE\",\"surface\":\"status\",\"selection\":\"status\",\"outputPath\":\"$OUT/0-status.png\"}" >/dev/null && echo "PASS status render"
 echo "ACCOUNT-SMOKE PASS; screenshots in $OUT"
