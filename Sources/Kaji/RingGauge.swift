@@ -12,15 +12,10 @@ import KajiCore
 //     windows right here in the popover. Localized EN / 中文.
 //     Cursor uses API / Auto captions instead (cursor-quota spec).
 //
-// `showRemaining` flips BOTH the ring trim direction (1-usedFraction) and the
-// center % text (100-used) — "0% means full" instead of "100% means full".
-// The "near limit" threshold is ALWAYS based on USED, so an empty (remaining
-// 100%) ring never reads as amber; a low-remaining ring always does.
+// Ring trim and number both read as % LEFT (full ring = plenty left).
 struct RingGauge: View {
     let provider: ProviderView
     var lang: Lang = .en
-    /// When true, the ring + % read as REMAINING (100% used → empty ring + 0%).
-    var showRemaining: Bool = false
 
     /// Outer ring diameter. Scales the ring + the logo + the big % together so
     /// the visual mass stays proportional across S/M popover presets.
@@ -60,18 +55,17 @@ struct RingGauge: View {
 
     /// Fraction of the ring's TRIM, given the current display direction.
     private var trimFraction: Double {
-        showRemaining ? 1.0 - provider.usedFraction : provider.usedFraction
+        provider.fiveHourPercent == nil ? 0 : 1.0 - provider.usedFraction
     }
 
     /// 7-day inner ring, also direction-flipped for symmetry.
     private var weekTrimFraction: Double {
-        showRemaining ? 1.0 - provider.weekFraction : provider.weekFraction
+        provider.weekPercent == nil ? 0 : 1.0 - provider.weekFraction
     }
 
     private func displayPercent(_ raw: Double?) -> String {
         guard let p = raw else { return "\u{2014}" }
-        let shown = showRemaining ? (100.0 - p) : p
-        return "\(Int(shown.rounded()))"
+        return "\(Int((100.0 - p).rounded()))% left"
     }
 
     private var fivePercentText: String { displayPercent(provider.fiveHourPercent) }

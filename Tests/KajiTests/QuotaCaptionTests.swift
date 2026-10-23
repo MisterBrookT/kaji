@@ -15,17 +15,17 @@ final class QuotaCaptionTests: XCTestCase {
 
     func testMissingPercentIsNotZero() {
         XCTAssertEqual(QuotaCaption.percent(nil), "\u{2014}")
-        XCTAssertNotEqual(QuotaCaption.percent(nil), "0%")
+        XCTAssertNotEqual(QuotaCaption.percent(nil), "0% left")
     }
 
     func testRealZeroStillRendersAsZero() {
-        XCTAssertEqual(QuotaCaption.percent(0), "0%")
+        XCTAssertEqual(QuotaCaption.percent(0), "0% left")
     }
 
     func testPercentRounds() {
-        XCTAssertEqual(QuotaCaption.percent(78.4), "78%")
-        XCTAssertEqual(QuotaCaption.percent(95.6), "96%")
-        XCTAssertEqual(QuotaCaption.percent(100), "100%")
+        XCTAssertEqual(QuotaCaption.percent(78.4), "78% left")
+        XCTAssertEqual(QuotaCaption.percent(95.6), "96% left")
+        XCTAssertEqual(QuotaCaption.percent(100), "100% left")
     }
 
     func testHasReadingDistinguishesNilFromZero() {

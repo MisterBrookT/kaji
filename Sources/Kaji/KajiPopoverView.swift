@@ -434,7 +434,7 @@ struct KajiPopoverView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("kaji.quota.account.\(id).toggle")
-                if expanded && canUse {
+                if expanded && canUse && !a.isActiveAccount {
                     if store.claudeRoute == id {
                         Text("Pinned")
                             .font(.system(size: 10, weight: .semibold, design: .rounded))
@@ -521,14 +521,14 @@ struct KajiPopoverView: View {
                 Spacer(minLength: 6)
             }
             quotaWindowLine(label: windows.primary,
-                            percentValue: provider.fiveHourPercent,
-                            fraction: provider.usedFraction,
+                            percentValue: AccountRouting.left(provider.fiveHourPercent),
+                            fraction: (AccountRouting.left(provider.fiveHourPercent) ?? 0) / 100,
                             resetDate: provider.resetDate,
                             nearLimit: provider.isNearLimit,
                             emphasized: true)
             quotaWindowLine(label: windows.secondary,
-                            percentValue: provider.weekPercent,
-                            fraction: provider.weekFraction,
+                            percentValue: AccountRouting.left(provider.weekPercent),
+                            fraction: (AccountRouting.left(provider.weekPercent) ?? 0) / 100,
                             resetDate: provider.weekResetDate,
                             nearLimit: provider.weekNearLimit,
                             emphasized: false)
@@ -572,7 +572,7 @@ struct KajiPopoverView: View {
                     .foregroundColor(hasReading ? (emphasized ? t.cream : t.mute) : t.ash)
                     .lineLimit(1)
                     .fixedSize(horizontal: true, vertical: false)
-                    .frame(minWidth: 30, alignment: .trailing)
+                    .frame(minWidth: 56, alignment: .trailing)
             }
             Text(hasReading ? resetCaption(resetDate) : QuotaCaption.unavailable)
                 .font(.system(size: 9, weight: .medium, design: .rounded))

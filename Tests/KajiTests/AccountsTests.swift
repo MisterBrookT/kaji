@@ -65,6 +65,12 @@ final class AccountsTests: XCTestCase {
         XCTAssertEqual(files.bandWidth, 25)
     }
 
+    @MainActor func testAccountStatusRingShowsRemainingWithoutInventingUnknownQuota() {
+        XCTAssertEqual(DualRing.arcFraction(usedPercent: 100), 0)
+        XCTAssertEqual(DualRing.arcFraction(usedPercent: 2), 0.98, accuracy: 0.0001)
+        XCTAssertEqual(DualRing.arcFraction(usedPercent: nil), 0)
+    }
+
     @MainActor func testMenuBarRingsReplaceCoveredProviders() {
         func v(_ id: String, logo: String? = nil) -> ProviderView {
             ProviderView(id: id, mark: id, displayName: id, fiveHourPercent: 10, weekPercent: nil,

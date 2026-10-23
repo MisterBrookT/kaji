@@ -138,3 +138,13 @@ final class AccountPinPolicyTests: XCTestCase {
         XCTAssertFalse(AccountPinPolicy.requiresConfirmation(a))
     }
 }
+
+final class BindingLimitTests: XCTestCase {
+    func testHeadlineIsTighterWindow() {
+        let own = ProviderView(id: "account:own", mark: "C", displayName: "brook",
+                               fiveHourPercent: 0, weekPercent: 100, resetDate: nil,
+                               weekResetDate: nil, logoKey: "claude")
+        XCTAssertEqual(own.percentLeft, 0, "5h fresh but 7d used up = 0% left")
+        XCTAssertEqual(AccountRouting.left(own.fiveHourPercent), 100, "expanded 5h still shows its own value")
+    }
+}

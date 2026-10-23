@@ -47,12 +47,6 @@ final class Prefs: ObservableObject {
     @Published var goalGrouping: GoalGrouping {
         didSet { defaults.set(goalGrouping.rawValue, forKey: Key.goalGrouping) }
     }
-    /// Show the 5h percentage as USED (default, "100% means full") vs
-    /// REMAINING ("0% means full"). Persisted; the toggle lives in both the
-    /// popover footer segment and the popover on the status item.
-    @Published var showRemaining: Bool {
-        didSet { defaults.set(showRemaining, forKey: Key.showRemaining) }
-    }
     @Published var focusMinutes: Int {
         didSet { defaults.set(focusMinutes, forKey: Key.focusMinutes) }
     }
@@ -84,7 +78,6 @@ final class Prefs: ObservableObject {
         static let primaryFavorites = "exposureExperimentPrimaryFavorites"
         static let language = "language"
         static let menubarStyle = "menubarStyle"
-        static let showRemaining = "showRemaining"
         static let focusMinutes = "focusMinutes"
         static let breakMinutes = "breakMinutes"
         static let allowBreakSkip = "allowBreakSkip"
@@ -101,7 +94,7 @@ final class Prefs: ObservableObject {
 
         static let existingPreferenceKeys = [
             visibleProviders, enabledModules, language, menubarStyle,
-            showRemaining, focusMinutes, breakMinutes,
+            focusMinutes, breakMinutes,
             allowBreakSkip, breakOverlayEnabled, workTimeDisplayStyle,
             goalMenuBarDisplayStyle, visibleProvidersV2, visibleProvidersCursor,
             launchAtLogin, preventSleep, goalGrouping,
@@ -170,13 +163,7 @@ final class Prefs: ObservableObject {
         if ThemePrefsLogic.shouldRewriteMenubarStyle(storedStyle) {
             d.set(normalizedStyle, forKey: Key.menubarStyle)
         }
-        // Default to showing USED — matches what the rings always did and
-        // avoids surprising existing users on first launch after upgrade.
-        if d.object(forKey: Key.showRemaining) != nil {
-            showRemaining = d.bool(forKey: Key.showRemaining)
-        } else {
-            showRemaining = false
-        }
+        d.removeObject(forKey: "showRemaining")
         goalGrouping = GoalGrouping(rawValue: d.string(forKey: Key.goalGrouping) ?? "") ?? .none
         let savedFocus = d.integer(forKey: Key.focusMinutes)
         focusMinutes = savedFocus > 0 ? savedFocus : 45
