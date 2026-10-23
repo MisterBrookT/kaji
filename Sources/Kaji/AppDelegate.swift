@@ -106,11 +106,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.updateStatusItem()
             }
             .store(in: &cancellables)
-        store.$accounts
+        prefs.$visibleProviders
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
-        prefs.$visibleProviders
+        prefs.$showRemaining
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.updateStatusItem() }
             .store(in: &cancellables)
@@ -235,7 +235,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// only before the first quota snapshot arrives, when StatusItemView falls
     /// back to its placeholder single ring.
     private var menuBarProviders: [ProviderView] {
-        QuotaStore.menuBarRings(accounts: store.accounts, providers: visibleProviders, count: 4)
+        QuotaStore.menuBarOrder(in: visibleProviders, count: 3)
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -261,6 +261,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
 
         let view = StatusItemView(providers: menuBarProviders,
+                                  showRemaining: prefs.showRemaining,
                                   updateAvailable: updateChecker.available != nil,
                                   workSlotLabel: workStatusSlotLabel,
                                   workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
@@ -282,6 +283,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateStatusItem() {
         hostingView?.rootView = StatusItemView(providers: menuBarProviders,
+                                               showRemaining: prefs.showRemaining,
                                                updateAvailable: updateChecker.available != nil,
                                                workSlotLabel: workStatusSlotLabel,
                                                workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
@@ -339,9 +341,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 
     private var statusItemLength: CGFloat {
-        // Each 21pt glyph has a 5pt gap; the outer horizontal padding is 6pt.
-        let rings = menuBarProviders
-        var length = CGFloat(max(1, rings.count)) * 26 + 6
+        // 21pt ring + 5pt gap per visible ring (up to 3), + 6pt padding —
+        // the pre-round-2 multi-ring formula, restored.
+        let shown = max(1, min(3, menuBarProviders.count))
+        var length = CGFloat(shown) * 26 + 6
         if let workStatusSlotLabel {
             let iconWidth: CGFloat = prefs.workTimeDisplayStyle == .minutesOnly ? 11 : 0
             length += 5 + iconWidth + CGFloat(workStatusSlotLabel.count) * 7
@@ -592,6 +595,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             "settings": [
                 "enabledModules": prefs.enabledModules.map(\.rawValue).sorted(),
                 "visibleProviders": prefs.visibleProviders.sorted(),
+                "showRemaining": prefs.showRemaining,
                 "focusMinutes": prefs.focusMinutes,
                 "breakMinutes": prefs.breakMinutes,
                 "allowBreakSkip": prefs.allowBreakSkip,

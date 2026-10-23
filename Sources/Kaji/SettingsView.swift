@@ -340,6 +340,23 @@ struct SettingsView: View {
                 .fixedSize()
                 .accessibilityIdentifier("kaji.settings.language")
             }
+            settingRow(title: L10n.t(.usage, prefs.language)) {
+                Menu {
+                    Picker(L10n.t(.usage, prefs.language), selection: $prefs.showRemaining) {
+                        Text(L10n.t(.showUsed, prefs.language)).tag(false)
+                        Text(L10n.t(.showRemaining, prefs.language)).tag(true)
+                    }
+                    .pickerStyle(.inline)
+                    .labelsHidden()
+                } label: {
+                    controlLabel(L10n.t(prefs.showRemaining ? .showRemaining : .showUsed, prefs.language), chevron: true)
+                }
+                .menuStyle(.button)
+                .buttonStyle(.plain)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .accessibilityIdentifier("kaji.settings.usage")
+            }
             Divider().overlay(t.track)
             settingRow(title: L10n.t(.currentVersion, prefs.language)) {
                 Text(updateChecker.currentVersion)

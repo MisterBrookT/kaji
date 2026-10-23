@@ -87,6 +87,7 @@ struct Snap {
         p.language = lang
         p.visibleProviders = ["claude", "codex", "cursor"]
         p.menubarStyle = .blackWhite
+        p.showRemaining = false
         // Slim default — quota only (matches shipped lean modules).
         p.enabledModules = [.quota]
         return p
@@ -131,7 +132,9 @@ struct Snap {
             let breakMode = args.contains("break")
             let settingsMode = args.contains("settings")
             let lang: Lang = args.contains("zh") ? .zh : .en
+            let showRemaining = args.contains("remaining")
             let prefs = makePrefs(lang)
+            prefs.showRemaining = showRemaining
             if goalsMode { prefs.enabledModules = [.quota, .goals] }
             if workMode || breakMode { prefs.enabledModules = [.quota, .work] }
 
@@ -174,7 +177,7 @@ struct Snap {
                         .foregroundColor(glyph)
                 }
                 return HStack(spacing: 13) {
-                    StatusItemView(providers: mocks)
+                    StatusItemView(providers: mocks, showRemaining: showRemaining)
                     sys("switch.2", 13)
                     sys("wifi", 13)
                     sys("battery.75", 16)
