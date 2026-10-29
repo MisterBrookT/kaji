@@ -775,6 +775,23 @@ class TestAccounts(unittest.TestCase):
             {"id": "work", "label": "work", "provider": "codex", "dir": "/tmp/cx"}]}))
         self.assertEqual([a["id"] for a in quota.pix_accounts()], ["own", "work"])
 
+    def test_disabled_accounts_skip_limits_and_keep_reason_without_losing_credentials(self):
+        from unittest.mock import patch
+        (self.home / "accounts.json").write_text(json.dumps({"accounts": [
+            {"id": "own", "label": "brook", "disabled": True, "disabledReason": "oauth_org_denied"},
+            {"id": "codex", "provider": "codex", "dir": "/tmp/cx"}]}))
+        with patch.object(quota, "_account_limits", return_value={"five_hour_used_percent": 4}) as limits:
+            rows = quota.collect_accounts({})
+        own = rows[0]
+        self.assertTrue(own["disabled"])
+        self.assertEqual(own["disabledReason"], "oauth_org_denied")
+        self.assertTrue(own["ready"], "disabled is not signed out")
+        self.assertNotIn("limits", own)
+        self.assertEqual([c.args[0]["id"] for c in limits.call_args_list], ["codex"])
+        with patch.object(quota, "_limits_cached") as cached:
+            self.assertIsNone(quota.claude_limits())
+            cached.assert_not_called()
+
     def test_keychain_service_matches_pix(self):
         import hashlib
         self.assertEqual(quota.claude_keychain_service(None), "Claude Code-credentials")

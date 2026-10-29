@@ -67,6 +67,24 @@ final class AccountStoreTests: XCTestCase {
         let usage = try String(contentsOf: dir.appendingPathComponent("accounts-usage.json"), encoding: .utf8)
         XCTAssertTrue(usage.contains("_active"), "Kaji never rewrites pix's _active")
     }
+
+    func testSharedDisableOverridesCachedQuotaAndPinsThenReenablesWithoutDeletingRoute() throws {
+        let s = try store(usage: #"{"own":{"left":99},"bench":{"left":30},"_active":{"id":"own"}}"#)
+        let path = dir.appendingPathComponent("accounts.json")
+        try #"{"band":25,"accounts":[{"id":"own","disabled":true,"disabledReason":"oauth_org_denied"},{"id":"bench","disabled":true,"disabledReason":"oauth_org_denied"}]}"#.write(to: path, atomically: true, encoding: .utf8)
+        try "own\n".write(to: dir.appendingPathComponent("claude-route"), atomically: true, encoding: .utf8)
+        s.rebuildAccounts()
+        XCTAssertNil(s.activeClaudeLabel, "a preserved disabled pin is not an active account")
+        let own = try XCTUnwrap(s.accounts.first { $0.accountID == "own" })
+        XCTAssertEqual(AccountCopy.summary(left: own.percentLeft, state: own.accountState), "unavailable, organization denied")
+        XCTAssertNil(own.percentLeft, "old cached quota must not imply the disabled login is healthy")
+        s.pinClaudeRoute("bench")
+        XCTAssertEqual(s.pixFiles.route, "own", "cannot select another disabled account; preserve the old pin for rollback")
+        try #"{"band":25,"accounts":[{"id":"own"},{"id":"bench"}]}"#.write(to: path, atomically: true, encoding: .utf8)
+        s.rebuildAccounts()
+        XCTAssertEqual(s.activeClaudeLabel, "brook")
+        XCTAssertEqual(s.pixFiles.route, "own")
+    }
 }
 
 @MainActor
@@ -83,6 +101,24 @@ final class AccountPanelRenderTests: XCTestCase {
         fixture.store.ingest(try JSONDecoder().decode(QuotaSnapshot.self, from: Data(json.utf8)))
         let rep = try XCTUnwrap(renderImage(fixture.view(page: .quota), size: CGSize(width: PanelSize.medium.frameSize.width, height: 640)))
         writePNG(rep, name: "popover-accounts")
+    }
+
+    func testOrganizationDeniedAccountsRenderReasonWithoutQuotaOrUseActions() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let fixture = PopoverRenderFixture()
+        defer { fixture.tearDown() }
+        fixture.store.pixFiles = PixAccountsFiles(home: dir)
+        let json = #"{"claude":{"limits":{"five_hour_used_percent":4}},"codex":{"limits":{"five_hour_used_percent":12}},"accounts":[{"id":"own","provider":"claude","label":"brook","ready":true,"disabled":true,"disabledReason":"oauth_org_denied","limits":{"five_hour_used_percent":4}},{"id":"bench","provider":"claude","label":"minarabench","ready":true,"disabled":true,"disabledReason":"oauth_org_denied"},{"id":"codex","provider":"codex","label":"codex","limits":{"five_hour_used_percent":12}}]}"#
+        fixture.store.ingest(try JSONDecoder().decode(QuotaSnapshot.self, from: Data(json.utf8)))
+        XCTAssertNil(fixture.store.activeClaudeLabel)
+        for account in fixture.store.accounts.filter({ $0.logo == "claude" }) {
+            XCTAssertFalse(AccountPinPolicy.canSwitch(account))
+            XCTAssertNil(account.percentLeft)
+        }
+        let rep = try XCTUnwrap(renderImage(fixture.view(page: .quota), size: CGSize(width: PanelSize.medium.frameSize.width, height: 640)))
+        writePNG(rep, name: "popover-accounts-disabled")
     }
 }
 

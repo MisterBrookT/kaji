@@ -534,6 +534,9 @@ def _parse_claude_usage(payload):
 
 
 def claude_limits():
+    # The default login's explicit availability is shared with AccountKit.
+    if any(a["provider"] == "claude" and not a.get("configDir") and a.get("disabled") for a in pix_accounts()):
+        return None
     return _limits_cached(
         "claude-limits-cache.json",
         _fetch_claude_limits,
@@ -1620,6 +1623,8 @@ def _claude_profile_token(config_dir):
 
 
 def _account_limits(account, provider_limits):
+    if account.get("disabled"):
+        return None
     if account["provider"] == "codex":
         home = os.path.expanduser(account.get("dir") or "")
         if not home or os.path.realpath(home) == os.path.realpath(HOME / ".codex"):
@@ -1662,7 +1667,7 @@ def record_account_usage(entries, now_ms=None):
     now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
     changed = False
     for e in entries:
-        if e["provider"] != "claude":
+        if e["provider"] != "claude" or e.get("disabled"):
             continue
         left, resets = percent_left(e.get("limits"))
         if left is None:
@@ -1688,11 +1693,15 @@ def collect_accounts(provider_limits):
     entries = []
     for a in pix_accounts():
         try:
-            limits = _account_limits(a, provider_limits)
+            limits = None if a.get("disabled") else _account_limits(a, provider_limits)
         except Exception:
             limits = None
         e = {"id": a["id"], "provider": a["provider"], "label": a["label"],
              "ready": a["provider"] != "claude" or claude_profile_ready(a.get("configDir"))}
+        if a.get("disabled"):
+            e["disabled"] = True
+            if isinstance(a.get("disabledReason"), str):
+                e["disabledReason"] = a["disabledReason"]
         if limits:
             e["limits"] = limits
         entries.append(e)
