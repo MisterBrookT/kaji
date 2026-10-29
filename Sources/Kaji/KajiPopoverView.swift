@@ -391,7 +391,7 @@ struct KajiPopoverView: View {
                             .accessibilityLabel("in use")
                             .accessibilityIdentifier("kaji.quota.account.\(id).active")
                     }
-                } else if a.accountState != .signedOut {
+                } else if AccountPinPolicy.canSwitch(a) {
                     Button("Use") {
                         if AccountPinPolicy.requiresConfirmation(a) {
                             pendingExhaustedPin = id
@@ -445,6 +445,12 @@ struct KajiPopoverView: View {
                 .font(.system(size: 9.5, weight: .semibold, design: .rounded))
                 .foregroundColor(t.mute)
             }
+            if provider.accountState == .disabled || provider.accountState == .orgDenied {
+                Text(AccountCopy.summary(left: nil, state: provider.accountState))
+                    .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                    .foregroundColor(t.ash)
+                    .accessibilityIdentifier("kaji.quota.account.unavailable")
+            } else {
             quotaWindowLine(label: windows.primary,
                             percentValue: provider.fiveHourPercent,
                             fraction: provider.usedFraction,
@@ -457,6 +463,7 @@ struct KajiPopoverView: View {
                             resetDate: provider.weekResetDate,
                             nearLimit: provider.weekNearLimit,
                             emphasized: false)
+            }
         }
     }
 

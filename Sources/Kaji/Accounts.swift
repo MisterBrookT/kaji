@@ -13,6 +13,8 @@ struct AccountQuota: Codable, Equatable {
     let label: String
     let ready: Bool?
     let limits: ProviderLimits?
+    var disabled: Bool? = nil
+    var disabledReason: String? = nil
 }
 
 struct AccountUsage: Equatable {
@@ -25,6 +27,8 @@ struct AccountUsage: Equatable {
 enum AccountState: Equatable {
     case ok
     case signedOut      // profile has no login (ready == false)
+    case disabled       // explicit, reversible inventory flag
+    case orgDenied      // disabled because the organization rejects OAuth
     case unknown        // signed in, but no quota reading
     case stale          // last reading older than `staleAfterMs`
 }
@@ -42,6 +46,18 @@ struct PixAccountsFiles {
         guard let data = try? Data(contentsOf: home.appendingPathComponent(name)),
               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
         return obj
+    }
+
+    /// The inventory is authoritative even when quota.py's snapshot predates a disable or re-enable.
+    func applyingAvailability(to accounts: [AccountQuota]) -> [AccountQuota] {
+        let rows = json("accounts.json")["accounts"] as? [[String: Any]] ?? []
+        return accounts.map { account in
+            guard let row = rows.first(where: { $0["id"] as? String == account.id }) else { return account }
+            var value = account
+            value.disabled = row["disabled"] as? Bool ?? false
+            value.disabledReason = row["disabledReason"] as? String
+            return value
+        }
     }
 
     /// Band width knob from accounts.json "band" (default 25).
@@ -86,7 +102,8 @@ enum AccountRouting {
         used.map { min(100, max(0, 100 - $0)) }
     }
 
-    static func state(ready: Bool?, hasReading: Bool, checkedAt: Double?, nowMs: Double) -> AccountState {
+    static func state(ready: Bool?, hasReading: Bool, checkedAt: Double?, nowMs: Double, disabled: Bool = false, disabledReason: String? = nil) -> AccountState {
+        if disabled { return disabledReason == "oauth_org_denied" ? .orgDenied : .disabled }
         if ready == false { return .signedOut }
         if !hasReading { return .unknown }
         if let checkedAt, nowMs - checkedAt > staleAfterMs { return .stale }
@@ -106,13 +123,13 @@ enum AccountRouting {
                                usage: [String: AccountUsage], storedActive: String?,
                                bandWidth: Double, nowMs: Double) -> String? {
         let claude = accounts.filter { $0.provider == "claude" }
-        if route != "auto", claude.contains(where: { $0.id == route }) { return route }
+        if route != "auto", let pinned = claude.first(where: { $0.id == route }) { return pinned.disabled == true ? nil : route }
         func band(_ a: AccountQuota) -> Double {
             guard let left = usage[a.id]?.left else { return -1 }
             return (left / bandWidth).rounded(.down)
         }
         let awake = claude.filter { a in
-            guard a.ready ?? true else { return false }
+            guard a.disabled != true, a.ready ?? true else { return false }
             if let cool = usage[a.id]?.coolUntil, nowMs < cool { return false }
             return true
         }
@@ -131,6 +148,8 @@ enum AccountCopy {
     static func summary(left: Double?, state: AccountState) -> String {
         switch state {
         case .signedOut: return "signed out"
+        case .disabled: return "disabled"
+        case .orgDenied: return "unavailable, organization denied"
         case .unknown: return "unknown"
         case .stale: return left.map { "\(Int($0.rounded()))% left · stale" } ?? "stale"
         case .ok: return left.map { "\(Int($0.rounded()))% left" } ?? "unknown"
@@ -156,6 +175,10 @@ struct AccountExpansion: Equatable {
 
 /// Only a fresh, known zero is exhausted. Quota is not model availability.
 enum AccountPinPolicy {
+    static func canSwitch(_ account: ProviderView) -> Bool {
+        account.logo == "claude" && account.accountState != .signedOut && account.accountState != .disabled && account.accountState != .orgDenied
+    }
+
     static func requiresConfirmation(_ account: ProviderView) -> Bool {
         account.logo == "claude" && account.accountState == .ok && account.percentLeft == 0
     }

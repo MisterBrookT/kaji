@@ -371,20 +371,21 @@ final class QuotaStore: ObservableObject {
     func rebuildAccounts(nowMs: Double = Date().timeIntervalSince1970 * 1000) {
         let files = pixFiles
         let route = files.route
-        let claudeIDs = Set(accountEntries.filter { $0.provider == "claude" }.map(\.id))
+        let entries = files.applyingAvailability(to: accountEntries)
+        let claudeIDs = Set(entries.filter { $0.provider == "claude" }.map(\.id))
         claudeRoute = claudeIDs.contains(route) ? route : "auto"
         let usage = files.usage
         let active = AccountRouting.activeClaudeID(
-            accounts: accountEntries, route: route, usage: usage,
+            accounts: entries, route: route, usage: usage,
             storedActive: files.storedActive, bandWidth: files.bandWidth, nowMs: nowMs)
-        accounts = accountEntries.map { a in
+        accounts = entries.map { a in
             ProviderView(id: "account:" + a.id,
                          mark: Providers.mark(for: a.provider),
                          displayName: a.label,
-                         fiveHourPercent: a.limits?.fiveHourUsedPercent,
-                         weekPercent: a.limits?.sevenDayUsedPercent,
-                         resetDate: a.limits?.fiveHourResetsAt?.date,
-                         weekResetDate: a.limits?.sevenDayResetsAt?.date,
+                         fiveHourPercent: a.disabled == true ? nil : a.limits?.fiveHourUsedPercent,
+                         weekPercent: a.disabled == true ? nil : a.limits?.sevenDayUsedPercent,
+                         resetDate: a.disabled == true ? nil : a.limits?.fiveHourResetsAt?.date,
+                         weekResetDate: a.disabled == true ? nil : a.limits?.sevenDayResetsAt?.date,
                          logoKey: a.provider,
                          accountLabel: a.label,
                          isActiveAccount: a.provider == "claude" && a.id == active,
@@ -392,13 +393,15 @@ final class QuotaStore: ObservableObject {
                             ready: a.ready,
                             hasReading: a.limits?.fiveHourUsedPercent != nil || a.limits?.sevenDayUsedPercent != nil,
                             checkedAt: a.provider == "claude" ? usage[a.id]?.checkedAt : nil,
-                            nowMs: nowMs))
+                            nowMs: nowMs, disabled: a.disabled == true, disabledReason: a.disabledReason))
         }
         activeClaudeLabel = accounts.first(where: \.isActiveAccount)?.displayName
     }
 
     /// Pin a Claude account ("auto" to unpin) by writing ~/.pix/claude-route.
     func pinClaudeRoute(_ value: String) {
+        rebuildAccounts()
+        if value != "auto" && !accounts.contains(where: { $0.accountID == value && AccountPinPolicy.canSwitch($0) }) { return }
         do { try pixFiles.writeRoute(value) } catch {
             NSLog("[Kaji] writing claude-route failed: %@", error.localizedDescription)
         }
