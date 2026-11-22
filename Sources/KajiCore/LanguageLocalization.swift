@@ -62,7 +62,7 @@ public enum L10n {
         case launchAtLogin
         case general, modules, modulesHint
         case cliIntegrationHint, cliExamplePrompt, copyPrompt
-        case moduleQuota, moduleWork, moduleGoals
+        case moduleQuota, moduleWork, moduleGoals, moduleGpu, gpuAddRemoteHint
         case goalGroup, goalGroupingNone, goalGroupingByTag, goalGroupingByCreatedTime
         case goalGroupUntagged, goalGroupToday, goalGroupYesterday, goalGroupThisWeek, goalGroupEarlier
         case permissions, loginPermission, loginPermissionWhy
@@ -170,6 +170,13 @@ public enum L10n {
         .moduleQuota: .init(en: "Quota", zh: "用量", ptBR: "Quota", es: "Quota"),
         .moduleWork: .init(en: "Work / Break", zh: "工作与休息", ptBR: "Trabalho / Pausa", es: "Trabajo / Descanso"),
         .moduleGoals: .init(en: "Goals", zh: "目标", ptBR: "Metas", es: "Metas"),
+        .moduleGpu: .init(en: "GPU monitor", zh: "GPU 监控", ptBR: "Monitor de GPU", es: "Monitor de GPU"),
+        .gpuAddRemoteHint: .init(
+            en: "Reads ~/.mlkit/gpus.json. Add a remote with `mk host add`.",
+            zh: "读取 ~/.mlkit/gpus.json。用 `mk host add` 添加远程主机。",
+            ptBR: "Lê ~/.mlkit/gpus.json. Adicione um remoto com `mk host add`.",
+            es: "Lee ~/.mlkit/gpus.json. Añade un remoto con `mk host add`."
+        ),
         .goalGroup: .init(en: "Group", zh: "分组", ptBR: "Agrupar", es: "Agrupar"),
         .goalGroupingNone: .init(en: "No Grouping", zh: "不分组", ptBR: "Sem agrupamento", es: "Sin agrupar"),
         .goalGroupingByTag: .init(en: "By Tag", zh: "按标签", ptBR: "Por etiqueta", es: "Por etiqueta"),

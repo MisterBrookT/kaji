@@ -1,11 +1,13 @@
 import Foundation
+import SQLite3
 
 // MARK: - Accounts (shared with pix accountkit)
 //
-// quota.py emits one entry per account under "accounts"; the route and usage
-// cache live in ~/.pix (owned by pix accountkit.ts). Kaji mirrors pix's band
-// rule to mark the active Claude account and can pin one via claude-route.
-// Codex accounts are display-only.
+// Kaji is display only. quota.py emits one entry per account under "accounts"
+// (numbers + the time each was really fetched). Which account is in use is
+// pix's decision: Kaji reads pix's printout (pix.db kv "route", brook 11-20:
+// code-written state is in ~/.pix/pix.db) and never derives it. The one thing
+// Kaji writes is the pin, "route.claude" in the hand-edited ~/.pix/config.json.
 
 struct AccountQuota: Codable, Equatable {
     let id: String
@@ -13,12 +15,20 @@ struct AccountQuota: Codable, Equatable {
     let label: String
     let ready: Bool?
     let limits: ProviderLimits?
+    /// Epoch ms the reading was really fetched (quota.py `checked_at`: cache
+    /// fetch time, never "now" for a cached number); nil = unknown.
+    var checkedAt: Double? = nil
+
+    enum CodingKeys: String, CodingKey {
+        case id, provider, label, ready, limits
+        case checkedAt = "checked_at"
+    }
 }
 
-struct AccountUsage: Equatable {
-    var left: Double?
-    var coolUntil: Double?   // epoch ms
-    var checkedAt: Double? = nil   // epoch ms of the last quota.py reading
+/// pix's printout of the route it is using (pix.db kv "route"). Read-only.
+struct PixRoute: Equatable {
+    var claude: String?
+    var codex: String?
 }
 
 /// What a single account row can honestly claim.
@@ -38,43 +48,53 @@ struct PixAccountsFiles {
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".pix"))
     }
 
-    private func json(_ name: String) -> [String: Any] {
-        guard let data = try? Data(contentsOf: home.appendingPathComponent(name)),
-              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
-        return obj
+    private var configURL: URL { home.appendingPathComponent("config.json") }
+    private var config: [String: Any]? {
+        guard let data = try? Data(contentsOf: configURL) else { return [:] }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    /// Band width knob from accounts.json "band" (default 25).
-    var bandWidth: Double {
-        let v = (json("accounts.json")["band"] as? NSNumber)?.doubleValue ?? 25
-        return v > 0 ? v : 25
+    /// pix.db kv value (JSON) for `key`, read-only; nil when absent.
+    func kv(_ key: String) -> Any? {
+        var db: OpaquePointer?
+        defer { sqlite3_close(db) }
+        let path = home.appendingPathComponent("pix.db").path
+        guard FileManager.default.fileExists(atPath: path),
+              sqlite3_open_v2(path, &db, SQLITE_OPEN_READONLY, nil) == SQLITE_OK else { return nil }
+        sqlite3_busy_timeout(db, 2000)
+        var st: OpaquePointer?
+        defer { sqlite3_finalize(st) }
+        guard sqlite3_prepare_v2(db, "SELECT value FROM kv WHERE key=?", -1, &st, nil) == SQLITE_OK else { return nil }
+        sqlite3_bind_text(st, 1, key, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+        guard sqlite3_step(st) == SQLITE_ROW, let t = sqlite3_column_text(st, 0) else { return nil }
+        return try? JSONSerialization.jsonObject(with: Data(String(cString: t).utf8), options: [.fragmentsAllowed])
     }
 
-    /// Raw route: "auto" or an account id (validated by the caller).
+    /// Raw route: "auto" or an account id (validated by the caller). config.json `route.claude`.
     var route: String {
-        let s = (try? String(contentsOf: home.appendingPathComponent("claude-route"), encoding: .utf8)) ?? ""
-        let v = s.trimmingCharacters(in: .whitespacesAndNewlines)
+        let v = ((config?["route"] as? [String: Any])?["claude"] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
         return v.isEmpty ? "auto" : v
     }
 
+    /// Set `route.claude` in config.json, keeping every other key brook wrote. A config.json that
+    /// does not parse is left alone (throws).
     func writeRoute(_ value: String) throws {
+        guard var c = config else { throw CocoaError(.fileReadCorruptFile) }
+        var r = c["route"] as? [String: Any] ?? [:]
+        r["claude"] = value
+        c["route"] = r
         try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
-        try (value + "\n").write(to: home.appendingPathComponent("claude-route"), atomically: true, encoding: .utf8)
+        let data = try JSONSerialization.data(withJSONObject: c, options: [.prettyPrinted, .sortedKeys])
+        try (data + Data("\n".utf8)).write(to: configURL, options: .atomic)
     }
 
-    var usage: [String: AccountUsage] {
-        var out: [String: AccountUsage] = [:]
-        for (id, v) in json("accounts-usage.json") {
-            guard let d = v as? [String: Any] else { continue }
-            out[id] = AccountUsage(left: (d["left"] as? NSNumber)?.doubleValue,
-                                   coolUntil: (d["coolUntil"] as? NSNumber)?.doubleValue,
-                                   checkedAt: (d["checkedAt"] as? NSNumber)?.doubleValue)
-        }
-        return out
-    }
-
-    var storedActive: String? {
-        (json("accounts-usage.json")["_active"] as? [String: Any])?["id"] as? String
+    /// Account pix is using per provider, from pix's printout (kv "route"):
+    /// `accounts.claude ?? account`, `accounts.codex`. Empty when missing.
+    var current: PixRoute {
+        let d = kv("route") as? [String: Any] ?? [:]
+        let per = d["accounts"] as? [String: Any]
+        func id(_ v: Any?) -> String? { (v as? String).flatMap { $0.isEmpty ? nil : $0 } }
+        return PixRoute(claude: id(per?["claude"]) ?? id(d["account"]), codex: id(per?["codex"]))
     }
 }
 
@@ -99,26 +119,11 @@ enum AccountRouting {
         return used.map { max(0, 100 - $0) }
     }
 
-    /// Mirrors pix accountkit `plan()[0]`: a valid pinned route wins; otherwise
-    /// keep the stored active account unless another ready, not-cooling account
-    /// sits in a STRICTLY higher band of % left (ties stay; unknown = lowest).
-    static func activeClaudeID(accounts: [AccountQuota], route: String,
-                               usage: [String: AccountUsage], storedActive: String?,
-                               bandWidth: Double, nowMs: Double) -> String? {
-        let claude = accounts.filter { $0.provider == "claude" }
-        if route != "auto", claude.contains(where: { $0.id == route }) { return route }
-        func band(_ a: AccountQuota) -> Double {
-            guard let left = usage[a.id]?.left else { return -1 }
-            return (left / bandWidth).rounded(.down)
-        }
-        let awake = claude.filter { a in
-            guard a.ready ?? true else { return false }
-            if let cool = usage[a.id]?.coolUntil, nowMs < cool { return false }
-            return true
-        }
-        var pick = awake.first { $0.id == storedActive } ?? awake.first
-        for a in awake where pick.map({ band(a) > band($0) }) ?? false { pick = a }
-        return pick?.id
+    /// The Claude account in use: a pin (config.json route.claude) naming a known account
+    /// wins; otherwise whatever pix printed (pix.db kv route); nil when neither.
+    static func currentClaudeID(accounts: [AccountQuota], route: String, current: PixRoute) -> String? {
+        if route != "auto", accounts.contains(where: { $0.provider == "claude" && $0.id == route }) { return route }
+        return current.claude
     }
 }
 

@@ -27,9 +27,12 @@ struct StatusItemView: View {
     var workSlotShowsIcon: Bool = false
     /// Optional Goals summary when Goals is enabled.
     var goalsSlotLabel: String? = nil
+    /// Optional GPU monitor avg util (nil when the module is off).
+    var gpuSlotLabel: String? = nil
     var onQuotaClick: () -> Void = {}
     var onWorkClick: () -> Void = {}
     var onGoalsClick: () -> Void = {}
+    var onGpuClick: () -> Void = {}
 
     @Environment(\.colorScheme) private var scheme
 
@@ -64,6 +67,14 @@ struct StatusItemView: View {
                 }
                 .buttonStyle(.plain)
             }
+            if let gpuSlotLabel {
+                Button(action: onGpuClick) {
+                    GoalsStatusSlot(label: gpuSlotLabel, systemImage: "cpu")
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("kaji.status.gpu")
+            }
         }
         .padding(.horizontal, 3)
         .frame(height: 22)
@@ -81,6 +92,7 @@ struct StatusItemView: View {
 
 private struct GoalsStatusSlot: View {
     let label: String
+    var systemImage: String = "calendar"
 
     @Environment(\.colorScheme) private var scheme
 
@@ -90,7 +102,7 @@ private struct GoalsStatusSlot: View {
 
     var body: some View {
         HStack(spacing: 2) {
-            Image(systemName: "calendar")
+            Image(systemName: systemImage)
                 .font(.system(size: 10, weight: .medium))
             Text(label)
                 .font(.system(size: 11, weight: .medium, design: .monospaced))

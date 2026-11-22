@@ -716,6 +716,18 @@ class TestStaleLimitsFallback(unittest.TestCase):
         out = quota._limits_cached(self.name, lambda: None)
         self.assertEqual(out["seven_day_used_percent"], 4)
 
+    def test_a_failed_fetch_is_not_retried_until_the_ttl_passes(self):
+        # codex fetches spawn `codex app-server`; failures re-ran every poll.
+        self.path.unlink()
+        calls = []
+        fail = lambda: calls.append(1)
+        try:
+            for _ in range(5):
+                quota._limits_cached(self.name, fail, ttl=300)
+            self.assertEqual(len(calls), 1)
+        finally:
+            self.path.with_name(self.name + ".retry-at").unlink(missing_ok=True)
+
     def test_cache_past_the_ceiling_reports_nothing(self):
         self.age(quota.STALE_LIMITS_MAX_AGE + 60)
         self.assertIsNone(
@@ -762,7 +774,7 @@ class TestAccounts(unittest.TestCase):
     def setUp(self):
         self.home = Path(os.environ["PIX_HOME"])
         self.home.mkdir(parents=True, exist_ok=True)
-        for f in ("accounts.json", "accounts-usage.json"):
+        for f in ("config.json", "accounts.json", "accounts-usage.json"):
             (self.home / f).unlink(missing_ok=True)
 
     def test_defaults_plus_implicit_codex(self):
@@ -775,30 +787,100 @@ class TestAccounts(unittest.TestCase):
             {"id": "work", "label": "work", "provider": "codex", "dir": "/tmp/cx"}]}))
         self.assertEqual([a["id"] for a in quota.pix_accounts()], ["own", "work"])
 
+    def test_config_json_accounts(self):
+        # brook 2026-11-20: one hand-edited ~/.pix/config.json; accounts live under "accounts".
+        (self.home / "config.json").write_text(json.dumps({"knobs": {}, "accounts": [{"id": "own", "label": "brook"}]}))
+        self.assertEqual([a["id"] for a in quota.pix_accounts()], ["own", "codex"])
+
     def test_keychain_service_matches_pix(self):
         import hashlib
         self.assertEqual(quota.claude_keychain_service(None), "Claude Code-credentials")
         want = hashlib.sha256(os.path.realpath("/tmp/p").encode()).hexdigest()[:8]
         self.assertEqual(quota.claude_keychain_service("/tmp/p"), "Claude Code-credentials-" + want)
 
-    def test_percent_left_uses_tighter_window(self):
-        self.assertEqual(quota.percent_left({"five_hour_used_percent": 30, "five_hour_resets_at": "a",
-                                             "seven_day_used_percent": 80, "seven_day_resets_at": "b"}),
-                         (20.0, "b"))
-        self.assertEqual(quota.percent_left(None), (None, None))
 
-    def test_record_usage_merges_and_keeps_cooldown(self):
-        (self.home / "accounts-usage.json").write_text(json.dumps(
-            {"own": {"left": 90, "coolUntil": 5}, "_active": {"id": "own"}}))
-        quota.record_account_usage([
-            {"id": "own", "provider": "claude", "limits": {"five_hour_used_percent": 40}},
-            {"id": "codex", "provider": "codex", "limits": {"five_hour_used_percent": 10}},
-            {"id": "x", "provider": "claude"}], now_ms=7)
-        d = json.loads((self.home / "accounts-usage.json").read_text())
-        self.assertEqual(d["own"], {"left": 60.0, "coolUntil": 5, "checkedAt": 7})
-        self.assertEqual(d["_active"], {"id": "own"})
-        self.assertNotIn("codex", d)
-        self.assertNotIn("x", d)
+# brook, 11-13: "Kaji = display only: reads, writes nothing to
+# accounts-usage.json" / "Kaji: option A ok (writes nothing; hub service polls
+# usage)". quota.py used to rewrite that file every poll and stamp
+# checkedAt = now on numbers that came from a cache up to 6 h old.
+class TestDisplayOnly(unittest.TestCase):
+    def setUp(self):
+        self.home = Path(os.environ["PIX_HOME"])
+        self.home.mkdir(parents=True, exist_ok=True)
+        self.usage = self.home / "accounts-usage.json"
+        self.usage.unlink(missing_ok=True)
+        (self.home / "accounts.json").write_text(json.dumps({"accounts": [
+            {"id": "own", "label": "brook"}]}))
+        self.dir = Path(tempfile.mkdtemp(prefix="cache-", dir=TMP))
+        self.old_dir, quota.CACHE_DIR = quota.CACHE_DIR, self.dir
+        self.old_offline = os.environ.get("HELM_QUOTA_OFFLINE")
+        os.environ["HELM_QUOTA_OFFLINE"] = "1"
+        self.cache = self.dir / "claude-limits-cache.json"
+
+    def tearDown(self):
+        quota.CACHE_DIR = self.old_dir
+        if self.old_offline is None:
+            os.environ.pop("HELM_QUOTA_OFFLINE", None)
+        else:
+            os.environ["HELM_QUOTA_OFFLINE"] = self.old_offline
+        (self.home / "accounts.json").unlink(missing_ok=True)
+        self.usage.unlink(missing_ok=True)
+
+    def cached(self, age):
+        self.cache.write_text(json.dumps({"five_hour_used_percent": 40}))
+        t = time.time() - age
+        os.utime(self.cache, (t, t))
+        return int(t * 1000)
+
+    def emit(self):
+        import io
+        import contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            quota.emit_json()
+        return {a["id"]: a for a in json.loads(buf.getvalue())["accounts"]}
+
+    def pix_files(self):
+        return sorted(p.name for p in self.home.iterdir())
+
+    def test_emit_leaves_accounts_usage_byte_identical(self):
+        self.cached(60)
+        raw = b'{"own": {"left": 90,  "checkedAt": 5},\n "_active": {"id": "own"}}\n'
+        self.usage.write_bytes(raw)
+        before = self.pix_files()
+        own = self.emit()["own"]
+        self.assertEqual(own["limits"]["five_hour_used_percent"], 40)
+        self.assertEqual(self.usage.read_bytes(), raw)
+        self.assertEqual(self.pix_files(), before, "nothing new under ~/.pix")
+
+    def test_emit_does_not_create_accounts_usage(self):
+        self.cached(60)
+        self.emit()
+        self.assertFalse(self.usage.exists())
+        self.assertEqual(self.pix_files(), ["accounts.json"])
+        self.assertFalse(hasattr(quota, "record_account_usage"))
+
+    def test_checked_at_is_the_cache_fetch_time_not_now(self):
+        fetched = self.cached(600)                      # served within the TTL
+        self.assertEqual(self.emit()["own"]["checked_at"], fetched)
+        fetched = self.cached(2 * 3600)                 # stale fallback, fetch failed
+        own = self.emit()["own"]
+        self.assertEqual(own["limits"]["five_hour_used_percent"], 40)
+        self.assertEqual(own["checked_at"], fetched)
+        self.assertLess(own["checked_at"], time.time() * 1000 - 7000 * 1000)
+
+    def test_checked_at_is_null_without_a_reading(self):
+        accounts = self.emit()
+        self.assertIn("checked_at", accounts["own"])
+        self.assertIsNone(accounts["own"]["checked_at"])
+        self.assertNotIn("limits", accounts["own"])
+
+    def test_checked_at_is_now_only_for_a_live_fetch(self):
+        os.environ.pop("HELM_QUOTA_OFFLINE", None)
+        before = time.time() * 1000
+        quota._limits_cached("live-cache.json", lambda: {"five_hour_used_percent": 1})
+        self.assertGreaterEqual(quota.fetched_at_ms("live-cache.json"), int(before) - 2000)
+        self.assertIsNone(quota.fetched_at_ms("never-read-cache.json"))
 
 
 if __name__ == "__main__":
