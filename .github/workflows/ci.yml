@@ -25,6 +25,11 @@ on:
       - '.github/workflows/ci.yml'
       - '.github/workflows/release.yml'
 
+# brook 11-22: a new push to the same PR/ref cancels the older run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-latest
