@@ -159,6 +159,7 @@ def ago(ts: float) -> str:
 # app restarts do not keep a rate-limited OAuth token in a retry loop.
 CACHE_DIR = HOME / ".helm" / "sessions"
 LIMITS_TTL = 180
+CODEX_LIMITS_TTL = 300  # each fetch spawns a `codex app-server`
 CLAUDE_LIMITS_TTL = 3600
 # Hard ceiling on serving a stale cache when every live fetch fails. Without
 # it a broken fetch path (missing CLI, revoked token) is invisible: the last
@@ -183,13 +184,27 @@ def _cache_is_current(data):
     return True
 
 
+# Cache name -> epoch ms its reading was really fetched (this run). A cached
+# reading keeps the cache file's mtime; only a live fetch counts as "now".
+_FETCHED_AT = {}
+
+
+def fetched_at_ms(name):
+    """When the reading `_limits_cached(name, ...)` returned was fetched; None
+    when it returned nothing or was never asked."""
+    return _FETCHED_AT.get(name)
+
+
 def _limits_cached(name, fetch, ttl=LIMITS_TTL):
     path = CACHE_DIR / name
     retry_path = path.with_name(path.name + ".retry-at")
+    _FETCHED_AT.pop(name, None)
     try:
-        if time.time() - path.stat().st_mtime < ttl:
+        mtime = path.stat().st_mtime
+        if time.time() - mtime < ttl:
             cached = json.loads(path.read_text())
             if _cache_is_current(cached):
+                _FETCHED_AT[name] = int(mtime * 1000)
                 return cached
     except Exception:
         pass
@@ -202,6 +217,8 @@ def _limits_cached(name, fetch, ttl=LIMITS_TTL):
     if not os.environ.get("HELM_QUOTA_OFFLINE") and time.time() >= retry_at:
         try:
             data = fetch()
+            if not data:
+                raise ValueError("no limits")
             retry_path.unlink(missing_ok=True)
         except Exception as exc:
             retry_after = None
@@ -209,6 +226,9 @@ def _limits_cached(name, fetch, ttl=LIMITS_TTL):
                 retry_after = float(exc.headers.get("Retry-After"))
             except Exception:
                 pass
+            # Any failure backs off a full TTL: a fetch that keeps failing (codex
+            # app-server) otherwise re-ran on every 30 s poll.
+            retry_after = retry_after if retry_after is not None else ttl
             if retry_after is not None:
                 try:
                     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -216,6 +236,7 @@ def _limits_cached(name, fetch, ttl=LIMITS_TTL):
                 except Exception:
                     pass
     if data:
+        _FETCHED_AT[name] = int(time.time() * 1000)
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
             # Atomic write (tmp + rename): brain restarts quota.py every poll,
@@ -229,9 +250,12 @@ def _limits_cached(name, fetch, ttl=LIMITS_TTL):
     # Fetch failed: fall back to the cache, but only while it is still plausibly
     # current. An unbounded fallback hides a permanently broken fetch path.
     try:
-        if time.time() - path.stat().st_mtime > STALE_LIMITS_MAX_AGE:
+        mtime = path.stat().st_mtime
+        if time.time() - mtime > STALE_LIMITS_MAX_AGE:
             return None
-        return json.loads(path.read_text())
+        cached = json.loads(path.read_text())
+        _FETCHED_AT[name] = int(mtime * 1000)
+        return cached
     except Exception:
         return None
 
@@ -845,7 +869,7 @@ def _fetch_codex_limits(codex_home=None):
 
 
 def codex_limits():
-    return _limits_cached("codex-limits-cache.json", _fetch_codex_limits)
+    return _limits_cached("codex-limits-cache.json", _fetch_codex_limits, ttl=CODEX_LIMITS_TTL)
 
 
 def munge_cwd(cwd):
@@ -1543,7 +1567,7 @@ def collect():
 
 
 # ── Accounts (shared with pix accountkit) ───────────────────────────────────
-# ~/.pix/accounts.json lists Claude Code logins, one config dir each; Kaji adds
+# ~/.pix/config.json "accounts" (brook 11-20: the one hand-edited Pix file) lists Claude Code logins, one config dir each; Kaji adds
 # provider "codex" entries (dir = CODEX_HOME) and treats ~/.codex as an implicit
 # codex account. Non-default Claude profiles are READ-ONLY here: Kaji never
 # refreshes their tokens (rotating a refresh token would sign that profile out).
@@ -1560,7 +1584,10 @@ def _read_json(path, default):
 
 
 def pix_accounts():
-    listed = _read_json(_pix_home() / "accounts.json", {}).get("accounts")
+    cfg = _read_json(_pix_home() / "config.json", None)
+    if cfg is None:  # older Pix: accounts.json
+        cfg = _read_json(_pix_home() / "accounts.json", {})
+    listed = cfg.get("accounts") if isinstance(cfg, dict) else None
     if not isinstance(listed, list):
         listed = [{"id": "minarabench", "label": "minarabench",
                    "configDir": str(HOME / ".claude-minarabench")},
@@ -1620,79 +1647,40 @@ def _claude_profile_token(config_dir):
 
 
 def _account_limits(account, provider_limits):
+    """(limits, cache file name the reading came from)."""
     if account["provider"] == "codex":
         home = os.path.expanduser(account.get("dir") or "")
         if not home or os.path.realpath(home) == os.path.realpath(HOME / ".codex"):
-            return provider_limits.get("codex")
+            return provider_limits.get("codex"), "codex-limits-cache.json"
+        name = "codex-limits-%s-cache.json" % account["id"]
         return _scrub_expired(_limits_cached(
-            "codex-limits-%s-cache.json" % account["id"],
-            lambda: _fetch_codex_limits(home)))
+            name, lambda: _fetch_codex_limits(home), ttl=CODEX_LIMITS_TTL)), name
     config_dir = account.get("configDir")
     if not config_dir:
-        return provider_limits.get("claude")
+        return provider_limits.get("claude"), "claude-limits-cache.json"
     if not claude_profile_ready(config_dir):
-        return None
+        return None, None
 
     def fetch():
         token = _claude_profile_token(config_dir)
         return _get_claude_usage(token) if token else None
-    return _scrub_expired(_limits_cached(
-        "claude-limits-%s-cache.json" % account["id"], fetch, ttl=CLAUDE_LIMITS_TTL))
-
-
-def percent_left(limits):
-    """100 - the tighter of the 5-hour and weekly windows, with its reset."""
-    left, resets = None, None
-    for win in ("five_hour", "seven_day"):
-        used = (limits or {}).get(win + "_used_percent")
-        if isinstance(used, (int, float)) and not isinstance(used, bool):
-            l = max(0.0, 100.0 - used)
-            if left is None or l < left:
-                left, resets = l, limits.get(win + "_resets_at")
-    return left, resets
-
-
-def record_account_usage(entries, now_ms=None):
-    """Merge Claude % left into ~/.pix/accounts-usage.json; keeps coolUntil
-    and every other key (e.g. pix's _active). Atomic tmp + rename."""
-    path = _pix_home() / "accounts-usage.json"
-    data = _read_json(path, {})
-    if not isinstance(data, dict):
-        data = {}
-    now_ms = int(now_ms if now_ms is not None else time.time() * 1000)
-    changed = False
-    for e in entries:
-        if e["provider"] != "claude":
-            continue
-        left, resets = percent_left(e.get("limits"))
-        if left is None:
-            continue
-        cur = dict(data.get(e["id"]) or {})
-        cur.update({"left": left, "checkedAt": now_ms})
-        if resets is not None:
-            cur["resetsAt"] = resets
-        data[e["id"]] = cur
-        changed = True
-    if not changed:
-        return
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(path.name + ".%d.tmp" % os.getpid())
-        tmp.write_text(json.dumps(data, indent=2))
-        tmp.replace(path)
-    except Exception:
-        pass
+    name = "claude-limits-%s-cache.json" % account["id"]
+    return _scrub_expired(_limits_cached(name, fetch, ttl=CLAUDE_LIMITS_TTL)), name
 
 
 def collect_accounts(provider_limits):
+    """Display only: Kaji never writes pix's usage readings (pix.db kv accounts-usage; pix owns it)."""
     entries = []
     for a in pix_accounts():
         try:
-            limits = _account_limits(a, provider_limits)
+            limits, cache = _account_limits(a, provider_limits)
         except Exception:
-            limits = None
+            limits, cache = None, None
         e = {"id": a["id"], "provider": a["provider"], "label": a["label"],
-             "ready": a["provider"] != "claude" or claude_profile_ready(a.get("configDir"))}
+             "ready": a["provider"] != "claude" or claude_profile_ready(a.get("configDir")),
+             # Epoch ms the reading was really fetched (cache file time), never
+             # "now" for a cached number; null when unknown or no reading.
+             "checked_at": fetched_at_ms(cache) if limits and cache else None}
         if limits:
             e["limits"] = limits
         entries.append(e)
@@ -1726,7 +1714,6 @@ def emit_json():
         if context:
             out[name]["context"] = context
     accounts = collect_accounts({k: (v or {}).get("limits") for k, v in out.items()})
-    record_account_usage(accounts)
     out["accounts"] = accounts
     # compact, no spaces — small payload for run_child_process
     sys.stdout.write(json.dumps(out, separators=(",", ":")))

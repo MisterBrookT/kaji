@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateChecker: UpdateChecker
     private let sleepController = SleepController()
     private lazy var workSession = WorkSessionController(prefs: prefs)
+    let gpuStore = GpuStore()
     let dailyGoals: DailyGoalStore
     private lazy var controlServer: KajiControlServer = {
         let environment = ProcessInfo.processInfo.environment
@@ -134,6 +135,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.rebuildPopoverContentIfShown()
             }
             .store(in: &cancellables)
+        gpuStore.$snapshot
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in self?.updateStatusItem() }
+            .store(in: &cancellables)
         prefs.$language
             .receive(on: RunLoop.main)
             .sink { [weak self] language in
@@ -222,6 +227,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             workSession.stopAndReset()
             closeBreakOverlay()
         }
+        if modules.contains(.gpu) { gpuStore.start() } else { gpuStore.stop() }
     }
 
     /// Providers the user has chosen to show, in display order — drives both the
@@ -242,6 +248,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         SleepLeaseClient.shared.close()
         closeDetailPopover()
         store.stop()
+        gpuStore.stop()
         breakWatchdogTimer?.invalidate()
         closeBreakOverlay()
         controlServer.stop()
@@ -266,9 +273,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                   workSlotLabel: workStatusSlotLabel,
                                   workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                   goalsSlotLabel: goalsStatusSlotLabel,
+                                  gpuSlotLabel: gpuStatusSlotLabel,
                                   onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                   onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                  onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                  onGpuClick: { [weak self] in self?.showPopover(.gpu) })
         hostingView = KajiHostingView(rootView: view)
         hostingView.configureKajiHost()
         hostingView.translatesAutoresizingMaskIntoConstraints = false
@@ -288,9 +297,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                workSlotLabel: workStatusSlotLabel,
                                                workSlotShowsIcon: prefs.workTimeDisplayStyle == .minutesOnly,
                                                goalsSlotLabel: goalsStatusSlotLabel,
+                                               gpuSlotLabel: gpuStatusSlotLabel,
                                                onQuotaClick: { [weak self] in self?.showPopover(.quota) },
                                                onWorkClick: { [weak self] in self?.showPopover(.work) },
-                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) })
+                                               onGoalsClick: { [weak self] in self?.showPopover(.goalsToday) },
+                                               onGpuClick: { [weak self] in self?.showPopover(.gpu) })
         statusItem.length = statusItemLength
     }
 
@@ -316,6 +327,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             breakRemaining: workSession.breakRemaining,
             displayStyle: prefs.workTimeDisplayStyle
         )
+    }
+
+    private var gpuStatusSlotLabel: String? {
+        guard prefs.isModuleEnabled(.gpu) else { return nil }
+        return GpuFormat.menuBarLabel(gpuStore.snapshot)
     }
 
     private var goalsStatusSlotLabel: String? {
@@ -351,6 +367,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let goalsStatusSlotLabel {
             length += 21 + CGFloat(goalsStatusSlotLabel.count) * 7
+        }
+        if let gpuStatusSlotLabel {
+            length += 21 + CGFloat(gpuStatusSlotLabel.count) * 7
         }
         return length
     }
@@ -446,8 +465,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case .quota:
             if prefs.isModuleEnabled(.work) { return .work }
             if prefs.isModuleEnabled(.goals) { return .goalsToday }
+            if prefs.isModuleEnabled(.gpu) { return .gpu }
             return .quota
-        case .work, .goalsToday:
+        case .work, .goalsToday, .gpu:
             return .quota
         }
     }
@@ -460,6 +480,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return popoverNavigation.panel == .work
         case .goalsToday:
             return popoverNavigation.panel == .goals
+        case .gpu:
+            return popoverNavigation.panel == .gpu
         }
     }
 
@@ -480,6 +502,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             popoverNavigation.panel = .goals
             popoverNavigation.goalHorizon = .today
+        case .gpu:
+            popoverNavigation.panel = prefs.isModuleEnabled(.gpu) ? .gpu : .quota
         }
     }
 
@@ -506,7 +530,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                       onContentSizeChange: { [weak self] size in
                                           self?.resizePopoverContent(to: size)
                                       },
-                                      updateChecker: updateChecker)
+                                      updateChecker: updateChecker,
+                                      gpuStore: gpuStore)
             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         let controller = KajiHostingController(rootView: AnyView(content))
         controller.view.configureKajiHost(cornerRadius: 14)

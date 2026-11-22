@@ -92,6 +92,8 @@ struct KajiPopoverView: View {
     var scrollsContent: Bool = true
     /// Footer shows an Update entry only while `available` is non-nil.
     @ObservedObject var updateChecker: UpdateChecker = UpdateChecker()
+    /// GPU monitor (opt-in): read-only view of mlkit's ~/.mlkit/gpus.json.
+    @ObservedObject var gpuStore: GpuStore = GpuStore()
 
     @State private var hoveredGoalDay: DailyGoalHistoryDay?
     @State private var previousFocusedGoalID: UUID?
@@ -270,6 +272,8 @@ struct KajiPopoverView: View {
             workPanel
         case .goals:
             goalsPanel
+        case .gpu:
+            gpuPanel
         }
     }
 
@@ -406,6 +410,11 @@ struct KajiPopoverView: View {
             }
             .buttonStyle(.plain)
             .font(.system(size: 10, weight: .semibold, design: .rounded))
+        } else if let id = a.accountID, a.isActiveAccount {
+            // Codex: display only, the account pix's route printout (pix.db) names.
+            Circle().fill(t.cream).frame(width: 5, height: 5)
+                .accessibilityLabel("in use")
+                .accessibilityIdentifier("kaji.quota.account.\(id).active")
         }
     }
 
@@ -542,6 +551,117 @@ struct KajiPopoverView: View {
             }
             .font(.system(size: 9.5, weight: .medium, design: .rounded))
             progressBar(min(max(value / 100, 0), 1), color: color)
+        }
+    }
+
+    // MARK: GPU monitor (opt-in, read-only; same list style as quota rows)
+
+    private var gpuPanel: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            if let snap = gpuStore.snapshot {
+                HStack(spacing: 6) {
+                    Text("avg util")
+                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.ash)
+                    Text(GpuFormat.menuBarLabel(snap))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(t.cream)
+                    Text("\(snap.busyCards)/\(snap.totalCards) cards busy")
+                        .font(.system(size: 9.5, weight: .medium, design: .rounded))
+                        .foregroundColor(t.mute)
+                    Spacer(minLength: 4)
+                    Text(snap.isStale() ? "stale \(ResetFormat.resetClock(snap.date))" : ResetFormat.resetClock(snap.date))
+                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundColor(snap.isStale() ? t.amber : t.ash)
+                }
+                ForEach(snap.hosts) { host in
+                    gpuHostRow(host)
+                }
+                if !snap.jobs.isEmpty {
+                    Text("Running jobs")
+                        .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                        .foregroundColor(t.ash)
+                        .padding(.top, 2)
+                    ForEach(snap.jobs) { job in
+                        HStack(spacing: 6) {
+                            Text(job.name)
+                                .font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                                .foregroundColor(t.cream)
+                                .lineLimit(1)
+                            Spacer(minLength: 4)
+                            Text(([job.where.joined(separator: ","), job.owner ?? "", GpuFormat.age(job.age)])
+                                .filter { !$0.isEmpty }.joined(separator: " \u{00B7} "))
+                                .font(.system(size: 9, weight: .medium, design: .rounded))
+                                .monospacedDigit()
+                                .foregroundColor(t.mute)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+            } else {
+                Text(gpuStore.missing ? "No GPU snapshot yet." : "Loading\u{2026}")
+                    .font(.system(size: 11, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.mute)
+            }
+            Text(L10n.t(.gpuAddRemoteHint, prefs.language))
+                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .foregroundColor(t.ash)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("kaji.gpu.addRemoteHint")
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private func gpuHostRow(_ host: GpuHost) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 7) {
+                Circle().fill(host.up ? t.gold : t.amber).frame(width: 6, height: 6)
+                Text(host.name)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundColor(t.cream)
+                Spacer(minLength: 6)
+                Text(host.up ? "up" : "down")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .foregroundColor(host.up ? t.ash : t.amber)
+            }
+            ForEach(host.cards) { card in
+                gpuCardLine(card)
+            }
+        }
+        .accessibilityIdentifier("kaji.gpu.host.\(host.name)")
+    }
+
+    private func gpuCardLine(_ c: GpuCard) -> some View {
+        let frac = Double(c.util ?? 0) / 100
+        let hot = (c.util ?? 0) >= 90
+        return VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 8) {
+                Text("gpu\(c.gpu)")
+                    .font(.system(size: 9.5, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(t.ash)
+                    .frame(width: QuotaCaption.windowLabelWidth + 6, alignment: .leading)
+                if c.util != nil {
+                    progressBar(frac, color: hot ? t.amber : t.gold, height: 5)
+                } else {
+                    unavailableBar(height: 5)
+                }
+                Text(GpuFormat.util(c.util))
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundColor(t.cream)
+                    .frame(width: 30, alignment: .trailing)
+            }
+            Text(([GpuFormat.memory(c), c.freeMB.map { "\($0 / 1024) GB free" } ?? "", c.who.isEmpty ? "idle" : c.who])
+                .filter { !$0.isEmpty }.joined(separator: " \u{00B7} "))
+                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundColor(t.ash)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.leading, QuotaCaption.windowLabelWidth + 14)
         }
     }
 
@@ -1251,6 +1371,7 @@ struct KajiPopoverView: View {
         case .quota: return "Quota"
         case .work: return "Work / Break"
         case .goals: return "Goals"
+        case .gpu: return "GPU"
         }
     }
 
@@ -1269,6 +1390,8 @@ struct KajiPopoverView: View {
                 scheduledCompleted: fixedPlanStore.todayScheduledCompletedCount,
                 scheduledTotal: fixedPlanStore.todayScheduledEntries.count
             )
+        case .gpu:
+            return gpuStore.snapshot.map { GpuFormat.menuBarLabel($0) }
         }
     }
 

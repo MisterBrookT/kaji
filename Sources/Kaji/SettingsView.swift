@@ -321,6 +321,14 @@ struct SettingsView: View {
             moduleRow(.quota, title: L10n.t(.moduleQuota, prefs.language), lockedOn: true)
             moduleRow(.work, title: L10n.t(.moduleWork, prefs.language), lockedOn: false)
             moduleRow(.goals, title: L10n.t(.moduleGoals, prefs.language), lockedOn: false)
+            moduleRow(.gpu, title: L10n.t(.moduleGpu, prefs.language), lockedOn: false)
+            if prefs.isModuleEnabled(.gpu) {
+                Text(L10n.t(.gpuAddRemoteHint, prefs.language))
+                    .font(.system(size: 11))
+                    .foregroundColor(t.mute)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("kaji.settings.gpu.hint")
+            }
             Divider().overlay(t.track)
             settingRow(title: L10n.t(.language, prefs.language)) {
                 Menu {

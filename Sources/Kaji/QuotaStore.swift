@@ -97,7 +97,7 @@ final class QuotaStore: ObservableObject {
     /// One view per account ("account:<id>"), empty when quota.py emits none.
     @Published private(set) var accounts: [ProviderView] = []
     @Published private(set) var claudeRoute = "auto"
-    /// Label of the Claude account pix will use next (pinned or auto pick).
+    /// Label of the Claude account in use (pin, else pix's route printout in pix.db).
     @Published private(set) var activeClaudeLabel: String?
     /// Provider sections an account list already covers (hidden in the popover).
     var accountCoveredProviders: Set<String> { Set(accounts.map(\.logo)) }
@@ -367,16 +367,16 @@ final class QuotaStore: ObservableObject {
         rebuildAccounts()
     }
 
-    /// Re-read ~/.pix route/usage and recompute account views + active mark.
+    /// Re-read the pin (~/.pix/config.json route.claude) + pix.db route and recompute account views.
+    /// Read-only: numbers and their age come from quota.py, the active mark
+    /// from pix's printout (pix.db kv route); usage readings in pix.db are not read at all.
     func rebuildAccounts(nowMs: Double = Date().timeIntervalSince1970 * 1000) {
         let files = pixFiles
         let route = files.route
         let claudeIDs = Set(accountEntries.filter { $0.provider == "claude" }.map(\.id))
         claudeRoute = claudeIDs.contains(route) ? route : "auto"
-        let usage = files.usage
-        let active = AccountRouting.activeClaudeID(
-            accounts: accountEntries, route: route, usage: usage,
-            storedActive: files.storedActive, bandWidth: files.bandWidth, nowMs: nowMs)
+        let current = files.current
+        let active = AccountRouting.currentClaudeID(accounts: accountEntries, route: route, current: current)
         accounts = accountEntries.map { a in
             ProviderView(id: "account:" + a.id,
                          mark: Providers.mark(for: a.provider),
@@ -387,20 +387,21 @@ final class QuotaStore: ObservableObject {
                          weekResetDate: a.limits?.sevenDayResetsAt?.date,
                          logoKey: a.provider,
                          accountLabel: a.label,
-                         isActiveAccount: a.provider == "claude" && a.id == active,
+                         isActiveAccount: a.id == (a.provider == "claude" ? active
+                                                   : a.provider == "codex" ? current.codex : nil),
                          accountState: AccountRouting.state(
                             ready: a.ready,
                             hasReading: a.limits?.fiveHourUsedPercent != nil || a.limits?.sevenDayUsedPercent != nil,
-                            checkedAt: a.provider == "claude" ? usage[a.id]?.checkedAt : nil,
+                            checkedAt: a.checkedAt,
                             nowMs: nowMs))
         }
-        activeClaudeLabel = accounts.first(where: \.isActiveAccount)?.displayName
+        activeClaudeLabel = accounts.first { $0.isActiveAccount && $0.logo == "claude" }?.displayName
     }
 
-    /// Pin a Claude account ("auto" to unpin) by writing ~/.pix/claude-route.
+    /// Pin a Claude account ("auto" to unpin) by writing route.claude in ~/.pix/config.json.
     func pinClaudeRoute(_ value: String) {
         do { try pixFiles.writeRoute(value) } catch {
-            NSLog("[Kaji] writing claude-route failed: %@", error.localizedDescription)
+            NSLog("[Kaji] writing the pin failed: %@", error.localizedDescription)
         }
         rebuildAccounts()
     }

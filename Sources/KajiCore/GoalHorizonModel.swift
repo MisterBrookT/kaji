@@ -234,6 +234,7 @@ public enum MenuBarDestination: Equatable, Sendable {
     case quota
     case work
     case goalsToday
+    case gpu
 }
 
 public enum MenuBarSlotLogic {

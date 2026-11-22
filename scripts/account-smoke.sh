@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Real-app account interaction check. Launches dist/Kaji.app with an isolated
-# PIX_HOME (copy of ~/.pix/accounts-usage.json; the real route file is never
-# touched), opens the real popover via the test control hook (works even when
+# PIX_HOME (brook 11-20: a copy of ~/.pix/config.json with route.claude=auto and
+# pix's route printout from pix.db; the real config is never touched), opens the real popover via the test control hook (works even when
 # Ice/Bartender hides the status item), then presses the real SwiftUI buttons
 # through the accessibility API (AXPress) and asserts on the route file and
 # on-screen text. Screenshots: .build/account-smoke/*.png
@@ -10,9 +10,12 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="$ROOT/.build/account-smoke"; PIX="$OUT/pix"
 rm -rf "$OUT"; mkdir -p "$PIX"
-cp "$HOME/.pix/accounts-usage.json" "$PIX/" 2>/dev/null || echo '{}' > "$PIX/accounts-usage.json"
-cp "$HOME/.pix/accounts.json" "$PIX/" 2>/dev/null || true
-echo auto > "$PIX/claude-route"
+ROUTE=$(sqlite3 "$HOME/.pix/pix.db" "SELECT value FROM kv WHERE key='route'" 2>/dev/null)
+[[ -n "$ROUTE" ]] || { echo "FAIL need pix.db kv route (pix prints the account in use)"; exit 1; }
+sqlite3 "$PIX/pix.db" "CREATE TABLE kv(key TEXT PRIMARY KEY, value TEXT, updated INTEGER); INSERT INTO kv VALUES('route', '${ROUTE//\'/\'\'}', 0);"
+pin() { python3 -c 'import json,sys;p=sys.argv[1];c=json.load(open(p)) if __import__("os").path.exists(p) else {};c.setdefault("route",{})["claude"]=sys.argv[2];json.dump(c,open(p,"w"))' "$PIX/config.json" "$1"; }
+cp "$HOME/.pix/config.json" "$PIX/" 2>/dev/null || true
+pin auto
 swiftc "$ROOT/scripts/account-smoke-ax.swift" -o "$OUT/ax"
 swiftc "$ROOT/scripts/account-smoke-wid.swift" -o "$OUT/wid"
 NONCE=$(uuidgen); PORT=$(jot -r 1 40000 59999)
@@ -30,7 +33,7 @@ shot() { sleep 0.5; screencapture -o -x -l "$("$OUT/wid" $PID)" "$OUT/$1.png"; }
 render_status() { curl -sf -XPOST "localhost:$PORT/v1/test/render" -H 'Content-Type: application/json' -d "{\"nonce\":\"$NONCE\",\"surface\":\"status\",\"selection\":\"status\",\"outputPath\":\"$OUT/$1.png\"}" >/dev/null && echo "PASS status render $1"; }
 has() { tree | grep -q -- "$1"; }
 check() { has "$1" && echo "PASS $2" || { echo "FAIL $2 (missing: $1)"; tree | grep kaji.quota; exit 1; }; }
-route() { tr -d '\n' < "$PIX/claude-route"; }
+route() { python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("route",{}).get("claude",""),end="")' "$PIX/config.json"; }
 for _ in $(seq 30); do has "kaji.quota.account.*.active" && break; sleep 1; act open-popover || true; done
 sleep 1
 ACTIVE=$(tree | grep -o 'kaji\.quota\.account\.[^ ]*\.active' | head -1 | sed 's/kaji.quota.account.//;s/.active//')
@@ -54,9 +57,9 @@ shot 2-pinned; render_status pinned-status
 press kaji.quota.account.auto
 [[ "$(route)" == auto ]] && echo "PASS Auto wrote route=auto" || { echo "FAIL auto"; exit 1; }
 check "kaji.quota.account.$ACTIVE.active" "auto pick active again"
-echo "$OTHER" > "$PIX/claude-route"; act refresh-quota; sleep 0.6
+pin "$OTHER"; act refresh-quota; sleep 0.6
 check "kaji.quota.account.auto" "refresh picks up external pin"
-echo auto > "$PIX/claude-route"; act refresh-quota; sleep 0.6
-grep -q _active "$PIX/accounts-usage.json" && echo "PASS _active untouched"
+pin auto; act refresh-quota; sleep 0.6
+[[ ! -e "$PIX/accounts-usage.json" ]] && echo "PASS accounts-usage.json never created" || { echo "FAIL Kaji wrote accounts-usage.json"; exit 1; }
 shot 3-final
 echo "ACCOUNT-SMOKE PASS; screenshots in $OUT"

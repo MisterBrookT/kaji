@@ -22,32 +22,27 @@ final class AccountsTests: XCTestCase {
         XCTAssertNotNil(snap.providers["codex"])
     }
 
-    private func active(_ accounts: [AccountQuota], route: String = "auto",
-                        usage: [String: AccountUsage], stored: String? = nil) -> String? {
-        AccountRouting.activeClaudeID(accounts: accounts, route: route, usage: usage,
-                                      storedActive: stored, bandWidth: 25, nowMs: 1_000)
+    // brook, 11-13: "Kaji = display only: reads, writes nothing to
+    // accounts-usage.json". The account in use is pix's printout (pix.db kv route),
+    // not a Kaji copy of the band rule.
+    func testSnapshotDecodesRealFetchTime() throws {
+        let json = #"{"accounts":[{"id":"own","provider":"claude","label":"brook","checked_at":1700000000000,"limits":{"five_hour_used_percent":1}},{"id":"b","provider":"claude","label":"b","checked_at":null}]}"#
+        let snap = try JSONDecoder().decode(QuotaSnapshot.self, from: Data(json.utf8))
+        XCTAssertEqual(snap.accounts[0].checkedAt, 1_700_000_000_000)
+        XCTAssertNil(snap.accounts[1].checkedAt)
     }
 
-    func testPinnedRouteWins() {
-        let all = [account("a"), account("b")]
-        XCTAssertEqual(active(all, route: "b", usage: ["a": .init(left: 90)]), "b")
-        XCTAssertEqual(active(all, route: "gone", usage: ["b": .init(left: 90)]), "b",
-                       "unknown route falls back to auto")
-    }
-
-    func testBandRuleKeepsCurrentOnTie() {
-        let all = [account("a"), account("b")]
-        // 60 and 70 share band 2: stay on the stored account.
-        XCTAssertEqual(active(all, usage: ["a": .init(left: 70), "b": .init(left: 60)], stored: "b"), "b")
-        // 80 is band 3 > band 2: switch.
-        XCTAssertEqual(active(all, usage: ["a": .init(left: 80), "b": .init(left: 60)], stored: "b"), "a")
-    }
-
-    func testUnknownIsLowestBandAndCoolingOrNotReadySkipped() {
-        let all = [account("a"), account("b", ready: false), account("c"), account("x", "codex")]
-        XCTAssertEqual(active(all, usage: ["c": .init(left: 0)]), "c", "0% beats unknown")
-        XCTAssertEqual(active(all, usage: ["a": .init(left: 99, coolUntil: 2_000), "c": .init(left: 10)]), "c")
-        XCTAssertEqual(active([account("a"), account("c")], usage: [:]), "a", "first in order with no data")
+    func testCurrentClaudeFollowsRouteJSONAndPinWins() {
+        let all = [account("a"), account("b"), account("x", "codex")]
+        let pix = PixRoute(claude: "a", codex: "x")
+        XCTAssertEqual(AccountRouting.currentClaudeID(accounts: all, route: "auto", current: pix), "a")
+        XCTAssertEqual(AccountRouting.currentClaudeID(accounts: all, route: "b", current: pix), "b", "pin wins")
+        XCTAssertEqual(AccountRouting.currentClaudeID(accounts: all, route: "gone", current: pix), "a",
+                       "a pin that names no Claude account is not a pin")
+        XCTAssertEqual(AccountRouting.currentClaudeID(accounts: all, route: "x", current: pix), "a",
+                       "a Codex id is not a Claude pin")
+        XCTAssertNil(AccountRouting.currentClaudeID(accounts: all, route: "auto", current: PixRoute()),
+                     "no route printout = no current account; Kaji does not guess")
     }
 
     func testRouteWriteAndRead() throws {
@@ -55,14 +50,32 @@ final class AccountsTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: dir) }
         let files = PixAccountsFiles(home: dir)
         XCTAssertEqual(files.route, "auto")
+        XCTAssertEqual(files.current, PixRoute(), "no route printout")
+        // brook 2026-11-20: the pin lives in the one hand-edited ~/.pix/config.json; brook's other keys stay.
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try #"{"knobs":{"x":1}}"#.write(to: dir.appendingPathComponent("config.json"), atomically: true, encoding: .utf8)
         try files.writeRoute("own")
-        XCTAssertEqual(try String(contentsOf: dir.appendingPathComponent("claude-route"), encoding: .utf8), "own\n")
+        let c = try JSONSerialization.jsonObject(with: Data(contentsOf: dir.appendingPathComponent("config.json"))) as! [String: Any]
+        XCTAssertEqual((c["route"] as? [String: Any])?["claude"] as? String, "own")
+        XCTAssertEqual((c["knobs"] as? [String: Any])?["x"] as? Int, 1)
         XCTAssertEqual(files.route, "own")
-        try #"{"own":{"left":40,"coolUntil":5},"_active":{"id":"own"}}"#
-            .write(to: dir.appendingPathComponent("accounts-usage.json"), atomically: true, encoding: .utf8)
-        XCTAssertEqual(files.usage["own"], AccountUsage(left: 40, coolUntil: 5))
-        XCTAssertEqual(files.storedActive, "own")
-        XCTAssertEqual(files.bandWidth, 25)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: dir.path), ["config.json"],
+                       "the pin is the only thing Kaji writes under ~/.pix")
+    }
+
+    func testRouteJSONRead() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let files = PixAccountsFiles(home: dir)
+        try seedPixRoute(dir, #"{"provider":"pix-anthropic","model":"claude-fable-5-2","account":"old","accounts":{"claude":"bench","codex":"apple"},"stage":0,"reason":"Auto policy","since":1}"#)
+        XCTAssertEqual(files.current, PixRoute(claude: "bench", codex: "apple"))
+        try seedPixRoute(dir, #"{"account":"own","accounts":{}}"#)
+        XCTAssertEqual(files.current, PixRoute(claude: "own", codex: nil), "falls back to `account`")
+        try seedPixRoute(dir, #"{"account":null}"#)
+        XCTAssertEqual(files.current, PixRoute())
+        try seedPixRoute(dir, "not json")
+        XCTAssertEqual(files.current, PixRoute())
     }
 
     @MainActor func testMenuBarRingsReplaceCoveredProviders() {
@@ -76,4 +89,30 @@ final class AccountsTests: XCTestCase {
         XCTAssertEqual(rings.map(\.id), ["account:own", "account:codex", "cursor"])
         XCTAssertEqual(QuotaStore.menuBarRings(accounts: [], providers: [v("claude")], count: 3).map(\.id), ["claude"])
     }
+}
+
+
+import SQLite3
+/// pix's route printout as pix writes it (brook 11-20: pix.db kv "route", plugins/core/pixdb.ts schema).
+func seedPixRoute(_ dir: URL, _ json: String) throws {
+    try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    var db: OpaquePointer?
+    defer { sqlite3_close(db) }
+    guard sqlite3_open(dir.appendingPathComponent("pix.db").path, &db) == SQLITE_OK else { throw CocoaError(.fileWriteUnknown) }
+    sqlite3_exec(db, "CREATE TABLE IF NOT EXISTS kv(key TEXT PRIMARY KEY, value TEXT, updated INTEGER)", nil, nil, nil)
+    var st: OpaquePointer?
+    defer { sqlite3_finalize(st) }
+    sqlite3_prepare_v2(db, "INSERT INTO kv(key,value,updated) VALUES('route',?,0) ON CONFLICT(key) DO UPDATE SET value=excluded.value", -1, &st, nil)
+    sqlite3_bind_text(st, 1, json, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+    sqlite3_step(st)
+}
+/// The Claude pin in config.json (route.claude), or nil.
+func configPin(_ dir: URL) -> String? {
+    guard let d = try? Data(contentsOf: dir.appendingPathComponent("config.json")),
+          let c = try? JSONSerialization.jsonObject(with: d) as? [String: Any] else { return nil }
+    return (c["route"] as? [String: Any])?["claude"] as? String
+}
+/// Set the pin the way brook or pix does (outside Kaji).
+func setConfigPin(_ dir: URL, _ v: String) throws {
+    try #"{"route":{"claude":"\#(v)"}}"#.write(to: dir.appendingPathComponent("config.json"), atomically: true, encoding: .utf8)
 }
